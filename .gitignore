@@ -1,0 +1,41 @@
+# Build output
+bin/
+obj/
+out/
+artifacts/
+publish/
+
+# IDE and OS
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.user
+*.suo
+*.swp
+.DS_Store
+Thumbs.db
+
+# Test and mutation output
+TestResults/
+coverage/
+*.coverage
+*.coveragexml
+StrykerOutput/
+
+# Local secrets (P5): only the committed example file is tracked
+.env
+.env.*
+!.env.example
+secrets.env
+!secrets.env.example
+
+# Second Key run output (recordings may contain customer data; never commit real ones)
+*.skcap
+*.skrun
+!samples/**/*.skcap
+!samples/**/*.skrun
+!schemas/samples/**
+!tests/**/fixtures/**
+.secondkey/
+evidence-out/
