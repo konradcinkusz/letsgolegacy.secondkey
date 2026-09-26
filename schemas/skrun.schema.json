@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/konradcinkusz/letsgolegacy.secondkey/schemas/skrun.schema.json",
+  "title": "Second Key run event",
+  "description": "One line of a *.skrun file (JSON Lines): what each side answered when a capture was replayed against it. The first line is a run.header and the last is a run.end; a file without its run.end is an interrupted run and is refused by the comparator.",
+  "type": "object",
+  "required": ["type", "v"],
+  "oneOf": [
+    { "$ref": "#/$defs/header" },
+    { "$ref": "#/$defs/stateReset" },
+    { "$ref": "#/$defs/exchangeResult" },
+    { "$ref": "#/$defs/end" }
+  ],
+  "$defs": {
+    "header": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "v", "runId", "startedAt", "tool", "capture", "sides", "scenarioMode"],
+      "properties": {
+        "type": { "const": "run.header" },
+        "v": { "const": 1 },
+        "runId": { "$ref": "#/$defs/id" },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "tool": { "$ref": "#/$defs/tool" },
+        "capture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["captureId", "sha256"],
+          "properties": {
+            "captureId": { "$ref": "#/$defs/id" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "path": { "type": "string" }
+          }
+        },
+        "sides": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["legacy", "candidate"],
+          "properties": {
+            "legacy": { "$ref": "#/$defs/sideInfo" },
+            "candidate": { "$ref": "#/$defs/sideInfo" }
+          }
+        },
+        "scenarioMode": {
+          "description": "session: the exchanges of one captured session replay together, in order, after one state reset. exchange: every exchange is its own scenario.",
+          "enum": ["session", "exchange"]
+        }
+      }
+    },
+    "sideInfo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseUrl"],
+      "properties": {
+        "baseUrl": { "type": "string", "format": "uri" },
+        "reset": { "$ref": "#/$defs/resetMethod" },
+        "probe": { "enum": ["none", "sqlserver-tables"] }
+      }
+    },
+    "resetMethod": { "enum": ["none", "sqlserver-snapshot", "http", "command"] },
+    "stateReset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "v", "scenario", "side", "method", "outcome", "durationMs"],
+      "properties": {
+        "type": { "const": "state.reset" },
+        "v": { "const": 1 },
+        "scenario": { "type": "string", "minLength": 1 },
+        "side": { "$ref": "#/$defs/side" },
+        "method": { "$ref": "#/$defs/resetMethod" },
+        "outcome": { "enum": ["ok", "failed"] },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "detail": { "type": "string" }
+      }
+    },
+    "exchangeResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "v", "exchange", "scenario", "side", "seq", "startedAt", "durationMs", "request"],
+      "properties": {
+        "type": { "const": "exchange.result" },
+        "v": { "const": 1 },
+        "exchange": { "$ref": "#/$defs/id" },
+        "scenario": { "type": "string", "minLength": 1 },
+        "side": { "$ref": "#/$defs/side" },
+        "seq": { "type": "integer", "minimum": 1 },
+        "startedAt": { "type": "string", "format": "date-time" },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "request": { "$ref": "skcap.schema.json#/$defs/request" },
+        "response": { "$ref": "skcap.schema.json#/$defs/response" },
+        "db": { "$ref": "#/$defs/dbDelta" },
+        "outbound": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["method", "url"],
+            "properties": {
+              "method": { "type": "string", "pattern": "^[A-Z]{3,10}$" },
+              "url": { "type": "string", "format": "uri" },
+              "request": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "headers": { "$ref": "skcap.schema.json#/$defs/headers" },
+                  "body": { "$ref": "skcap.schema.json#/$defs/body" }
+                }
+              },
+              "response": { "$ref": "skcap.schema.json#/$defs/response" }
+            }
+          }
+        },
+        "error": {
+          "description": "Present when the side did not answer: the request is recorded, the response is not.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "message"],
+          "properties": {
+            "kind": { "enum": ["connection", "timeout", "protocol", "reset-failed"] },
+            "message": { "type": "string" }
+          }
+        }
+      },
+      "oneOf": [
+        { "required": ["response"], "not": { "required": ["error"] } },
+        { "required": ["error"], "not": { "required": ["response"] } }
+      ]
+    },
+    "dbDelta": {
+      "description": "Row-level changes a scenario step made, per table, as seen by a state probe.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tables"],
+      "properties": {
+        "probe": { "type": "string" },
+        "tables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["inserted", "deleted", "updated"],
+            "properties": {
+              "inserted": { "type": "array", "items": { "type": "object" } },
+              "deleted": { "type": "array", "items": { "type": "object" } },
+              "updated": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["key", "before", "after"],
+                  "properties": {
+                    "key": { "type": "object" },
+                    "before": { "type": "object" },
+                    "after": { "type": "object" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "end": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "v", "finishedAt", "scenarios", "results"],
+      "properties": {
+        "type": { "const": "run.end" },
+        "v": { "const": 1 },
+        "finishedAt": { "type": "string", "format": "date-time" },
+        "scenarios": { "type": "integer", "minimum": 0 },
+        "results": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "side": { "enum": ["legacy", "candidate"] },
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "commit": { "type": ["string", "null"] }
+      }
+    }
+  }
+}
