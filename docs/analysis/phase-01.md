@@ -5,7 +5,7 @@ for the core repository. It is the source the master prompt
 ([`S1-S3.master-prompt.md`](S1-S3.master-prompt.md)) is generated from; corrections go
 here first, then the prompt is regenerated (GENERATE-MASTER-PROMPT.md §5).
 
-**Revision:** 1 (2026-09-26).
+**Revision:** 3 (2026-09-26).
 
 ## 1. The change
 
@@ -65,7 +65,7 @@ Acceptance criteria are copied verbatim from [`../WORKPLAN.md`](../WORKPLAN.md).
 | D-1 | S7 defines six subcommands; `compare` and `validate` are added as two more because the chain needs them and the ticket does not forbid it | implementing session, recorded here | a CLI surface larger than the ticket, revisited in review |
 | D-2 | A difference that no contract clause explains is classified as a **regression** (fail closed) — ADR 0003 | implementing session | more human review, never a missed regression |
 | D-3 | nopCommerce serves HTML, so the contract language extracts values from HTML by CSS selector before any predicate runs; no predicate reads prose — ADR 0002 | implementing session | selectors break when markup changes; that breaks loudly as `unexercised`, not silently |
-| A1 | The SQL Server snapshot test needs Docker; CI (ubuntu-latest) has it. Locally, without Docker, the test reports itself skipped with the reason; in CI `SK_REQUIRE_DOCKER=1` turns a missing Docker into a failure. `SK_SKIP_DOCKER=1` skips it on purpose, with the reason: the mutation job sets it, because the SQL Server code is excluded from mutation | implementing session | none in CI; a local run proves less than CI |
+| A1 | The SQL Server snapshot test needs Docker; CI (ubuntu-latest) has it. Locally, without Docker, the test reports itself skipped with the reason; in CI `SK_REQUIRE_DOCKER=1` turns a missing Docker into a failure. `SK_SKIP_DOCKER=1` skips it on purpose, with the reason, and wins over the `SK_REQUIRE_DOCKER=1` every CI job inherits: the mutation job sets it, because the SQL Server code is excluded from mutation | implementing session | none in CI; a local run proves less than CI |
 | A2 | PDF rendering needs a headless Chromium. CI has one; `SK_REQUIRE_PDF=1` in CI makes its absence a failure, locally it is reported as skipped | implementing session | none in CI |
 | A3 | Since 26 IX 2026, on the owner's standing instruction, the implementing session merges a pull request once every check on its head is green; stacks merge in order, with merge commits. No person reviews a pull request before it merges: the checks — tests, mutation thresholds, the end-to-end job, CodeQL, the secret scan — are the review | owner | a defect no check catches reaches `main` unreviewed; mutation testing bounds what the tests miss on the paths it covers, and nothing more |
 
@@ -75,3 +75,4 @@ Acceptance criteria are copied verbatim from [`../WORKPLAN.md`](../WORKPLAN.md).
 |---|---|---|---|
 | 1 | First pass: table for S1–S16, decisions D-1–D-3, accepted risks A1–A3 | — | none blocking |
 | 2 | The replay joins mutation testing: `SecondKey.Replay` without its SQL Server code, from 60.7 % to 89.5 %. Tests now prove what a replay does not send (hop-by-hop headers, recorded cookies, redacted values, a recorded `content-length`), that a redirect is recorded rather than followed, that a base URL's path prefixes every request, and that correlation leaves bodies it cannot read alone. A1 gains `SK_SKIP_DOCKER`; A3 records how pull requests are merged now | this revision's pull request | the SQL Server reset and probe are covered by integration tests only |
+| 3 | A1 held in the mutation job only on paper: it inherits `SK_REQUIRE_DOCKER=1`, which overrode `SK_SKIP_DOCKER=1`, so its SQL Server tests ran against a container. The deliberate skip now wins, and the attribute and the container fixture share one decision (`DockerGate`), so a skipped test never starts a container | this revision's pull request | none |
