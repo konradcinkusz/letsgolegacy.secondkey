@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <Description>sk — the Second Key command line: capture, mine, replay, gate, mutate, evidence.</Description>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>sk</ToolCommandName>
+    <PackageId>SecondKey.Cli</PackageId>
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecondKey.Artifacts\SecondKey.Artifacts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SecondKey.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

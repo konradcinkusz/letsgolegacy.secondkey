@@ -104,6 +104,17 @@ public static class ContractRules
             {
                 CheckRegex(extractor.Selector, $"{at}/selector", Error, requireGroup: true);
             }
+            else if (extractor.From == ExtractSource.Json)
+            {
+                try
+                {
+                    _ = SelectorPath.ParseRelative(extractor.Selector);
+                }
+                catch (PathSyntaxException ex)
+                {
+                    Error($"{at}/selector", ex.Message);
+                }
+            }
 
             if (extractor.Regex is { } regex)
             {

@@ -18,6 +18,7 @@ FILTER="${1:-}"
 # test project directory : project under test
 PAIRS=(
   "tests/SecondKey.Artifacts.Tests:SecondKey.Artifacts.csproj"
+  "tests/SecondKey.Contract.Tests:SecondKey.Contract.csproj"
 )
 
 dotnet tool restore >/dev/null

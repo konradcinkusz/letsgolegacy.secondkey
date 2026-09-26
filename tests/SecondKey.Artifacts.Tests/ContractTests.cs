@@ -60,6 +60,7 @@ public class ContractTests
         { "an extractor scope regex that does not compile", "    when: { method: GET, path: \"^/cart$\" }\n    from: html\n    selector: \".order-total\"", "    when: { method: GET, path: \"^/cart($\" }\n    from: html\n    selector: \".order-total\"", "/extract/0/when/path", "not a valid regular expression" },
         { "a duplicate extractor name", "  - name: cartLineTotals", "  - name: cartTotal", "/extract/1/name", "extractor 'cartTotal' is defined more than once" },
         { "an attribute on a non-html extractor", "    from: html\n    selector: \".order-total\"", "    from: json\n    selector: total\n    attribute: href", "/extract/0", "" },
+        { "a json extractor path that does not parse", "    from: html\n    selector: \".order-total\"", "    from: json\n    selector: \"items[\"", "/extract/0/selector", "unterminated" },
         { "a duplicate YAML key", "  revision: 1\n", "  revision: 1\n  revision: 2\n", "", "Duplicate key revision" },
     };
 
