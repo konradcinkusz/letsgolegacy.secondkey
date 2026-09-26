@@ -1,3 +1,4 @@
+using System.Net;
 using SecondKey.Artifacts.Capture;
 using SecondKey.Artifacts.Runs;
 using static SecondKey.Cli.Tests.CliRunner;
@@ -41,6 +42,32 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
         Assert.Equal(["/a", "/b"], capture.Exchanges.Select(e => e.Request.Path));
         Assert.Equal(["sid"], capture.Header.SessionKeys);
         Assert.Contains("x-api-key", capture.Header.Sanitization!.RedactedHeaders!);
+    }
+
+    /// <summary>
+    /// A pipeline or a terminal stops a capture with a signal. The exchange in flight at that
+    /// moment takes longer than the two seconds System.CommandLine allows by default, and is
+    /// still recorded, and the command still ends with its summary and exit code 0.
+    /// </summary>
+    [UnixFact]
+    public async Task A_stop_signal_lets_the_exchange_in_flight_finish_and_keeps_it()
+    {
+        await using var slow = await TinyServer.StartAsync("slow", TimeSpan.FromSeconds(4));
+        var port = TinyServer.FreePort();
+        var output = Path.Combine(_directory, "stopped.skcap");
+        using var sk = Start("capture", "--listen", $"http://127.0.0.1:{port}", "--target", slow.Address.ToString(), "--out", output);
+        await sk.LineAsync("sk capture: recording").WaitAsync(TimeSpan.FromSeconds(60));
+
+        using var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+        var answer = client.GetAsync("/slow");
+        await slow.Received.WaitAsync(TimeSpan.FromSeconds(30));
+        sk.Signal("TERM");
+        await sk.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(60));
+
+        Assert.True(sk.ExitCode == ExitCodes.Success, $"exit {sk.ExitCode}\n{sk.Output}\n{sk.Error}");
+        Assert.Contains("recorded 1 exchange(s), skipped 0", sk.Output, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, (await answer).StatusCode);
+        Assert.Equal(["/slow"], CaptureFile.Read(output).Exchanges.Select(e => e.Request.Path));
     }
 
     [Fact]

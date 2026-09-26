@@ -65,6 +65,15 @@ internal sealed class CliContext
 /// </summary>
 public static class SecondKeyCli
 {
+    /// <summary>
+    /// How long a command has to stop cleanly once Ctrl+C or SIGTERM cancels it, before the
+    /// process is ended with the signal's own exit code (130 or 143). System.CommandLine's
+    /// default is two seconds: too short for <c>sk capture</c>, which lets the exchanges in
+    /// flight to a slow legacy system finish — for up to the 30 seconds its host allows —
+    /// and then closes the recording and prints its summary.
+    /// </summary>
+    internal static readonly TimeSpan StopGrace = TimeSpan.FromMinutes(1);
+
     public static async Task<int> RunAsync(string[] args, TextWriter output, TextWriter error, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(args);
@@ -88,7 +97,7 @@ public static class SecondKeyCli
         try
         {
             return await parsed.InvokeAsync(
-                new InvocationConfiguration { Output = output, Error = error, EnableDefaultExceptionHandler = false },
+                new InvocationConfiguration { Output = output, Error = error, EnableDefaultExceptionHandler = false, ProcessTerminationTimeout = StopGrace },
                 cancellationToken).ConfigureAwait(false);
         }
         catch (ArtifactValidationException ex)
