@@ -37,14 +37,14 @@ jobs:
           SK_PDF: required
       - name: Upload the evidence pack
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: evidence-pack
           path: .secondkey/e2e/evidence/
           if-no-files-found: ignore
       - name: Upload the capture, the run, the verdict and the logs
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-artifacts
           path: |
