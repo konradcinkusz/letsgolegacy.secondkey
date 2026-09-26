@@ -44,8 +44,9 @@ public class ConfigurationTests
         Assert.Equal(["dbo.Orders"], config.Replay.Legacy.Probe!.SqlServer!.Tables);
         Assert.Equal("__RequestVerificationToken", config.Replay.Correlation![0].FormField);
         Assert.Equal(["gate.sarif"], config.Gate!.Sarif);
-        Assert.Equal("/work", config.BaseDirectory);
-        Assert.Equal("/work/.secondkey/run.skrun", config.Resolve(config.Compare!.Run!));
+        // "/work" is rooted on every platform; on Windows it is rooted on the current drive.
+        Assert.Equal(Path.GetFullPath("/work"), config.BaseDirectory);
+        Assert.Equal(Path.GetFullPath("/work/.secondkey/run.skrun"), config.Resolve(config.Compare!.Run!));
     }
 
     [Theory]

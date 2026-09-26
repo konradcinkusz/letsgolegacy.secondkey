@@ -73,7 +73,7 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
         await File.WriteAllTextAsync(config, $$"""
             version: 1
             replay:
-              capture: "{{Sample("sample.skcap")}}"
+              capture: '{{Sample("sample.skcap")}}'
               out: out/run.skrun
               scenarioMode: exchange
               legacy: { baseUrl: "{{_legacy.Address}}" }
@@ -109,7 +109,7 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
         await File.WriteAllTextAsync(config, $$"""
             version: 1
             replay:
-              capture: "{{Sample("sample.skcap")}}"
+              capture: '{{Sample("sample.skcap")}}'
               legacy: { baseUrl: "{{_legacy.Address}}", reset: { sqlServerSnapshot: { connectionStringEnv: SK_TEST_NO_SUCH_VARIABLE, database: Shop, snapshot: Shop_sk } } }
               candidate: { baseUrl: "{{_candidate.Address}}" }
             """);
