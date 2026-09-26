@@ -1,12 +1,19 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SecondKey.Artifacts/SecondKey.Artifacts.csproj" />
+    <Project Path="src/SecondKey.Capture/SecondKey.Capture.csproj" />
     <Project Path="src/SecondKey.Contract/SecondKey.Contract.csproj" />
+    <Project Path="src/SecondKey.Replay/SecondKey.Replay.csproj" />
     <Project Path="src/SecondKey.Cli/SecondKey.Cli.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/SampleShop/SampleShop.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SecondKey.Artifacts.Tests/SecondKey.Artifacts.Tests.csproj" />
+    <Project Path="tests/SecondKey.Capture.Tests/SecondKey.Capture.Tests.csproj" />
     <Project Path="tests/SecondKey.Contract.Tests/SecondKey.Contract.Tests.csproj" />
+    <Project Path="tests/SecondKey.Replay.Tests/SecondKey.Replay.Tests.csproj" />
     <Project Path="tests/SecondKey.Cli.Tests/SecondKey.Cli.Tests.csproj" />
   </Folder>
 </Solution>

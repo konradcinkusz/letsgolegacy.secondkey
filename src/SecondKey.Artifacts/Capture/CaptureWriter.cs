@@ -16,6 +16,7 @@ public sealed class CaptureWriter : IAsyncDisposable
     private readonly SemaphoreSlim _gate = new(1, 1);
     private long _seq;
     private long _count;
+    private int _disposed;
 
     private CaptureWriter(Stream stream) => _stream = stream;
 
@@ -62,11 +63,24 @@ public sealed class CaptureWriter : IAsyncDisposable
         }
     }
 
+    /// <summary>Flushes and closes the file. Safe to call more than once.</summary>
     public async ValueTask DisposeAsync()
     {
-        await _stream.FlushAsync().ConfigureAwait(false);
-        await _stream.DisposeAsync().ConfigureAwait(false);
-        _gate.Dispose();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        await _gate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _stream.FlushAsync().ConfigureAwait(false);
+            await _stream.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     /// <summary>Serializes one event as a single line, exactly as the capture writer would.</summary>

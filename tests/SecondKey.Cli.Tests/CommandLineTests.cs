@@ -19,9 +19,7 @@ public class CommandLineTests
     }
 
     [Theory]
-    [InlineData("capture")]
     [InlineData("mine")]
-    [InlineData("replay")]
     [InlineData("gate")]
     [InlineData("mutate")]
     [InlineData("evidence")]
