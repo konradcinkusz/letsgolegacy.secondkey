@@ -40,23 +40,23 @@ Critical path: S0 → S1 → S3–S6 → S7–S14 → S15 → (bench P3) → (be
 
 | ID | Deliverable | Done when | Status |
 |---|---|---|---|
-| S0 | Master prompt for S1–S3 (bootstrap and schemas) | It passes the self-containment test of `GENERATE-MASTER-PROMPT.md` §6 | planned |
-| S1 | Bootstrap: repository baseline (hygiene files, secret scanning, one-command onboarding, `.claude/settings.json` declaring architecture-standards), empty solution, CI with build, tests and a Stryker.NET threshold | CI is green | planned |
-| S2 | `docs/reference-notes.md`: what is ported from agent-eval-bench, judge-worker and ArchGate (now Portcullis), with file paths | Written, before any code | planned |
-| S3 | JSON Schema, sample and validator test for `*.skcap` | The sample validates and a broken line is rejected | planned |
-| S4 | JSON Schema and sample for `contract.yaml`: predicates on the response, DB deltas and outbound calls, absence assertions, tolerances, set semantics, per-clause provenance | The sample validates | planned |
-| S5 | JSON Schema and sample for `*.skrun` | The sample validates | planned |
-| S6 | JSON Schema and sample for `verdict.json` with the four classes | The sample validates | planned |
-| S7 | C0 CLI `sk`: System.CommandLine, `secondkey.yaml`, six subcommands as stubs, documented exit codes | `sk --help` lists all six, and each stub returns its exit code under test | planned |
-| S8 | C3 contract engine: `contract.yaml` evaluated against `*.skrun` into per-clause verdicts | Fixtures pass and a mutation score is reported | planned |
-| S9 | C1 HTTP capture: YARP recording proxy writing `*.skcap`, inbound only | A request through the proxy to a sample app produces a valid `.skcap` line | planned |
-| S10 | C6 replay: `*.skcap` replayed against two base addresses, `*.skrun` written | Both sides are recorded for the sample | planned |
-| S11 | C6 state reset: SQL Server snapshot restored before each scenario | A test proves two consecutive scenarios start from the same state | planned |
-| S12 | C7 canonical JSON and normalization (ignored paths, tolerances, sets, timestamps, GUIDs) | Normalization tests pass | planned |
-| S13 | C7 diff and four-class verdict into `verdict.json` | Fixtures produce both a regression and a fix candidate | planned |
-| S14 | C10 unsigned evidence pack: standalone HTML from `verdict.json`, SARIF and the contract; PDF through a headless browser | The pack renders from fixtures | planned |
-| S15 | End-to-end job: capture → replay → compare → evidence on the sample app, in CI | One CI job produces the pack | planned |
-| S16 | C6 outbound stubs with WireMock.Net from recorded traffic | Phase 01 only if the specimen calls out (payments, shipping); otherwise phase 02 | planned |
+| S0 | Master prompt for S1–S3 (bootstrap and schemas) | It passes the self-containment test of `GENERATE-MASTER-PROMPT.md` §6 | done (#1) |
+| S1 | Bootstrap: repository baseline (hygiene files, secret scanning, one-command onboarding, `.claude/settings.json` declaring architecture-standards), empty solution, CI with build, tests and a Stryker.NET threshold | CI is green | done (#1) |
+| S2 | `docs/reference-notes.md`: what is ported from agent-eval-bench, judge-worker and ArchGate (now Portcullis), with file paths | Written, before any code | done (#1) |
+| S3 | JSON Schema, sample and validator test for `*.skcap` | The sample validates and a broken line is rejected | done (#2) |
+| S4 | JSON Schema and sample for `contract.yaml`: predicates on the response, DB deltas and outbound calls, absence assertions, tolerances, set semantics, per-clause provenance | The sample validates | done (#2) |
+| S5 | JSON Schema and sample for `*.skrun` | The sample validates | done (#2) |
+| S6 | JSON Schema and sample for `verdict.json` with the four classes | The sample validates | done (#2) |
+| S7 | C0 CLI `sk`: System.CommandLine, `secondkey.yaml`, six subcommands as stubs, documented exit codes | `sk --help` lists all six, and each stub returns its exit code under test | done (#3) |
+| S8 | C3 contract engine: `contract.yaml` evaluated against `*.skrun` into per-clause verdicts | Fixtures pass and a mutation score is reported | done (#3) |
+| S9 | C1 HTTP capture: YARP recording proxy writing `*.skcap`, inbound only | A request through the proxy to a sample app produces a valid `.skcap` line | done (#4) |
+| S10 | C6 replay: `*.skcap` replayed against two base addresses, `*.skrun` written | Both sides are recorded for the sample | done (#4) |
+| S11 | C6 state reset: SQL Server snapshot restored before each scenario | A test proves two consecutive scenarios start from the same state | done (#4) |
+| S12 | C7 canonical JSON and normalization (ignored paths, tolerances, sets, timestamps, GUIDs) | Normalization tests pass | in review (#5) |
+| S13 | C7 diff and four-class verdict into `verdict.json` | Fixtures produce both a regression and a fix candidate | in review (#5) |
+| S14 | C10 unsigned evidence pack: standalone HTML from `verdict.json`, SARIF and the contract; PDF through a headless browser | The pack renders from fixtures | in review (#5) |
+| S15 | End-to-end job: capture → replay → compare → evidence on the sample app, in CI | One CI job produces the pack | in review (#5) |
+| S16 | C6 outbound stubs with WireMock.Net from recorded traffic | Phase 01 only if the specimen calls out (payments, shipping); otherwise phase 02 | phase 02 — neither the sample shop nor nopCommerce's demo configuration calls out |
 
 ## Phase 02 and later (starts after the phase 01 gate)
 
