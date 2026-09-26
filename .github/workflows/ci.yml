@@ -43,15 +43,15 @@ jobs:
           path: TestResults/
 
   mutation:
-    # One job per mutation-tested project, in parallel: the verdict path grew to four
-    # projects, and one after another they would outlast the rest of CI several times over.
+    # One job per mutation-tested project, in parallel: the verdict path and the replay are
+    # five projects, and one after another they would outlast the rest of CI several times over.
     name: mutation testing (${{ matrix.project }})
     runs-on: ubuntu-latest
     needs: build-test
     strategy:
       fail-fast: false
       matrix:
-        project: [Artifacts, Contract, Compare, Evidence]
+        project: [Artifacts, Contract, Compare, Evidence, Replay]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6

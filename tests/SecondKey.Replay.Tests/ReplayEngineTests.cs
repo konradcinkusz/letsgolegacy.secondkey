@@ -119,7 +119,8 @@ public sealed class ReplayEngineTests : IAsyncLifetime
         Assert.Equal(ResetMethod.Http, run.Header.Sides.Legacy.Reset);
         Assert.Equal(ScenarioMode.Session, run.Header.ScenarioMode);
         Assert.Equal(_capture.Header.CaptureId, run.Header.Capture.CaptureId);
-        Assert.Matches("^[a-f0-9]{64}$", run.Header.Capture.Sha256);
+        Assert.Equal(SecondKey.Artifacts.Hashing.Sha256Digest.OfFile(CapturePath), run.Header.Capture.Sha256);
+        Assert.Equal("traffic.skcap", run.Header.Capture.Path);
     }
 
     [Fact]
@@ -230,6 +231,7 @@ public sealed class ReplayEngineTests : IAsyncLifetime
     [InlineData("token", "token", "v", "token=v")]
     [InlineData("a=1", "token", "v", "a=1")]
     [InlineData("my+field=1", "my field", "v", "my+field=v")]
+    [InlineData("=old&token=a", "", "v", "=v&token=a")]
     public void A_form_field_is_replaced_in_place(string form, string field, string value, string expected)
     {
         Assert.Equal(expected, ReplayEngine.ReplaceFormField(form, field, value));
@@ -238,7 +240,9 @@ public sealed class ReplayEngineTests : IAsyncLifetime
     [Fact]
     public async Task Replaying_without_options_is_refused()
     {
-        await Assert.ThrowsAsync<ArgumentNullException>(() => ReplayEngine.RunAsync(null!));
-        Assert.Throws<ArgumentNullException>(() => ReplayEngine.Plan(null!, ScenarioMode.Session));
+        var options = await Assert.ThrowsAsync<ArgumentNullException>(() => ReplayEngine.RunAsync(null!));
+        var exchanges = Assert.Throws<ArgumentNullException>(() => ReplayEngine.Plan(null!, ScenarioMode.Session));
+        Assert.Equal("options", options.ParamName);
+        Assert.Equal("exchanges", exchanges.ParamName);
     }
 }
