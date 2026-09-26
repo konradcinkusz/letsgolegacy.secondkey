@@ -138,7 +138,7 @@ public class ContractTests
         var yaml = SampleYaml
             .Replace("kind: never", "kind: must", StringComparison.Ordinal)
             .Replace("kind: must\n    title: A cart or order total is never negative", "kind: never\n    title: A cart or order total is never negative", StringComparison.Ordinal)
-            .Replace("provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }\n\n  - id: CART-TOTAL", "provenance: { origin: designed, status: proposed }\n\n  - id: CART-TOTAL", StringComparison.Ordinal);
+            .Replace("provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }\n\n  - id: CART-SHOWS", "provenance: { origin: designed, status: proposed }\n\n  - id: CART-SHOWS", StringComparison.Ordinal);
 
         var report = ContractFile.ValidateText(yaml, "only a proposed absence");
 

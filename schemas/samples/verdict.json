@@ -166,7 +166,7 @@
           "candidate": "pass"
         },
         {
-          "id": "CART-TOTAL-MATCHES-LINES",
+          "id": "CART-SHOWS-TOTAL-AND-LINES",
           "legacy": "pass",
           "candidate": "pass"
         },
@@ -319,9 +319,9 @@
       "status": "held"
     },
     {
-      "id": "CART-TOTAL-MATCHES-LINES",
+      "id": "CART-SHOWS-TOTAL-AND-LINES",
       "kind": "must",
-      "title": "The cart page total equals the sum of its lines",
+      "title": "The cart page shows a total and at least one line",
       "text": "For GET /cart: extract.cartTotal is present, and extract.cartLineTotals has at least 1 value(s).",
       "accepted": true,
       "exercised": 1,
