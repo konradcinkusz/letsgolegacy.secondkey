@@ -729,8 +729,10 @@ kroki, a~z~opcją \texttt{-{}-check} tylko raportuje, czego brakuje, i~niczego n
         nazwane tak, żeby pominięcie było świadomym wyborem (P8): działający Docker (tylko
         dla testów snapshotu SQL Server, S11; bez niego te testy lokalnie raportują się jako
         pominięte), gitleaks (dla skanu pre-commit w~kroku 3; job CI skanuje niezależnie) i~przeglądarka headless (tylko do PDF pakietu; raport HTML powstaje zawsze).
-        Przeglądarki skrypt szuka w~kolejności: \texttt{SK\_CHROME\_PATH}, \texttt{chromium},
-        \texttt{chromium-browser}, \texttt{google-chrome}, \texttt{google-chrome-stable}.
+        Przeglądarki skrypt szuka w~tej samej kolejności co \texttt{PdfRenderer}:
+        \texttt{SK\_CHROME\_PATH}, \texttt{google-chrome}, \texttt{google-chrome-stable},
+        \texttt{chrome}, \texttt{microsoft-edge}, \texttt{microsoft-edge-stable},
+        \texttt{msedge}, \texttt{chromium}, \texttt{chromium-browser}.
   \item \textbf{Restore}: \repopath{dotnet restore SecondKey.slnx} i~\repopath{dotnet tool restore}.
   \item \textbf{Pre-commit secret scan} (opcjonalny): gdy gitleaks jest zainstalowany,
         skrypt kopiuje \path{scripts/hooks/pre-commit} do \path{.git/hooks/pre-commit} i~nadaje mu prawo wykonania; w~przeciwnym razie krok jest pomijany.
@@ -887,7 +889,7 @@ Reguła dwóch asercji: odmowa to odmowa \emph{i} nieobecność (\path{evals/REA
 \path{scripts/validate-scenarios.mjs}) & walidacja semantyczna poza schematem: kontrakt bez
 klauzuli \texttt{never} jest odrzucany \\
 Walidacja poza schematem: duplikaty identyfikatorów, nieznane referencje
-(\path{scripts/validate-scenarios.mjs}) & \texttt{ContractValidator}: duplikaty
+(\path{scripts/validate-scenarios.mjs}) & \texttt{ContractRules}: duplikaty
 identyfikatorów klauzul, referencje do niezdefiniowanych ekstraktorów, regexy, które się nie
 kompilują \\
 Trzy dyscypliny ewaluacji
@@ -1094,14 +1096,17 @@ Biblioteka kontraktów & fragmenty kontraktów wielokrotnego użytku między sys
 \end{xltabular}
 }
 
-\paragraph{Historia rewizji analizy.} Analiza fazy 01 ma nagłówek „Revision: 3
-(2026-09-26)” i~trzy wpisy w~dzienniku rewizji. Wpis 1: pierwsza tabela dla S1–S16,
+\paragraph{Historia rewizji analizy.} Analiza fazy 01 ma nagłówek „Revision: 4
+(2026-09-26)” i~cztery wpisy w~dzienniku rewizji. Wpis 1: pierwsza tabela dla S1–S16,
 decyzje D-1–D-3, ryzyka A1–A3, nic blokującego. Wpis 2: replay dołącza do testów
 mutacyjnych, nowe testy tego, czego replay nie wysyła, \texttt{SK\_SKIP\_DOCKER} w~A1 i~nowy tryb mergowania w~A3; otwarte: reset i~sonda SQL Server tylko w~testach
 integracyjnych. Wpis 3: w~jobie mutacyjnym A1 obowiązywało tylko na papierze ---
 odziedziczone \texttt{SK\_REQUIRE\_DOCKER=1} wygrywało z~\texttt{SK\_SKIP\_DOCKER=1}, więc
 testy SQL Server działały tam na kontenerze; teraz wygrywa świadome pominięcie, a~atrybut
-i~fixture dzielą jedną decyzję (\texttt{DockerGate}). Master prompt dla S1–S3 (\path{docs/analysis/S1-S3.master-prompt.md}) jest
+i~fixture dzielą jedną decyzję (\texttt{DockerGate}). Wpis 4: wiersze S8 i~S11 tabeli
+wskazują pliki, które faktycznie powstały --- jeden \path{stryker-config.json}
+i~\path{scripts/mutation.sh} w~katalogu głównym, \path{Resets/} z~\path{ResetTests.cs}
+i~\path{SqlServerTests.cs} --- zamiast nazw zaplanowanych w~pierwszym przebiegu. Master prompt dla S1–S3 (\path{docs/analysis/S1-S3.master-prompt.md}) jest
 plikiem generowanym z~rewizji 1 analizy i~nie jest edytowany ręcznie; przy rozbieżności
 wygrywa analiza.
 

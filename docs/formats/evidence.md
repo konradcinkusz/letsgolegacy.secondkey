@@ -24,11 +24,12 @@ a pack can never pair a verdict with the wrong inputs.
 | `contract.yaml` | The contract the verdict was computed from. |
 | `run.skrun` | The run, when `--run` is given — with the contract, enough to recompute the verdict. Leave it out when the recorded traffic must stay inside its boundary. |
 | `sarif/*.sarif` | The gate's logs, unchanged. |
-| `statement.intoto.json` | An [in-toto Statement v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md) naming every other file and its SHA-256, with the outcome, the summary, the contract and run digests and the gate's result as its predicate (`predicateType` `https://github.com/konradcinkusz/letsgolegacy.secondkey/evidence/v1`). **Unsigned** (`"signed": false`). |
+| `statement.intoto.json` | An [in-toto Statement v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md) naming every file but itself and `manifest.json` — which is written after it and lists it — with its SHA-256, with the outcome, the summary, the contract and run digests and the gate's result as its predicate (`predicateType` `https://github.com/konradcinkusz/letsgolegacy.secondkey/evidence/v1`). **Unsigned** (`"signed": false`). |
 | `manifest.json` | Every file but itself, with its SHA-256 and size. |
 
 Writing a pack into a directory that holds a previous pack replaces exactly the files that
-pack's manifest lists; a directory holding anything else is refused, never emptied.
+pack's manifest lists; a directory holding anything else is refused, never emptied, and
+`sk evidence` exits 64: the command asked for a place it cannot write to.
 
 ## Checking a pack
 

@@ -1,5 +1,6 @@
 using System.CommandLine;
 using System.Globalization;
+using SecondKey.Cli.Configuration;
 using SecondKey.Evidence;
 
 namespace SecondKey.Cli.Commands;
@@ -53,7 +54,9 @@ internal static class EvidenceCommand
                     "required" => PdfMode.Required,
                     "off" => PdfMode.Off,
                     "auto" => PdfMode.Auto,
-                    var other => throw new UsageException($"evidence.pdf: '{other}' is not one of auto, required, off"),
+                    // --pdf is checked by the parser (64) and evidence.pdf when the file is read (3);
+                    // this arm only keeps the switch total.
+                    var other => throw new ConfigurationException($"evidence.pdf: '{other}' is not one of auto, required, off"),
                 },
             };
 

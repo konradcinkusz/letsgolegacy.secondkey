@@ -28,7 +28,12 @@ public sealed class NoReset : IStateReset
     public Task<ResetResult> ResetAsync(CancellationToken cancellationToken) => Task.FromResult(new ResetResult(true, 0, null));
 }
 
-/// <summary>Calls an endpoint the system exposes for tests (e.g. <c>POST /__sk/reset</c>); any 2xx is success.</summary>
+/// <summary>
+/// Calls an endpoint the system exposes for tests (e.g. <c>POST /__sk/reset</c>); any 2xx is
+/// success. The path is appended to the side's base URL the way every replayed request path
+/// is, so a system served under <c>/shop/</c> is reset at <c>/shop/__sk/reset</c>, not at the
+/// host's root.
+/// </summary>
 public sealed class HttpReset : IStateReset
 {
     private readonly HttpClient _client;
@@ -41,7 +46,8 @@ public sealed class HttpReset : IStateReset
         ArgumentNullException.ThrowIfNull(baseUrl);
         _client = client;
         _method = new HttpMethod(method);
-        _uri = new Uri(baseUrl, path);
+        ArgumentNullException.ThrowIfNull(path);
+        _uri = new Uri(baseUrl.GetLeftPart(UriPartial.Authority) + baseUrl.AbsolutePath.TrimEnd('/') + (path.StartsWith('/') ? path : "/" + path));
     }
 
     public ResetMethod Method => ResetMethod.Http;

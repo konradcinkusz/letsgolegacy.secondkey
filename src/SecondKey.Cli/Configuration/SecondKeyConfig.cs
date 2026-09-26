@@ -84,6 +84,7 @@ public sealed record SecondKeyConfig
                 throw new ConfigurationException($"{path}: version {config.Version} is not supported; this build reads version 1");
             }
 
+            config.CheckValues(path);
             return config with { BaseDirectory = Path.GetDirectoryName(Path.GetFullPath(path)) ?? Environment.CurrentDirectory };
         }
         catch (YamlConversionException ex)
@@ -98,6 +99,56 @@ public sealed record SecondKeyConfig
 
     /// <summary>A path from the file, made absolute against the file's directory.</summary>
     public string Resolve(string path) => Path.GetFullPath(Path.Combine(BaseDirectory, path));
+
+    /// <summary>
+    /// The values the keys' types cannot constrain: a URL that must be absolute http(s), a
+    /// choice among named values, a reset that names exactly one kind. Checked when the file
+    /// is read, so every command — and <c>sk validate</c> — refuses the same file the same
+    /// way (exit 3) before anything runs, instead of one command guessing and another failing.
+    /// </summary>
+    private void CheckValues(string path)
+    {
+        Url(Capture?.Listen, "capture.listen");
+        Url(Capture?.Target, "capture.target");
+        Url(Replay?.Legacy?.BaseUrl, "replay.legacy.baseUrl");
+        Url(Replay?.Candidate?.BaseUrl, "replay.candidate.baseUrl");
+        OneOf(Replay?.ScenarioMode, "replay.scenarioMode", "session", "exchange");
+        OneOf(Evidence?.Pdf, "evidence.pdf", "auto", "required", "off");
+        OneKind(Replay?.Legacy?.Reset, "replay.legacy.reset");
+        OneKind(Replay?.Candidate?.Reset, "replay.candidate.reset");
+
+        void Url(string? value, string key)
+        {
+            if (value is not null && !(Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"))
+            {
+                throw new ConfigurationException($"{path}: {key}: '{value}' is not an absolute http(s) URL");
+            }
+        }
+
+        void OneOf(string? value, string key, params string[] choices)
+        {
+            if (value is not null && !choices.Contains(value, StringComparer.Ordinal))
+            {
+                throw new ConfigurationException($"{path}: {key}: '{value}' is not one of {string.Join(", ", choices)}");
+            }
+        }
+
+        // A second kind would be silently ignored and an empty reset would silently mean none:
+        // either way the file would not say what it does.
+        void OneKind(ResetConfig? reset, string key)
+        {
+            if (reset is null)
+            {
+                return;
+            }
+
+            var kinds = (reset.Http is null ? 0 : 1) + (reset.SqlServerSnapshot is null ? 0 : 1) + (reset.Command is null ? 0 : 1);
+            if (kinds != 1)
+            {
+                throw new ConfigurationException($"{path}: {key}: give exactly one of http, sqlServerSnapshot, command (found {kinds})");
+            }
+        }
+    }
 }
 
 public sealed record CaptureConfig

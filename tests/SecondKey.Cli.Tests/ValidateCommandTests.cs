@@ -77,6 +77,13 @@ public class ValidateCommandTests
             var (exit, output, _) = await RunAsync("validate", good);
             Assert.Equal(ExitCodes.InvalidInput, exit);
             Assert.Contains("scenarioModes", output, StringComparison.Ordinal);
+
+            // A value the key's type cannot constrain is checked when the file is read, so
+            // validate refuses it exactly as the command that would use it does.
+            await File.WriteAllTextAsync(good, "version: 1\nreplay:\n  scenarioMode: exchanges\n");
+            var (badValue, badOutput, _) = await RunAsync("validate", good);
+            Assert.Equal(ExitCodes.InvalidInput, badValue);
+            Assert.Contains("replay.scenarioMode: 'exchanges' is not one of session, exchange", badOutput, StringComparison.Ordinal);
         }
         finally
         {

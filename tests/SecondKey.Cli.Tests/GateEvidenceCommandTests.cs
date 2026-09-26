@@ -238,7 +238,7 @@ public class EvidenceCommandTests
 
             var (exit, _, error) = await RunAsync("evidence", "--config", config);
 
-            Assert.Equal(ExitCodes.Usage, exit);
+            Assert.Equal(ExitCodes.InvalidInput, exit);
             Assert.Contains("evidence.pdf: 'sometimes' is not one of auto, required, off", error, StringComparison.Ordinal);
         }
         finally
