@@ -4,15 +4,15 @@ namespace SecondKey.Cli.Tests;
 
 public class CommandLineTests
 {
-    private static readonly string[] SixSteps = ["capture", "mine", "replay", "gate", "mutate", "evidence"];
+    private static readonly string[] Steps = ["capture", "mine", "replay", "compare", "gate", "mutate", "evidence"];
 
     [Fact]
-    public async Task Help_lists_all_six_steps_of_the_chain()
+    public async Task Help_lists_every_step_of_the_chain()
     {
         var (exit, output, _) = await RunAsync("--help");
 
         Assert.Equal(ExitCodes.Success, exit);
-        foreach (var step in SixSteps)
+        foreach (var step in Steps)
         {
             Assert.Contains($"  {step} ", output, StringComparison.Ordinal);
         }

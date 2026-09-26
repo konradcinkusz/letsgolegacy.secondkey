@@ -115,6 +115,9 @@ internal static class Fixtures
         return new RunDocument(header, [], list, new RunEnd { FinishedAt = DateTimeOffset.UnixEpoch, Scenarios = 1, Results = list.Count });
     }
 
+    public static ComparisonInputs InputsOf(ContractDocument contract, RunDocument run) =>
+        new() { Contract = contract, ContractSha256 = new string('a', 64), Run = run, RunSha256 = new string('b', 64) };
+
     private static string FindRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

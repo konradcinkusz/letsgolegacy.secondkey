@@ -71,10 +71,14 @@ public sealed class CompiledClause
 /// <summary>Per-clause outcomes of one run: both sides, every exchange.</summary>
 public sealed class ContractReport
 {
-    internal ContractReport(IReadOnlyList<ClauseSummary> clauses, IReadOnlyDictionary<(string Exchange, Side Side), IReadOnlyList<ClauseEvaluation>> outcomes)
+    internal ContractReport(
+        IReadOnlyList<ClauseSummary> clauses,
+        IReadOnlyDictionary<(string Exchange, Side Side), IReadOnlyList<ClauseEvaluation>> outcomes,
+        IReadOnlyDictionary<(string Exchange, Side Side), Observation> observations)
     {
         Clauses = clauses;
         Outcomes = outcomes;
+        Observations = observations;
     }
 
     /// <summary>One summary per clause, in contract order.</summary>
@@ -82,6 +86,12 @@ public sealed class ContractReport
 
     /// <summary>For each exchange and side, one evaluation per clause in contract order.</summary>
     public IReadOnlyDictionary<(string Exchange, Side Side), IReadOnlyList<ClauseEvaluation>> Outcomes { get; }
+
+    /// <summary>
+    /// The observation each outcome was evaluated on, so that the comparator compares exactly
+    /// what the clauses saw — the same extracted values, not a second extraction.
+    /// </summary>
+    public IReadOnlyDictionary<(string Exchange, Side Side), Observation> Observations { get; }
 }
 
 /// <summary>
@@ -116,14 +126,17 @@ public sealed class ContractEngine
     {
         ArgumentNullException.ThrowIfNull(run);
         var outcomes = new Dictionary<(string, Side), IReadOnlyList<ClauseEvaluation>>();
+        var observations = new Dictionary<(string, Side), Observation>();
         foreach (var result in run.Results)
         {
-            outcomes[(result.Exchange, result.Side)] = Evaluate(Observations.Build(result));
+            var observation = Observations.Build(result);
+            observations[(result.Exchange, result.Side)] = observation;
+            outcomes[(result.Exchange, result.Side)] = Evaluate(observation);
         }
 
         var exchanges = run.Results.Select(r => r.Exchange).Distinct(StringComparer.Ordinal).ToList();
         var summaries = Clauses.Select((clause, index) => Summarize(clause, index, exchanges, outcomes)).ToList();
-        return new ContractReport(summaries, outcomes);
+        return new ContractReport(summaries, outcomes, observations);
     }
 
     private static ClauseSummary Summarize(

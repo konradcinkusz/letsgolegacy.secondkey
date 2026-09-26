@@ -123,5 +123,11 @@ normalize:
 ```
 
 A difference explained by one of these rules makes an exchange **equal under
-contract**; a difference nothing explains is a **regression** until a person adds a rule
-or a clause (see [ADR 0003](../adr/0003-verdict-classes.md)).
+contract**, and the verdict names the rule beside the difference; a difference nothing
+explains is a **regression** until a person adds a rule or a clause (see
+[ADR 0003](../adr/0003-verdict-classes.md) and [reading a verdict](verdict.md)).
+
+`timestamps` masks ISO-8601 date-times only. Other date forms — `/Date(1411725600000)/`
+from an ASP.NET JSON serializer, `26.09.2026` — are left alone on purpose: when a
+migration changes how a date is *written*, that is a difference a person should see. Add
+a `patterns` mask if a legacy form must be hidden on both sides.
