@@ -11,6 +11,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\SecondKey.Artifacts\SecondKey.Artifacts.csproj" />
+    <ProjectReference Include="..\SecondKey.Capture\SecondKey.Capture.csproj" />
+    <ProjectReference Include="..\SecondKey.Replay\SecondKey.Replay.csproj" />
   </ItemGroup>
 
   <ItemGroup>

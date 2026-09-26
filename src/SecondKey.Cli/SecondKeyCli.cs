@@ -6,6 +6,24 @@ using SecondKey.Cli.Configuration;
 
 namespace SecondKey.Cli;
 
+/// <summary>The command line asked for something that cannot be done as written.</summary>
+public sealed class UsageException : Exception
+{
+    public UsageException(string message)
+        : base(message)
+    {
+    }
+
+    public UsageException()
+    {
+    }
+
+    public UsageException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+}
+
 /// <summary>What every command needs: where to write, and the shared --config option.</summary>
 internal sealed class CliContext
 {
@@ -26,6 +44,19 @@ internal sealed class CliContext
     };
 
     public SecondKeyConfig LoadConfig(ParseResult result) => SecondKeyConfig.Load(result.GetValue(Config));
+
+    /// <summary>An absolute http(s) URL from an option or the configuration, or null when neither gives one.</summary>
+    public static Uri? Url(string? value, string source)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return System.Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
+            ? uri
+            : throw new UsageException($"{source}: '{value}' is not an absolute http(s) URL");
+    }
 }
 
 /// <summary>
@@ -69,6 +100,12 @@ public static class SecondKeyCli
         {
             await error.WriteLineAsync(ex.Message).ConfigureAwait(false);
             return ExitCodes.InvalidInput;
+        }
+        catch (UsageException ex)
+        {
+            await error.WriteLineAsync(ex.Message).ConfigureAwait(false);
+            await error.WriteLineAsync("Run 'sk --help' for usage.").ConfigureAwait(false);
+            return ExitCodes.Usage;
         }
         catch (OperationCanceledException)
         {

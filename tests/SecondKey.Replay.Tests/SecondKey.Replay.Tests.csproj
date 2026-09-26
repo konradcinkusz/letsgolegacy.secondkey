@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Testcontainers.MsSql" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SecondKey.Replay\SecondKey.Replay.csproj" />
+    <ProjectReference Include="..\..\src\SecondKey.Capture\SecondKey.Capture.csproj" />
+    <ProjectReference Include="..\..\samples\SampleShop\SampleShop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\SecondKey.Capture.Tests\SampleShopHost.cs" Link="SampleShopHost.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

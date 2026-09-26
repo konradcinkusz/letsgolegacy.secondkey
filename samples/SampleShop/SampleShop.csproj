@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <Description>A tiny shop that plays both roles of the phase 01 demo: the legacy system and the migrated candidate.</Description>
+    <IsPackable>false</IsPackable>
+    <!-- The sample's own culture handling is deliberately what it is: it demonstrates the NLS→ICU trap. -->
+    <NoWarn>$(NoWarn);CA1305;CA1307;CA1309;CA1310</NoWarn>
+  </PropertyGroup>
+
+</Project>

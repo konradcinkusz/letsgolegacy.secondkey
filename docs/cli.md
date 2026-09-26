@@ -9,9 +9,9 @@ dotnet run --project src/SecondKey.Cli -- --help
 
 | Command | Step | Status in this build |
 |---|---|---|
-| `sk capture` | C1 — record traffic through a proxy in front of the legacy system | S9 |
+| `sk capture` | C1 — record traffic through a proxy in front of the legacy system | available (S9) |
 | `sk mine` | C2 — propose contract clauses from recordings | planned, phase 02 (exits 70) |
-| `sk replay` | C6 — replay a capture against both sides under identical conditions | S10–S11 |
+| `sk replay` | C6 — replay a capture against both sides under identical conditions | available (S10–S11) |
 | `sk gate` | C5 — summarize the gate's SARIF per rule | S14 |
 | `sk mutate` | C9 — inject defects the contract must catch | planned, phase 02 (exits 70) |
 | `sk evidence` | C10 — assemble the evidence pack | S14 |
