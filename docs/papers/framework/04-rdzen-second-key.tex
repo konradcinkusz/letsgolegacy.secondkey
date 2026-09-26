@@ -415,7 +415,7 @@ proxy, \texttt{SessionTracker} & \path{Microsoft.AspNetCore.Mvc.Testing}; refere
 --- \\
 \path{SecondKey.Replay.Tests} & \texttt{ReplayEngine} na \texttt{SampleShop}, szczegóły HTTP
 (nagłówki, przekierowania, prefiks ścieżki bazowej, korelacja), resety, wartości sondy,
-snapshot i~sonda SQL Server & \texttt{[DockerFact]}; Testcontainers.MsSql; plik
+snapshot i~sonda SQL Server, tabela prawdy \texttt{DockerGate} & \texttt{[DockerFact]}; Testcontainers.MsSql; plik
 \path{SampleShopHost.cs} dołączony z~projektu testów capture \\
 \path{SecondKey.Compare.Tests} & \texttt{CanonicalJson}, \texttt{ComparableDocument},
 \texttt{JsonDiff}, \texttt{Normalizer}, \texttt{Comparator} & --- \\
@@ -529,9 +529,9 @@ Testy mają atrybut \texttt{[DockerFact]}; Docker uznaje się za dostępny, gdy 
 \toprule
 \texttt{SK\_REQUIRE\_DOCKER} & \texttt{SK\_SKIP\_DOCKER} & Docker & Wynik \\
 \midrule
-\texttt{1} & dowolna & dowolny & test uruchamiany zawsze; brak Dockera to porażka \\
-inna niż \texttt{1} & \texttt{1} & dowolny & pominięty celowo, z~powodem: testy SQL Server
+dowolna & \texttt{1} & dowolny & pominięty celowo, z~powodem: testy SQL Server
 zostają dla jobu build-and-test \\
+\texttt{1} & inna niż \texttt{1} & dowolny & test uruchamiany zawsze; brak Dockera to porażka \\
 inna niż \texttt{1} & inna niż \texttt{1} & jest & uruchamiany \\
 inna niż \texttt{1} & inna niż \texttt{1} & brak & pominięty z~powodem: test potrzebuje
 prawdziwego SQL Server, CI go uruchamia \\
@@ -542,8 +542,12 @@ prawdziwego SQL Server, CI go uruchamia \\
 To jest zaakceptowane ryzyko A1: lokalny przebieg bez Dockera dowodzi mniej niż CI.
 \repopath{SK\_SKIP\_DOCKER=1} ustawia skrypt \path{scripts/mutation.sh} dla projektu
 \repopath{SecondKey.Replay}, bo kontener SQL Server na każdego mutanta byłby daleko poza
-budżetem, a~kod SQL Server jest wyłączony z~mutacji. Kolejność warunków w~\texttt{DockerFactAttribute} daje pierwszeństwo \repopath{SK\_REQUIRE\_DOCKER=1}: przy obu
-zmiennych równych \repopath{1} test jest uruchamiany.
+budżetem, a~kod SQL Server jest wyłączony z~mutacji. \repopath{SK\_SKIP\_DOCKER=1} ma
+pierwszeństwo przed \repopath{SK\_REQUIRE\_DOCKER=1}, które CI ustawia każdemu jobowi:
+pominięcie jest świadomą decyzją jednego jobu, a~wymaganie --- ustawieniem domyślnym.
+Decyzję podejmuje jedna klasa, \texttt{DockerGate}, z~której korzystają i~atrybut,
+i~fixture \texttt{SqlServerFixture}, więc pominięty test nigdy nie uruchamia kontenera;
+tabelę prawdy trzymają testy \texttt{DockerGateTests}.
 
 \subsubsection{Testy PDF i~sygnałów}
 
@@ -599,6 +603,7 @@ tylko testami integracyjnymi.
 \path{letsgolegacy.secondkey/scripts/mutation.sh},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
 \path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/DockerFactAttribute.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/DockerGate.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/SqlServerTests.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/Fixtures.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/UnixFactAttribute.cs}}
@@ -668,8 +673,8 @@ Compare, Evidence i~Replay oraz \texttt{fail-fast: false}. Każdy job uruchamia
 artefakt \texttt{mutation-report-}\emph{projekt}. Po jednym jobie na projekt, równolegle:
 pięć projektów po kolei trwałoby kilka razy dłużej niż reszta CI. Job nie nadpisuje zmiennych
 z~poziomu workflowu, więc dziedziczy \texttt{SK\_REQUIRE\_DOCKER} równą \texttt{1} obok
-\texttt{SK\_SKIP\_DOCKER=1} ustawianej przez skrypt; skutek tej kombinacji opisuje
-sekcja~\ref{sec:rdzen-testy}.
+\texttt{SK\_SKIP\_DOCKER=1} ustawianej przez skrypt; pominięcie ma pierwszeństwo, więc
+testy SQL Server są w~nim pomijane (sekcja~\ref{sec:rdzen-testy}).
 
 \subsubsection{End-to-end}
 
@@ -816,7 +821,8 @@ Id & Zaakceptowane ryzyko & Koszt, jeśli błędne \\
 \midrule
 A1 & Test snapshotu SQL Server potrzebuje Dockera; CI (ubuntu-latest) go ma. Lokalnie, bez
 Dockera, test raportuje się jako pominięty z~powodem; w~CI \texttt{SK\_REQUIRE\_DOCKER=1}
-zamienia brak Dockera w~porażkę. \texttt{SK\_SKIP\_DOCKER=1} pomija test celowo, z~powodem:
+zamienia brak Dockera w~porażkę. \texttt{SK\_SKIP\_DOCKER=1} pomija test celowo, z~powodem,
+i~ma pierwszeństwo przed \texttt{SK\_REQUIRE\_DOCKER=1}, które dziedziczy każdy job CI:
 ustawia ją job mutacyjny, bo kod SQL Server jest wyłączony z~mutacji. & żaden w~CI; przebieg
 lokalny dowodzi mniej niż CI \\
 A2 & Renderowanie PDF potrzebuje headless Chromium. CI je ma; \texttt{SK\_REQUIRE\_PDF=1} w~CI czyni jego brak porażką, lokalnie jest raportowany jako pominięty. & żaden w~CI \\
@@ -1088,11 +1094,14 @@ Biblioteka kontraktów & fragmenty kontraktów wielokrotnego użytku między sys
 \end{xltabular}
 }
 
-\paragraph{Historia rewizji analizy.} Analiza fazy 01 ma nagłówek „Revision: 1
-(2026-09-26)”, a~jej dziennik rewizji ma dwa wpisy. Wpis 1: pierwsza tabela dla S1–S16,
+\paragraph{Historia rewizji analizy.} Analiza fazy 01 ma nagłówek „Revision: 3
+(2026-09-26)” i~trzy wpisy w~dzienniku rewizji. Wpis 1: pierwsza tabela dla S1–S16,
 decyzje D-1–D-3, ryzyka A1–A3, nic blokującego. Wpis 2: replay dołącza do testów
 mutacyjnych, nowe testy tego, czego replay nie wysyła, \texttt{SK\_SKIP\_DOCKER} w~A1 i~nowy tryb mergowania w~A3; otwarte: reset i~sonda SQL Server tylko w~testach
-integracyjnych. Master prompt dla S1–S3 (\path{docs/analysis/S1-S3.master-prompt.md}) jest
+integracyjnych. Wpis 3: w~jobie mutacyjnym A1 obowiązywało tylko na papierze ---
+odziedziczone \texttt{SK\_REQUIRE\_DOCKER=1} wygrywało z~\texttt{SK\_SKIP\_DOCKER=1}, więc
+testy SQL Server działały tam na kontenerze; teraz wygrywa świadome pominięcie, a~atrybut
+i~fixture dzielą jedną decyzję (\texttt{DockerGate}). Master prompt dla S1–S3 (\path{docs/analysis/S1-S3.master-prompt.md}) jest
 plikiem generowanym z~rewizji 1 analizy i~nie jest edytowany ręcznie; przy rozbieżności
 wygrywa analiza.
 

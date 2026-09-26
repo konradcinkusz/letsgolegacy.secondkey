@@ -15,7 +15,7 @@ public sealed class SqlServerFixture : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        if (Environment.GetEnvironmentVariable("SK_REQUIRE_DOCKER") != "1" && Environment.GetEnvironmentVariable("DOCKER_HOST") is null && !File.Exists("/var/run/docker.sock"))
+        if (DockerGate.SkipReason is not null)
         {
             return;
         }
