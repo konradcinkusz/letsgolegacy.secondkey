@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>The artifact formats that are Second Key's product interface: capture, contract, run, verdict.</Description>
+  </PropertyGroup>
+
+</Project>

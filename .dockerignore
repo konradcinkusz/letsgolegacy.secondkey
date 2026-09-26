@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/TestResults/
+**/StrykerOutput/
+.git/
+.github/
+docs/
+tests/
+*.skcap
+*.skrun
+.env
+.env.*
