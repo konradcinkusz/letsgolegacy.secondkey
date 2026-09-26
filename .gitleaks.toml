@@ -9,15 +9,19 @@ useDefault = true
 [[rules]]
 id = "sqlserver-connection-string-with-password"
 description = "SQL Server connection string carrying an inline password"
-# RE2 has no lookahead; placeholders are excluded by the allowlist below instead.
-regex = '''(?i)(server|data source)\s*=\s*[^\s;]+\s*;.{0,200}?(password|pwd)\s*=\s*[^\s;"']{4,}'''
+# The secret is the password itself (group 1), which is what the allowlist below is
+# matched against. Without secretGroup gitleaks takes the first group — "Server" — as the
+# secret, and a placeholder was never allowlisted.
+regex = '''(?i)(?:server|data source)\s*=\s*[^\s;]+\s*;.{0,200}?(?:password|pwd)\s*=\s*([^\s;"']{4,})'''
+secretGroup = 1
 tags = ["database", "connection-string"]
+
+  [[rules.allowlists]]
+  description = "Docs and fixtures that show the shape of a secret with a placeholder in angle brackets, e.g. Password=<from SK_LEGACY_DB>"
+  regexes = ['''^<''']
 
 [allowlist]
 description = "Templates that must show the shape of a secret without carrying one"
 paths = [
   '''secrets\.env\.example''',
-]
-regexes = [
-  '''(?i)(password|pwd)\s*=\s*<[^>]+>''',
 ]
