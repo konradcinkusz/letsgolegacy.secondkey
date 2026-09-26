@@ -1,12 +1,20 @@
 flowchart TD
-  S["wymiana: odpowiedzi legacy i kandydata<br/>po zredukowaniu do zachowania"] --> A{"strona bez odpowiedzi?<br/>timeout, połączenie, reset"}
+  S["wymiana: odpowiedzi legacy i kandydata<br/>zredukowane do zachowania"] --> A["strona bez odpowiedzi?<br/>(timeout, połączenie, reset)"]
   A -- tak --> R1["regression<br/>missing-result"]
-  A -- nie --> B{"zaakceptowana klauzula:<br/>legacy pass, kandydat fail?"}
+  A -- nie --> B["zaakceptowana klauzula:<br/>legacy pass, kandydat fail?"]
   B -- tak --> R2["regression<br/>clause-regression"]
-  B -- nie --> C{"legacy fail,<br/>kandydat pass?"}
+  B -- nie --> C["legacy fail,<br/>kandydat pass?"]
   C -- tak --> FC["fix-candidate<br/>clause-fixed"]
-  C -- nie --> D{"brak różnic?"}
+  C -- nie --> D["brak różnic?"]
   D -- tak --> E["equal<br/>identical"]
-  D -- nie --> N{"każdą różnicę tłumaczy<br/>reguła normalizacji?"}
+  D -- nie --> N["każdą różnicę tłumaczy<br/>reguła normalizacji?"]
   N -- tak --> EU["equal-under-contract<br/>normalized"]
   N -- nie --> R3["regression<br/>uncovered-difference"]
+  classDef q fill:#FEF5E7,stroke:#E67E22,color:#1F4E79
+  classDef bad fill:#FDEDEC,stroke:#C0392B,color:#78281F
+  classDef good fill:#E9F7EF,stroke:#27AE60,color:#145A32
+  classDef rev fill:#FEF9E7,stroke:#B7950B,color:#7D6608
+  class A,B,C,D,N q
+  class R1,R2,R3 bad
+  class E,EU good
+  class FC rev

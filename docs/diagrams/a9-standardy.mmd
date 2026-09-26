@@ -1,11 +1,18 @@
 flowchart LR
-  SRC["standards/*.md<br/>SK-ARCH-001…007<br/>SK-MIG-001…013"] --> GEN["secondkey-standards<br/>validate, generate --check"]
-  CAT["catalog/pack.json<br/>catalog/skill.template.md"] --> GEN
-  GEN --> SKILL["generated/skills/<br/>applying-dotnet-migration-standards"]
-  GEN --> CFG["generated/config/<br/>.editorconfig, .globalconfig"]
-  GEN --> NUP["generated/nuget/<br/>SecondKey.Standards"]
-  GEN --> MAN["generated/manifest.json"]
+  SRC["standards/*.md<br/>SK-ARCH-001…007<br/>SK-MIG-001…013"] --> GEN["secondkey-standards<br/>validate,<br/>generate --check"]
+  CAT["catalog/pack.json<br/>catalog/<br/>skill.template.md"] --> GEN
+  subgraph OUT["generated/"]
+    direction TB
+    SKILL["skills/applying-dotnet-<br/>migration-standards"]
+    CFG["config/.editorconfig,<br/>config/.globalconfig"]
+    NUP["nuget/<br/>SecondKey.Standards"]
+    MAN["manifest.json"]
+  end
+  GEN --> SKILL
+  GEN --> CFG
+  GEN --> NUP
+  GEN --> MAN
   SKILL --> AG["agent migracyjny<br/>.github/skills"]
   NUP --> BUILD["build kandydata<br/>severity diagnostyk"]
   CFG --> BUILD
-  DRIFT["actions/drift-check"] -. "pin kontra wydanie" .-> BUILD
+  DRIFT["actions/drift-check"] -. "pin kontra<br/>wydanie" .-> BUILD

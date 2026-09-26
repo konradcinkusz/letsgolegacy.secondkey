@@ -1,0 +1,104 @@
+\section{Klauzule kontraktu bench nopCommerce}\label{app:klauzule}
+
+Tabela wymienia wszystkie 76~klauzul pliku \path{contract/contract.yaml} bench nopCommerce
+(sekcja~\ref{sec:bench}) w~kolejności z~pliku: 61~rodzaju \texttt{must} i~15~rodzaju
+\texttt{never}. Kolumna „Zakres \texttt{when}” podaje metodę, wyrażenie regularne ścieżki
+i~wyrażenia parametrów zapytania (w~większości sondy \texttt{probe}) w~postaci, w~jakiej
+odczytuje je parser YAML; klauzula bez \texttt{when} obejmuje każde żądanie. Tytuły są
+przepisane z~pliku bez zmian, a~asercje, uzasadnienia \texttt{why} z~numerami reguł
+R01--R46 planu ruchu i~proweniencja (u~wszystkich klauzul \texttt{origin: designed},
+\texttt{status: accepted}) pozostają w~pliku źródłowym.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}r >{\raggedright\arraybackslash}p{3.1cm} l >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Lp. & Id & \texttt{kind} & Zakres \texttt{when} & Tytuł (\texttt{title}) \\
+\midrule
+\endfirsthead
+\toprule
+Lp. & Id & \texttt{kind} & Zakres \texttt{when} & Tytuł (\texttt{title}) \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & \path{STOREFRONT-ANSWERS-WITH-FOOTER} & \texttt{must} & \texttt{GET} \path{^/(|notebooks|computers|desktops|search|lenovo-ideacentre-600-all-in-one-pc|apple-macbook-pro-13-inch|build-your-own-computer|25-virtual-gift-card)$} & The home, category, search and product pages the traffic opens answer 200 and show \textquotedbl{}Powered by nopCommerce\textquotedbl{} \\
+2 & \path{HOME-LISTS-THE-FOUR-HOME-PAGE-PRODUCTS} & \texttt{must} & \texttt{GET} \path{^/$} & The home page lists exactly four products - Build your own computer, Apple MacBook Pro 13-inch, HTC One M8 Android L 5.0 Lollipop and \$25 Virtual Gift Card, the four the sample data flags \textquotedbl{}show on home page\textquotedbl{} \\
+3 & \path{COMPUTERS-LISTS-ITS-SUBCATEGORIES} & \texttt{must} & \texttt{GET} \path{^/computers$} & The Computers category lists its three subcategories Desktops, Notebooks and Software \\
+4 & \path{NOTEBOOKS-BY-PRICE-ASCENDING} & \texttt{must} & \texttt{GET} \path{^/notebooks$}\newline \texttt{orderby: \textasciicircum{}10\$} & Notebooks sorted by price (orderby=10) list HP Spectre, Lenovo Thinkpad X1, Asus N551JK, Samsung Series 9, Apple MacBook Pro - \$1,350 to \$1,800 \\
+5 & \path{NOTEBOOKS-BY-NAME} & \texttt{must} & \texttt{GET} \path{^/notebooks$}\newline \texttt{orderby: \textasciicircum{}5\$} & Notebooks sorted by name (orderby=5) list Apple, Asus, HP Spectre, Lenovo, Samsung in that order \\
+6 & \path{NOTEBOOKS-PAGE-TWO-OF-THREE-PER-PAGE} & \texttt{must} & \texttt{GET} \path{^/notebooks$}\newline \texttt{pagesize: \textasciicircum{}3\$}\newline \texttt{pagenumber: \textasciicircum{}2\$} & Page 2 of the notebooks at 3 per page lists Lenovo Thinkpad X1 Carbon Laptop and Samsung Series 9 NP900X4C Premium Ultrabook \\
+7 & \path{UNPUBLISHED-NEVER-LISTED} & \texttt{never} & \texttt{GET} \path{^/(notebooks|search)$} & The unpublished HP Envy 6-1180ca is never among the products a notebooks listing or a search lists \\
+8 & \path{UNPUBLISHED-PAGE-NEVER-SERVED} & \texttt{never} & \texttt{GET} \path{^/hp-envy-6-1180ca-156-inch-sleekbook$} & The unpublished HP Envy 6-1180ca's product page is never answered 200 \\
+9 & \path{UNPUBLISHED-PAGE-NOT-FOUND} & \texttt{must} & \texttt{GET} \path{^/hp-envy-6-1180ca-156-inch-sleekbook$} & The unpublished HP Envy 6-1180ca's product page answers 404 \\
+10 & \path{LENOVO-PAGE-NAME-SKU-PRICE} & \texttt{must} & \texttt{GET} \path{^/lenovo-ideacentre-600-all-in-one-pc$} & The Lenovo IdeaCentre 600 page shows its name, SKU LE\_IC\_600 and price 500.00 \\
+11 & \path{MACBOOK-PAGE-NAME-SKU-PRICE} & \texttt{must} & \texttt{GET} \path{^/apple-macbook-pro-13-inch$} & The Apple MacBook Pro 13-inch page shows its name, SKU AP\_MBP\_13 and price 1800.00 \\
+12 & \path{COMPUTER-PAGE-ATTRIBUTE-ADJUSTMENTS} & \texttt{must} & \texttt{GET} \path{^/build-your-own-computer$} & The Build your own computer page shows price 1200.00 and the options \textquotedbl{}2.5 GHz Intel Pentium Dual-Core E2200 [+\$15.00]\textquotedbl{} and \textquotedbl{}400 GB [+\$100.00]\textquotedbl{} \\
+13 & \path{SEARCH-FINDS-MACBOOK-BY-NAME-CASE-AND-SKU} & \texttt{must} & \texttt{GET} \path{^/search$}\newline \texttt{q: \textasciicircum{}(\allowbreak{}\textbackslash{}s|\allowbreak{}\%20)*(\allowbreak{}apple|\allowbreak{}APPLE|\allowbreak{}AP\_MBP\_13)(\allowbreak{}\textbackslash{}s|\allowbreak{}\%20)*\$} & Searching apple, APPLE, \textquotedbl{} apple \textquotedbl{} or the SKU AP\_MBP\_13 lists Apple MacBook Pro 13-inch \\
+14 & \path{SEARCH-TERM-MINIMUM-LENGTH} & \texttt{must} & \texttt{GET} \path{^/search$}\newline \texttt{q: \textasciicircum{}ap\$} & Searching \textquotedbl{}ap\textquotedbl{} answers \textquotedbl{}Search term minimum length is 3 characters\textquotedbl{} and lists no product \\
+15 & \path{LISTING-ADD-TO-CART-SUCCEEDS} & \texttt{must} & \texttt{POST} \path{^/addproducttocart/catalog/} & Every add-to-cart from a listing button answers \textquotedbl{}success\textquotedbl{}:true \\
+16 & \path{T07-CART-HOLDS-ONE-LENOVO} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T07\$} & After a refused add of 5 more, the T07 cart still holds exactly one line, one Lenovo IdeaCentre 600 \\
+17 & \path{QUANTITY-ABOVE-STOCK-REFUSED} & \texttt{must} & \texttt{POST} \path{^/addproducttocart/details/3/1$}\newline \texttt{probe: \textasciicircum{}T07\$} & Adding 5 Lenovos to a cart holding 1, with 3 in stock, answers \textquotedbl{}success\textquotedbl{}:false with \textquotedbl{}Your quantity exceeds stock on hand. The maximum quantity that can be added is 3.\textquotedbl{} \\
+18 & \path{QUANTITY-BELOW-MINIMUM-REFUSED} & \texttt{must} & \texttt{POST} \path{^/addproducttocart/details/4/1$}\newline \texttt{probe: \textasciicircum{}T08\$} & Adding 1 MacBook answers \textquotedbl{}success\textquotedbl{}:false with \textquotedbl{}The minimum quantity allowed for purchase is 2.\textquotedbl{} \\
+19 & \path{REQUIRED-ATTRIBUTE-REFUSED} & \texttt{must} & \texttt{POST} \path{^/addproducttocart/details/1/1$}\newline \texttt{probe: \textasciicircum{}T09\$} & Adding Build your own computer without an HDD answers \textquotedbl{}success\textquotedbl{}:false with \textquotedbl{}Please select HDD\textquotedbl{} \\
+20 & \path{T09-ATTRIBUTES-PRICED-INTO-UNIT-PRICE} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T09\$} & The T09 cart prices the configured computer at 1435.00 (1200 + 15 + 20 + 100 + 50 + 50), one line, subtotal 1435.00 \\
+21 & \path{T10-QUANTITY-UPDATE-REPRICES} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T10-\allowbreak{}quantity\$} & Setting the Lenovo line to 3 shows quantities 3 and 1, line totals 1500.00 and 24.00 and subtotal 1524.00 \\
+22 & \path{T10-REMOVE-CHECKBOX-DELETES-LINE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T10-\allowbreak{}remove\$} & Ticking \textquotedbl{}remove\textquotedbl{} on the book leaves the cart with the Lenovo line only \\
+23 & \path{T10-QUANTITY-ZERO-EMPTIES-CART} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T10-\allowbreak{}zero\$} & Setting the last line to quantity 0 answers \textquotedbl{}Your Shopping Cart is empty!\textquotedbl{} with no line \\
+24 & \path{CART-UNIT-PRICES-WRITTEN-IN-USD} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}(\allowbreak{}T07|\allowbreak{}T09)\$} & Every unit price on a cart page is written as \$\#,\#\#0.00 \\
+25 & \path{SAVE10-TAKES-10-PERCENT-OF-SUBTOTAL} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T11\$} & SAVE10 on the \$1,000.00 cart answers \textquotedbl{}The coupon code was applied\textquotedbl{} and shows the subtotal discount as (\$100.00) \\
+26 & \path{COUPON-TRIMMED-AND-CASE-INSENSITIVE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T12\$} & \textquotedbl{} save10 \textquotedbl{} (spaces, lower case) answers \textquotedbl{}The coupon code was applied\textquotedbl{} and shows the subtotal discount (\$100.00) \\
+27 & \path{COUPON-WITH-U180E-REFUSED} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T12B\$} & SAVE10 followed by U+180E (Mongolian vowel separator) is answered \textquotedbl{}The coupon code you entered couldn't be applied to your order\textquotedbl{}, with no discount \\
+28 & \path{EXPIRED-COUPON-MESSAGE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T13-\allowbreak{}expired\$} & The expired sample coupon 456 answers \textquotedbl{}Sorry, this offer is expired\textquotedbl{} \\
+29 & \path{FUTURE-COUPON-MESSAGE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T13-\allowbreak{}future\$} & FUTURE10 (valid from 2099) answers \textquotedbl{}Sorry, this offer is not started yet\textquotedbl{} \\
+30 & \path{UNKNOWN-COUPON-MESSAGE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T13-\allowbreak{}unknown\$} & The unknown code NOSUCH answers \textquotedbl{}The coupon code you entered couldn't be applied to your order\textquotedbl{} \\
+31 & \path{REFUSED-COUPON-NEVER-DISCOUNTS} & \texttt{never} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T13-\allowbreak{}} & After the expired, the not-yet-started or the unknown coupon, the cart never shows a subtotal discount \\
+32 & \path{REFUSED-COUPON-NEVER-SAYS-APPLIED} & \texttt{never} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T13-\allowbreak{}} & The expired, the not-yet-started and the unknown coupon are never answered \textquotedbl{}The coupon code was applied\textquotedbl{} \\
+33 & \path{TAKE50-CAPPED-AT-ORDER-TOTAL} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T14\$} & TAKE50 on the \$34.00 order (\$24.00 book, \$10.00 shipping, \$0.00 tax) shows the order discount (\$34.00) and total 0.00 \\
+34 & \path{CART-TOTAL-NEVER-NEGATIVE} & \texttt{never} & (każda metoda) \path{^/cart$} & A cart page's order total is never below 0.00 \\
+35 & \path{PCT20MAX100-STOPS-AT-MAXIMUM} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T15\$} & PCT20MAX100 on the \$3,600.00 cart shows the subtotal discount (\$100.00), not 20\% \\
+36 & \path{SHIPFREE-ZEROES-SHIPPING} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T16\$} & SHIPFREE on the \$500.00 cart with Ground chosen shows shipping 0.00 \\
+37 & \path{GIFT-CARD-IN-CART-COUPON-MESSAGE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T17\$} & SAVE10 on a cart holding a gift card answers \textquotedbl{}Sorry, this discount cannot be used with gift cards in the cart\textquotedbl{} \\
+38 & \path{GIFT-CARD-CART-NEVER-DISCOUNTED} & \texttt{never} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T17\$} & A cart holding a gift card never shows a subtotal discount after SAVE10 \\
+39 & \path{MEMBERS15-NEVER-FOR-A-GUEST} & \texttt{never} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T18A\$} & A guest's cart never shows a subtotal discount after MEMBERS15 (Registered role only) \\
+40 & \path{MEMBERS15-GUEST-NEVER-TOLD-APPLIED} & \texttt{never} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T18A\$} & A guest applying MEMBERS15 is never answered \textquotedbl{}The coupon code was applied\textquotedbl{} \\
+41 & \path{MEMBERS15-GUEST-GETS-AN-EMPTY-MESSAGE} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T18A\$} & A guest applying MEMBERS15 is answered with exactly one coupon message, and it is empty \\
+42 & \path{MEMBERS15-FOR-A-REGISTERED-CUSTOMER} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T18B\$} & MEMBERS15 for the registered sample customer answers \textquotedbl{}The coupon code was applied\textquotedbl{} and shows the subtotal discount (\$75.00) \\
+43 & \path{ONCE5-REFUSED-THE-SECOND-TIME} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T19\$} & ONCE5, once used in a placed order, answers \textquotedbl{}Sorry, you've used this discount already\textquotedbl{} the second time \\
+44 & \path{COUPON-123-APPLIED-CHANGES-NOTHING} & \texttt{must} & \texttt{POST} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T20\$} & The sample coupon 123 answers \textquotedbl{}The coupon code was applied\textquotedbl{} and the \$500.00 cart shows no discount \\
+45 & \path{TAX-US-NY-10001} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T21\$} & Billed to US / New York / 10001, the \$500.00 Lenovo with Ground shows tax 45.00 (9\%) \\
+46 & \path{TAX-US-NY-ANY-ZIP} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22A\$} & Billed to US / New York / 10002, the \$500.00 Lenovo shows tax 44.38 (8.875\%, rounded) \\
+47 & \path{TAX-US-CALIFORNIA} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22B\$} & Billed to US / California, the \$500.00 Lenovo shows tax 36.25 (7.25\%) \\
+48 & \path{TAX-US-ANY-STATE} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22C\$} & Billed to US / Texas, the \$500.00 Lenovo shows tax 25.00 (the 5\% rate for any US state) \\
+49 & \path{TAX-NO-RATE-GERMANY} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22D\$} & Billed to Germany, the \$500.00 Lenovo shows tax 0.00 (no rate for the country) \\
+50 & \path{TAX-ZIP-MATCH-IGNORES-CASE} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T23\$} & Billed to Canada / Ontario / \textquotedbl{}k1a 0b1\textquotedbl{}, the \$500.00 Lenovo shows tax 65.00 (the 13\% rate stored for K1A 0B1) \\
+51 & \path{TAX-FOLLOWS-BILLING-ADDRESS} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22F\$} & Billed to US / New York / 10001 and shipped to US / Texas, the \$500.00 Lenovo shows tax 45.00 - New York's 9\%, not Texas's 5\% \\
+52 & \path{TAX-EXEMPT-NEVER-TAXED} & \texttt{never} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22E\$} & The tax-exempt MacBook (x2, billed to US / New York / 10001) never shows tax above 0.00 \\
+53 & \path{TAX-EXEMPT-CART-PRICED} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T22E\$} & The tax-exempt MacBook cart (x2) shows subtotal 3600.00 and tax 0.00 \\
+54 & \path{ESTIMATE-OFFERS-FIXED-RATES-AND-PICKUP} & \texttt{must} & \texttt{POST} \path{^/cart/estimateshipping$}\newline \texttt{probe: \textasciicircum{}T24\$} & The estimate for US / New York / 10001 lists exactly Ground (\$10.00), Next Day Air (\$40.00), 2nd Day Air (\$25.00) and Pickup (\$1.99), in that order \\
+55 & \path{CHECKOUT-OFFERS-THE-SAME-RATES} & \texttt{must} & \texttt{POST} \path{^/checkout/OpcSaveBilling/$}\newline \texttt{probe: \textasciicircum{}T24\$} & The checkout's shipping-method step for the same cart offers Ground (\$10.00), 2nd Day Air (\$25.00) and Next Day Air (\$40.00) \\
+56 & \path{FREE-SHIPPING-PRODUCTS-SHIP-FREE} & \texttt{must} & \texttt{POST} \path{^/cart/estimateshipping$}\newline \texttt{probe: \textasciicircum{}T25\$} & For a cart of MacBooks only (a free-shipping product), the estimate charges \$0.00 for Ground, Next Day Air and 2nd Day Air, and \$1.99 for Pickup \\
+57 & \path{NO-FREE-SHIPPING-AT-EXACTLY-1000} & \texttt{must} & \texttt{POST} \path{^/cart/estimateshipping$}\newline \texttt{probe: \textasciicircum{}T26-\allowbreak{}1000\$} & A \$1,000.00 cart is estimated Ground (\$10.00) \\
+58 & \path{FREE-SHIPPING-OVER-1000} & \texttt{must} & \texttt{POST} \path{^/cart/estimateshipping$}\newline \texttt{probe: \textasciicircum{}T26-\allowbreak{}1024\$} & A \$1,024.00 cart is estimated Ground (\$0.00) \\
+59 & \path{GUEST-ORDER-NUMBERED} & \texttt{must} & \texttt{GET} \path{^/checkout/completed/$}\newline \texttt{probe: \textasciicircum{}T27\$} & The guest's placed order is shown as order number 6 \\
+60 & \path{GUEST-ORDER-TOTALS} & \texttt{must} & \texttt{GET} \path{^/orderdetails/[0-9]+$}\newline \texttt{probe: \textasciicircum{}T27\$} & The guest's order details show Sub-Total \$500.00, Shipping \$10.00, Tax \$45.00, Order Total \$555.00 and Order Status Pending \\
+61 & \path{BAD-CARD-NUMBER-REFUSED} & \texttt{must} & \texttt{POST} \path{^/checkout/OpcSavePaymentInfo/$}\newline \texttt{probe: \textasciicircum{}T28\$} & A card number failing its check digit (4111 1111 1111 1112) is answered with the payment form again, saying \textquotedbl{}Wrong card number\textquotedbl{} \\
+62 & \path{BAD-CARD-NEVER-REACHES-CONFIRM} & \texttt{never} & \texttt{POST} \path{^/checkout/OpcSavePaymentInfo/$}\newline \texttt{probe: \textasciicircum{}T28\$} & A card number failing its check digit never leads to the confirm step \\
+63 & \path{REGISTERED-ORDER-TOTALS} & \texttt{must} & \texttt{GET} \path{^/orderdetails/[0-9]+$}\newline \texttt{probe: \textasciicircum{}T28\$} & R1's order details show Sub-Total \$1,000.00, Discount (\$100.00), Shipping \$40.00, Tax \$81.00 (9\% of 900.00) and Order Total \$1,021.00 \\
+64 & \path{ORDER-EMPTIES-THE-CART} & \texttt{must} & \texttt{GET} \path{^/cart$}\newline \texttt{probe: \textasciicircum{}T28-\allowbreak{}after\$} & After R1's order is placed, the cart answers \textquotedbl{}Your Shopping Cart is empty!\textquotedbl{} \\
+65 & \path{ORDER-LOWERS-STOCK} & \texttt{must} & \texttt{POST} \path{^/addproducttocart/details/3/1$}\newline \texttt{probe: \textasciicircum{}T28\$} & After R1 ordered 2 of the 3 Lenovos in stock, adding 2 more answers \textquotedbl{}success\textquotedbl{}:false with \textquotedbl{}... The maximum quantity that can be added is 1.\textquotedbl{} \\
+66 & \path{HISTORY-LISTS-OWN-ORDERS-ONLY} & \texttt{must} & \texttt{GET} \path{^/order/history$}\newline \texttt{probe: \textasciicircum{}T29\$} & The sample customer's order history lists exactly one order, \textquotedbl{}Order Number: 1\textquotedbl{} \\
+67 & \path{OWN-ORDER-DETAILS-SHOWN} & \texttt{must} & \texttt{GET} \path{^/orderdetails/1$} & The sample customer's own order 1 answers 200 with \textquotedbl{}Order \#1\textquotedbl{} \\
+68 & \path{OWN-ORDER-PDF-INVOICE} & \texttt{must} & \texttt{GET} \path{^/orderdetails/pdf/1$} & The PDF invoice of the sample customer's own order 1 answers 200 as application/pdf \\
+69 & \path{OTHERS-ORDER-NEVER-SHOWN} & \texttt{never} & \texttt{GET} \path{^/orderdetails(/print|/pdf)?/2$} & Someone else's order 2 - its details, print view or PDF - is never answered 200, to a guest or to another customer \\
+70 & \path{OTHERS-ORDER-NEVER-NAMES-ITS-OWNER} & \texttt{never} & \texttt{GET} \path{^/orderdetails(/print|/pdf)?/2$} & No answer to a request for someone else's order 2 ever contains its owner's name, Arthur \\
+71 & \path{OTHERS-ORDER-SENDS-TO-LOGIN} & \texttt{must} & \texttt{GET} \path{^/(orderdetails(/print|/pdf)?/2|reorder/2|order/history)$}\newline \texttt{probe: \textasciicircum{}T30[AB]\$} & The requests of T30A and T30B - someone else's order 2 (details, print view, PDF, reorder) and a guest's order history - are redirected (302) to /login?ReturnUrl=... \\
+72 & \path{GUEST-NEVER-GETS-ORDER-HISTORY} & \texttt{never} & \texttt{GET} \path{^/order/history$}\newline \texttt{probe: \textasciicircum{}T30A\$} & A guest's request for /order/history is never answered 200 \\
+73 & \path{NOBODY-REORDERS-OTHERS-ORDER} & \texttt{never} & \texttt{GET} \path{^/reorder/2$}\newline \texttt{probe: \textasciicircum{}T30A\$} & A guest's reorder of someone else's order 2 never leads to the cart \\
+74 & \path{SIGN-IN-RETURNS-HOME} & \texttt{must} & \texttt{POST} \path{^/login$} & Signing in with valid credentials answers 302 to / \\
+75 & \path{REGISTRATION-COMPLETES} & \texttt{must} & \texttt{GET} \path{^/registerresult/1$} & Registering R1 answers \textquotedbl{}Your registration completed\textquotedbl{} \\
+76 & \path{NEVER-A-SERVER-ERROR} & \texttt{never} & (brak \texttt{when}: każde żądanie) & No request of the traffic set is ever answered with a server error (5xx) \\
+\end{xltabular}
+}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/contract/contract.yaml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md}}

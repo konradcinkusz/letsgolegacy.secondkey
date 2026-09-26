@@ -1,0 +1,2605 @@
+\section{Bench nopCommerce --- publiczny okaz}\label{sec:bench}
+
+Repozytorium \repopath{letsgolegacy.secondkey-nopcommerce-bench} jest publicznym okazem
+(specimen) frameworku letsgolegacy, w~praktyce nazywanym „bench nopCommerce”. Pokazuje
+łańcuch Second Key na prawdziwym systemie legacy: nopCommerce 3.x, sklepie na klasycznym
+ASP.NET MVC i~.NET Framework, który migruje agent migracyjny Microsoftu (modernize-dotnet),
+a~Second Key sprawdza -- niezależnie i~deterministycznie -- względem spisanego kontraktu
+tego, co sklep musi robić i~czego nie może robić nigdy. Second Key niczego nie migruje;
+tylko sprawdza.
+
+Rozdział opisuje migawkę repozytorium w~stanie \texttt{origin/main} (commit
+\texttt{e6d4fe9}). W~tym stanie zadania P1--P5 są zrobione (build, host legacy, rozgrzewka
+łańcucha, nagranie ruchu, kontrakt z~dowodem A/A), a~P6--P10 są zaplanowane. README
+zaznacza, że repozytorium jest w~budowie i~że żaden evidence pack (pakiet dowodowy) nie
+został jeszcze opublikowany; pakiety powstające w~każdym przebiegu CI są artefaktami
+workflowów, a~nie publikacją. Kolejne podsekcje idą od decyzji (ADR 0001--0006) przez
+nagranie ruchu, kontrakt, skrypty i~workflowy do wyników P3--P5, runbooka P6 i~planów
+P7--P10.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
+
+\subsection{Cel okazu i~zawartość repozytorium}\label{sec:bench-cel}
+
+Plan pracy (\repopath{docs/WORKPLAN.md}) nazywa okaz publicznym dowodem, że łańcuch
+Second Key działa na prawdziwym kodzie legacy. Wybranym systemem jest starszy nopCommerce
+(3.x, klasyczne ASP.NET MVC na .NET Framework): prawdziwy sklep z~rabatami, podatkami
+i~wysyłką, w~którym reguły „never” coś znaczą. Migrację wykonuje agent modernize-dotnet;
+Second Key tylko ją sprawdza.
+
+Pokaz jest zbudowany wokół jednego momentu: agent migruje, build i~istniejące testy
+przechodzą, a~Second Key mimo to znajduje prawdziwą różnicę w~zachowaniu. Najlepszym
+kandydatem na taką różnicę jest globalizacja: przejście z~.NET Framework na nowoczesny
+.NET przełącza ją z~NLS na ICU, więc porównywanie i~sortowanie napisów zależne od kultury
+może się zmienić -- plan nazywa to znaną, udokumentowaną pułapką migracji. Miejsca
+w~nopCommerce 3.90, w~których ta różnica może wyjść na wierzch, i~scenariusze, które je
+sondują, opisuje sekcja~\ref{sec:bench-plany}.
+
+\finding{Kod nopCommerce nie jest częścią repozytorium: CI pobiera przypięte wydanie
+z~projektu upstream w~czasie buildu, a~repozytorium zawiera wyłącznie bench -- skrypty,
+ruch, kontrakt i~wyniki.} Bench ma dzięki temu własne warunki (README: wszystkie prawa
+zastrzeżone), a~nopCommerce zostaje na licencji swoich autorów.
+
+Identyfikatory zadań (P1--P10) są zgodne z~backlogiem wspólnym dla wszystkich
+repozytoriów frameworku. Jedno zadanie to jeden pull request, chyba że jest oznaczone jako praca człowieka.
+Zadania należą do fazy 01 (demo), a~P9 tego repozytorium jest bramką fazy 01; status
+zadań podaje sekcja~\ref{sec:bench-plany}. Tabela~\ref{tab:bench-repo} pokazuje, co
+zawiera repozytorium.
+
+\begin{table}[htbp]
+\centering
+\small
+\caption{Zawartość repozytorium bench nopCommerce}\label{tab:bench-repo}
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+Ścieżka & Zawartość \\
+\midrule
+\path{pins.json} & jedyne źródło prawdy o~wszystkim, co bench pobiera lub buduje
+  (sekcja~\ref{sec:bench-pins}) \\
+\path{scripts/} & kroki 1--9 strony legacy, \path{collect-diagnostics.ps1}, biblioteki
+  \path{lib/}, scenariusze ruchu \path{traffic/}, skrypty rozgrzewki \path{eshop/}
+  (sekcja~\ref{sec:bench-skrypty}) \\
+\path{contract/} & kontrakt \path{contract.yaml}, konfiguracja odtwarzania
+  \path{secondkey.yaml}, README z~mapą reguł planu na klauzule
+  (sekcja~\ref{sec:bench-kontrakt}) \\
+\path{warmup/eshop/} & kontrakt i~konfiguracja rozgrzewki P3
+  (sekcja~\ref{sec:bench-rozgrzewka}) \\
+\path{docs/} & \path{WORKPLAN.md}, \path{TOPOLOGY.md}, \path{P4-TRAFFIC-PLAN.md},
+  \path{P6-RUNBOOK.md}, \path{P10-ONBOARDING-HOURS.md}, \path{adr/} (ADR 0001--0006) \\
+\path{results/p3/}, \path{p4/}, \path{p5/} & to, co zapisały przebiegi CI zamykające
+  zadania P3--P5 (sekcja~\ref{sec:bench-wyniki}) \\
+\path{.github/} & workflowy \path{legacy-build.yml}, \path{chain-tools.yml},
+  \path{warmup-eshop.yml}, \path{secret-scan.yml}; \path{CODEOWNERS};
+  \path{dependabot.yml} (sekcja~\ref{sec:bench-ci}) \\
+\path{.githooks/}, \path{.gitleaks.toml} & skan sekretów przed commitem i~w~CI
+  (sekcja~\ref{sec:bench-higiena}) \\
+\path{PSScriptAnalyzerSettings.psd1} & ustawienia lintu skryptów \\
+\path{.gitignore} & m.in.\ zakaz commitowania nagrań \path{*.skcap} i~\path{*.skrun} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.gitignore}}
+
+\subsection{Wybór i~przypięcie nopCommerce 3.90 (ADR 0001)}\label{sec:bench-pin}
+
+\paragraph{Kontekst.} Bench potrzebuje prawdziwego sklepu legacy: klasycznego ASP.NET na
+.NET Framework, SQL Server i~reguł biznesowych, które mają znaczenie (rabaty, podatki,
+wysyłka), tak by reguły „must” i~„never” kontraktu P5 coś znaczyły. Plan pracy ustalił
+produkt (nopCommerce) i~wersję główną (3.x); konkretne wydanie było otwarte. Upstream
+taguje każde wydanie 3.x: \texttt{release-3.00} … \texttt{release-3.80},
+\texttt{release-3.90} oraz dwie bety. Następna wersja główna, 4.00, przeszła na ASP.NET
+Core, co przekreśla cel: obserwowana ma być migracja z~System.Web na nowoczesny .NET.
+
+\paragraph{Decyzja.} Przypięte jest wydanie \texttt{release-3.90}:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+Tag & \texttt{release-3.90} (obiekt tagu z~adnotacją
+  \texttt{5846b2b59b102270e15d7eb8415298ae989a1abf}, otagowany 2017-03-15) \\
+Commit & \texttt{12d1f0139149a9d6e84964d325d62bae6ac748f6} \\
+Stos & ASP.NET MVC 5.2.3, Entity Framework 6.1.3, Autofac 4, .NET Framework 4.5.1,
+  SQL Server (lub SQL CE) \\
+Rozmiar & 5397 śledzonych plików; 94~MiB spakowane, 338~MB po checkoucie (upstream
+  commituje swój katalog \texttt{packages/}) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Przypięcie jest w~jednym miejscu, \repopath{pins.json}. Krok~1
+(\repopath{1-fetch-nopcommerce.ps1}) egzekwuje je przy każdym uruchomieniu dwa razy:
+tag upstream musi nadal wskazywać przypięty commit (przesunięty tag przerywa przebieg,
+zamiast po cichu zbudować coś innego), a~drzewo po checkoucie musi być dokładnie tym
+commitem, bez zmodyfikowanego pliku śledzonego. Krok~2 powtarza drugi test przed buildem
+i~po nim, więc opublikowana witryna jest dowodliwie buildem niezmienionego kodu upstream.
+
+\paragraph{Dlaczego 3.90, a~nie wcześniejsze 3.x.}
+\begin{itemize}
+  \item To \textbf{ostatnie} wydanie na klasycznym ASP.NET MVC: zawiera wszystkie
+    poprawki linii 3.x i~najpełniejszą powierzchnię biznesową -- reguły wymagań rabatów,
+    dostawców podatku według kraju, stanu i~kodu pocztowego, kilku dostawców stawek
+    wysyłki, wiele sklepów, dostawców (vendors), karty podarunkowe, punkty lojalnościowe,
+    atrybuty zamówienia. Więcej reguł do zapisania w~kontrakcie i~więcej sposobów na
+    regresję.
+  \item Jego toolchain (projekty Visual Studio 2015, \texttt{packages.config}) jest
+    najmłodszy w~linii 3.x, co daje najkrótszą drogę do buildu na obecnych obrazach
+    runnerów.
+  \item Żadne wcześniejsze 3.x nie wzmocniłoby pokazu; dodałoby tylko lat.
+\end{itemize}
+
+\paragraph{Dlaczego pobierany, a~nie dołączony do repozytorium.}
+\begin{itemize}
+  \item \textbf{Licencja.} nopCommerce 3.90 jest na nopCommerce Public License 3.0 (GPLv3
+    z~wymogiem atrybucji „powered by nopCommerce”), a~repozytorium bench ma wszystkie prawa
+    zastrzeżone. Trzymanie kodu upstream poza drzewem rozdziela oba zestawy warunków.
+  \item \textbf{Rozmiar i~szum.} 338~MB i~około 5000 plików cudzego kodu przytłoczyłyby
+    własną historię benchu i~każdy diff w~review.
+\end{itemize}
+
+\paragraph{Konsekwencje.}
+\begin{itemize}
+  \item CI potrzebuje w~czasie buildu dostępu do github.com; pobieranie ponawia błędy
+    przejściowe i~na hostowanym runnerze trwa sekundy.
+  \item Artefakt workflowu \repopath{legacy-site} jest buildem niezmienionego kodu upstream.
+    Jego manifest (\path{state/build.json}) podaje repozytorium i~commit upstream, czyli
+    miejsce publikacji źródeł. Stopka „powered by nopCommerce” pozostaje nietknięta.
+    Artefakt jest przechowywany 7~dni -- wystarczająco dla jobów, które go konsumują.
+  \item Zmiana przypięcia jest decyzją, a~nie rutynową czynnością: wymaga nowego ADR
+    i~ponownego przebiegu smoke testu oraz zestawu ruchu (P4) na nowym wydaniu.
+  \item Dane przykładowe 3.90 są datowane: rabat „20\% sumy zamówienia” wygasł
+    2020-01-01. To zachowanie do nagrania i~zapisania w~kontrakcie (P4, P5), a~nie defekt
+    do łatania.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0001-pin-nopcommerce-3.90.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/1-fetch-nopcommerce.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/2-build-legacy.ps1}}
+
+\subsubsection{Plik \texttt{pins.json}}\label{sec:bench-pins}
+
+\repopath{pins.json} jest jedynym źródłem prawdy o~wszystkim, co bench pobiera lub buduje:
+o~stronie legacy, o~narzędziach łańcucha Second Key i~o~aplikacji rozgrzewki. Każde
+pobranie jest weryfikowane względem tych wartości, zanim zostanie użyte, a~zmiana wartości
+jest decyzją, której powód zapisuje się w~\path{docs/adr/}. Plik ma cztery bloki:
+
+\begin{itemize}
+  \item \texttt{nopCommerce} -- repozytorium, tag, commit, ścieżki rozwiązania, projektu
+    \texttt{Nop.Web} i~katalogu wtyczek oraz docelowa wersja frameworku; czytają go kroki~1
+    i~2.
+  \item \texttt{toolchain} -- \texttt{NuGet.CommandLine} 7.9.0 (\texttt{nuget.exe}, gdy
+    żadnego nie ma na \texttt{PATH}), pakiet asemblacji referencyjnych .NET Framework 4.5.1
+    (ADR 0002) oraz nośnik SQL Server 2022 Express z~oczekiwanym podpisującym,
+    nazwą instancji i~kolacją (ADR 0003); czytają go kroki 2, 3 i~4. Każdy plik ma adres
+    URL i~skrót SHA-256.
+  \item \texttt{eShopModernizing} -- wyłącznie rozgrzewka P3 (ADR 0004): repozytorium,
+    commit, projekt i~katalog źródeł eShopLegacyMVC oraz dwa pakiety asemblacji
+    referencyjnych (4.6.1 i~4.7.2).
+  \item \texttt{chain} -- commity \texttt{letsgolegacy.secondkey} i~\texttt{letsgolegacy.portcullis},
+    z~których workflow \path{chain-tools.yml} buduje \repopath{sk} i~Portcullis za pomocą
+    .NET 10 SDK.
+\end{itemize}
+
+Klucze pamięci podręcznej CI zawierają skrót \repopath{pins.json}, więc każda zmiana
+pliku unieważnia zbuforowane pobrania. Przypięte wartości (adresy URL i~skróty SHA-256 pobrań są
+w~pliku):
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.1cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Klucz & Wartość \\
+\midrule
+\texttt{nopCommerce} & \path{https://github.com/nopSolutions/nopCommerce.git}, tag
+  \texttt{release-3.90}, commit \texttt{12d1f0139149a9d6e84964d325d62bae6ac748f6};
+  rozwiązanie \path{src/NopCommerce.sln}, projekt
+  \path{src/Presentation/Nop.Web/Nop.Web.csproj}, wtyczki \path{src/Plugins}, framework
+  \texttt{v4.5.1} \\
+\path{toolchain.nuget} & \texttt{NuGet.CommandLine} 7.9.0 (nuget.org) \\
+\path{toolchain.referenceAssemblies} &
+  \path{Microsoft.NETFramework.ReferenceAssemblies.net451} 1.0.3 (nuget.org) \\
+\path{toolchain.sqlServerExpress} & „SQL Server 2022 Express (core media, x64,
+  English)”, plik \path{SQLEXPR_x64_ENU.exe} z~download.microsoft.com, podpisujący
+  \texttt{Microsoft Corporation}, instancja \texttt{SQLEXPRESS}, kolacja
+  \texttt{SQL\_Latin1\_General\_CP1\_CI\_AS} \\
+\texttt{eShopModernizing} & \path{https://github.com/dotnet-architecture/eShopModernizing.git},
+  commit \texttt{63bc9ec4414d7e281dc9f9d7bdcf70030950457d}; projekt
+  \path{eShopLegacyMVCSolution/src/eShopLegacyMVC/eShopLegacyMVC.csproj}, źródła
+  \path{eShopLegacyMVCSolution/src/eShopLegacyMVC}; pakiety
+  \path{Microsoft.NETFramework.ReferenceAssemblies.net461} i~\path{...net472} w~wersji
+  1.0.3 (frameworki \texttt{v4.6.1}, \texttt{v4.7.2}) \\
+\path{chain.secondKey} & \path{konradcinkusz/letsgolegacy.secondkey}, commit
+  \texttt{967c49c0005c4412180914f43437d75b43f148dc}, projekt
+  \path{src/SecondKey.Cli/SecondKey.Cli.csproj}, asemblacja \path{SecondKey.Cli.dll} \\
+\path{chain.portcullis} & \path{konradcinkusz/letsgolegacy.portcullis}, commit
+  \texttt{84e1925fe0d85cf23415f0d33c98590f86128722}, projekt
+  \path{src/Portcullis.Cli/Portcullis.Cli.csproj}, asemblacja \path{Portcullis.Cli.dll} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/pins.json},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/chain-tools.yml}}
+
+\subsection{Topologia demonstracyjna (decyzja D7)}\label{sec:bench-topologia}
+
+\repopath{docs/TOPOLOGY.md} zapisuje decyzję D7 ze statusem „proposed”. Strona legacy jest
+zbudowana i~działa w~CI (P1, P2); części oznaczone jako planowane opisują, jak miały się
+podłączyć zadania P4--P7, które mogą je doprecyzować i~powinny wtedy zaktualizować tę
+stronę.
+
+\paragraph{Decyzja: jeden host Windows obsługuje stronę legacy, Linux -- resztę łańcucha.}
+\begin{itemize}
+  \item Sklep legacy potrzebuje Windows: nopCommerce 3.90 to ASP.NET MVC 5 na .NET
+    Framework, serwowany przez IIS, z~SQL Server pod spodem. Jeden host Windows mieści
+    wszystkie trzy.
+  \item Łańcuch Second Key -- capture, replay, compare, evidence -- jest aplikacją .NET 10
+    i~działa wszędzie; jego naturalnym miejscem jest Linux (szybszy start runnerów,
+    kontenery).
+  \item Komponenty wymieniają \textbf{pliki}, nigdy swoje wnętrza: \path{*.skcap},
+    \path{contract.yaml}, \path{*.skrun}, \path{verdict.json}, \path{*.sarif}
+    (sekcja~\ref{sec:formaty}). Granica między maszynami może więc przebiegać wszędzie
+    tam, dokąd da się skopiować te pliki.
+  \item Tylko dwa kroki muszą sięgać do działającego sklepu przez HTTP: \textbf{capture}
+    (P4) i~\textbf{replay} (A/A w~P5, kandydat w~P7). Działają tam, skąd sklep jest
+    osiągalny; wszystko dalej to „plik na wejściu, plik na wyjściu”.
+\end{itemize}
+
+Tabela~\ref{tab:bench-porty} zbiera nazwy, porty i~miejsca. \texttt{<work>} oznacza
+katalog roboczy skryptów (sekcja~\ref{sec:bench-stan}).
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.6cm}@{}}
+\caption{Nazwy, porty i~miejsca (TOPOLOGY)}\label{tab:bench-porty}\\
+\toprule
+Co & Wartość & Ustawia \\
+\midrule
+\endfirsthead
+\toprule
+Co & Wartość & Ustawia \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Sklep legacy & \url{http://localhost:8080/} & krok~4, \texttt{-Port} \\
+Witryna i~pula aplikacji IIS & \texttt{nopcommerce-legacy}; .NET CLR v4.0, potok
+  zintegrowany, bez limitu bezczynności, bez okresowego recyklingu & krok~4,
+  \texttt{-SiteName} \\
+Tożsamość witryny & \texttt{IIS APPPOOL\textbackslash{}nopcommerce-legacy}: Modify na
+  katalogu witryny, \texttt{dbcreator} w~SQL Server, nic więcej & krok~4 \\
+Katalog witryny & \path{C:\inetpub\nopcommerce-legacy} & krok~4, \texttt{-InstallDir} \\
+SQL Server & SQL Server 2022 Express, instancja \texttt{.\textbackslash{}SQLEXPRESS},
+  kolacja serwera \texttt{SQL\_Latin1\_General\_CP1\_CI\_AS}; połączenia lokalne przez
+  pamięć współdzieloną & krok~3, \path{pins.json} \\
+Baza danych & \texttt{nopcommerce\_legacy}, tworzona przez instalator nopCommerce
+  z~przypiętą kolacją, danymi przykładowymi i~uwierzytelnianiem Windows (nigdzie hasła) &
+  krok~4, \texttt{-DatabaseName} \\
+Administrator sklepu & \texttt{admin@nopbench.invalid}, hasło generowane na przebieg,
+  przechowywane w~\path{<work>\secrets\legacy-admin.json} & krok~4 \\
+Proxy nagrywające (P4) & \url{http://127.0.0.1:8000/} $\rightarrow$
+  \url{http://localhost:8080/} & krok~7, \texttt{-ProxyUrl} \\
+Snapshot bazy (P4) & \texttt{nopcommerce\_legacy\_snapshot}, robiony po konfiguracji
+  sklepu, przywracany przed każdym scenariuszem & krok~7 \\
+Kandydat (planowany, P7) & \url{http://localhost:8090/}, własna kopia bazy & P7 \\
+Rozgrzewka P3: eShopLegacyMVC & \url{http://localhost:8081/}, witryna IIS
+  \texttt{eshop-legacy}, dane mock (bez bazy) & \path{scripts/eshop/2-deploy-eshop.ps1} \\
+Rozgrzewka P3: proxy nagrywające & \url{http://127.0.0.1:8001/} $\rightarrow$
+  \url{http://localhost:8081/} & \path{scripts/eshop/3-record-eshop.ps1} \\
+\end{xltabular}
+}
+
+\paragraph{W~CI.} Runnery hostowane przez GitHub nie dzielą sieci: job na runnerze linuksowym nie dosięgnie
+IIS na runnerze Windows. Dlatego capture i~replay działają \textbf{wewnątrz joba Windows},
+obok IIS -- \repopath{sk} jest wieloplatformową aplikacją .NET 10, więc uruchomienie go na
+Windows niczego nie komplikuje. To, co produkują (\path{*.skcap}, \path{*.skrun}),
+opuszcza job jako artefakt, a~kroki „plik na wejściu, plik na wyjściu” (sprawdzenia
+kontraktu, compare, evidence) działają w~jobie linuksowym. Rozgrzewka P3 była pierwszym
+przebiegiem tego podziału (ADR 0004); rozkład jobów pokazuje
+sekcja~\ref{sec:bench-ci}. Zmierzone na \texttt{windows-2022}: job buildu trwa
+około 1,5~minuty; job hosta dodaje IIS, SQL Server Express i~instalator (czasy są
+w~podsumowaniu każdego przebiegu oraz w~\path{state\platform.json}
+i~\path{state\deploy.json}).
+
+\paragraph{Na stacji roboczej.} Te same skrypty, w~tej samej kolejności, na jednym z:
+\begin{itemize}
+  \item \textbf{maszynie wirtualnej Windows Server 2022 pod Hyper-V} (do pokazu wystarczy
+    nośnik ewaluacyjny; 4~vCPU i~8~GB są wygodne) albo
+  \item \textbf{komputerze z~Windows 10/11 Pro lub Enterprise z~IIS} -- skrypty włączają
+    IIS przez funkcje opcjonalne DISM, których nazwy są takie same w~Windows klienckim
+    i~serwerowym.
+\end{itemize}
+Kroki 1--5 uruchamia się w~PowerShell z~podniesionymi uprawnieniami (kroki~1 i~2 ich nie
+potrzebują). Żeby strona linuksowa (WSL2 albo maszyna Linux w~tym samym przełączniku
+wirtualnym) dosięgła sklepu, trzeba otworzyć port na hoście Windows -- CI tego nie
+potrzebuje, więc skrypty tego nie robią:
+
+\begin{lstlisting}
+New-NetFirewallRule -DisplayName 'nopbench legacy 8080' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
+\end{lstlisting}
+
+Następnie z~Linuksa (smoke test działa także na PowerShell 7 w~Linuksie):
+
+\begin{lstlisting}
+pwsh scripts/5-smoke.ps1 -BaseUrl http://<windows-host>:8080/
+\end{lstlisting}
+
+\paragraph{Co host dokłada do zachowania -- i~dlatego jest ustalone.}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Ustawienie & Wartość & Dlaczego ma znaczenie \\
+\midrule
+Kolacja SQL & \texttt{SQL\_Latin1\_General\_CP1\_CI\_AS}, przypięta dla serwera i~bazy &
+  kolejność i~równość w~zapytaniach (sortowanie katalogu, wyszukiwanie) \\
+Środowisko .NET Framework & 4.8 (hosta), uruchamiające aplikację zbudowaną dla 4.5.1 &
+  środowisko zastępowane w~miejscu: tak działa każdy produkcyjny host tego sklepu \\
+Kultura & \texttt{en-US}, ustawiana przez nopCommerce na każde żądanie z~języka sklepu &
+  format cen i~dat; porównanie NLS $\rightarrow$ ICU w~P7 dotyczy środowiska, więc obie
+  strony muszą widzieć tę samą kulturę \\
+Strefa czasowa & UTC na runnerach hostowanych & ważność rabatów, daty zamówień, produkty
+  „nowe” \\
+Kompresja & niezainstalowana & nagrane treści zostają czytelne; kompresja należy do
+  transportu, nie do kontraktu \\
+Zegar & czas rzeczywisty & nie da się go kontrolować bez ruszania kodu legacy; zamiast
+  tego komparator normalizuje czasy (zadanie rdzenia S12) \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0004-chain-tools-and-eshop-warmup.md}}
+
+\subsection{Katalog roboczy, pliki przekazania i~jedyny sekret}\label{sec:bench-stan}
+
+\paragraph{Katalog roboczy \texttt{<work>}.} Każdy skrypt rozwiązuje katalog roboczy
+w~tej kolejności: parametr \texttt{-WorkRoot}, zmienna \texttt{NOPBENCH\_WORK}, a~potem
+domyślnie \path{C:\nopbench} (dokładniej \texttt{\$env:SystemDrive\textbackslash{}nopbench})
+w~Windows i~\path{$HOME/nopbench} w~innych systemach. W~CI workflowy ustawiają
+\path{NOPBENCH_WORK=$env:RUNNER_TEMP\nopbench}, co na hostowanym
+runnerze Windows daje \path{D:\a\_temp\nopbench}. Ścieżka ma być krótka: potok publikacji
+webowej MSBuild głęboko zagnieżdża ścieżki, a~starsze zadania MSBuild nadal trafiają na
+limit 260 znaków. Nic, co zapisuje którykolwiek krok, nie ląduje w~repozytorium.
+
+Katalog roboczy zawiera: \path{legacy-src} (checkout, krok~1), \path{legacy-site}
+(publikacja, krok~2), \path{downloads} (zweryfikowane pobrania: pakiety
+\path{<id>.<wersja>.nupkg} i~\path{SQLEXPR_x64_ENU.exe}; w~CI buforowany),
+\path{tools} (rozpakowane pakiety ze znacznikiem \path{.sha256}, nośnik
+\path{sqlexpress-media}, narzędzia łańcucha w~\path{chain\secondkey}
+i~\path{chain\portcullis}, asemblacje rozgrzewki w~\path{eshop-reference-assemblies}),
+\path{logs} (binlogi MSBuild, logi proxy \path{traffic-capture.log} i~\path{.log.err}),
+\path{state} (pliki przekazania), \path{secrets\legacy-admin.json},
+\path{sqldata} (tylko gdy dysk systemowy zgłasza sektory atomowe ponad 4096~B),
+\path{traffic\nopcommerce.skcap}, \path{replay} (\path{run.skrun}, \path{verdict.json},
+\path{evidence}), \path{diagnostics} oraz katalogi rozgrzewki \path{eshop-src},
+\path{eshop-site} i~\path{eshop}. Poza nim są tylko katalogi serwowane przez IIS
+(\path{C:\inetpub\nopcommerce-legacy}, \path{C:\inetpub\eshop-legacy}) i~pliki snapshotu
+bazy (\path{<snapshot>_<plik>.ss}) obok plików danych bazy.
+
+\paragraph{Pliki przekazania.} Każdy krok zapisuje, co wyprodukował, w~pliku
+\path{<work>\state\<krok>.json}, a~następny krok czyta go, gdy nie dostanie parametru:
+najpierw jawny parametr, potem plik przekazania, na końcu wartość domyślna. Funkcja
+\texttt{Write-BenchState} zapisuje JSON w~UTF-8 bez BOM i~z~zasady nie zapisuje sekretów.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} l >{\raggedright\arraybackslash}X@{}}
+\caption{Pliki przekazania w~\texttt{<work>\textbackslash{}state}}\label{tab:bench-state}\\
+\toprule
+Plik & Zapisuje & Zawiera \\
+\midrule
+\endfirsthead
+\toprule
+Plik & Zapisuje & Zawiera \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\path{fetch.json} & krok~1 & tag, commit, ścieżkę checkoutu, liczbę plików śledzonych \\
+\path{build.json} & krok~2 & zbudowany commit, wersje narzędzi i~pakietu asemblacji,
+  ścieżkę witryny, liczbę plików i~wtyczek, skrót manifestu, obraz hosta, czasy faz \\
+\path{legacy-site.sha256} & krok~2 & SHA-256 każdego opublikowanego pliku, zgodny
+  z~\texttt{sha256sum -c}, sortowany porządkowo \\
+\path{platform.json} & krok~3 & stan IIS, instancję, wersję i~kolację SQL Server \\
+\path{deploy.json} & krok~4 & URL, witrynę, tożsamość, bazę i~jej kolację, connection
+  string (bez sekretu), liczbę tabel i~produktów, ścieżkę pliku z~danymi administratora,
+  czasy \\
+\path{smoke.json} & krok~5 & każdą kontrolę ze statusem, czasem i~wynikiem \\
+\path{store-config.json} & krok~6 & co skonfigurowano, z~nadanymi identyfikatorami
+  (kategoria podatku, kraje, produkty, rabaty, rola klienta) \\
+\path{traffic.json} & krok~7 & ścieżkę i~skrót nagrania, scenariusze z~identyfikatorami
+  sesji i~liczbą żądań, snapshot, odpowiedzi na pierwsze żądanie po każdym przywróceniu,
+  skrót manifestu witryny, znacznik \texttt{partial} \\
+\path{replay.json} & krok~8 & ścieżkę i~skrót przebiegu, tryb (A/A albo legacy vs
+  kandydat), oba URL-e, liczby scenariuszy, wyników i~resetów, statusy \\
+\path{verdict.json} & krok~9 & wynik, podsumowanie, klauzule niespełnione, maski, pliki
+  pakietu \\
+\path{eshop-*.json} & rozgrzewka & odpowiedniki dla eShopLegacyMVC (\texttt{build},
+  \texttt{deploy}, \texttt{traffic}, \texttt{replay}, \texttt{scan} -- SARIF, liczba
+  znalezisk i~kod wyjścia Portcullis --, \texttt{verdict}) \\
+\end{xltabular}
+}
+
+\paragraph{Jedyny sekret.} Krok~4 tworzy administratora sklepu z~hasłem generowanym na
+dany przebieg: 32~znaki losowane generatorem \texttt{RandomNumberGenerator}
+z~57-znakowego alfabetu (bez liter I, O, l i~cyfr 0, 1), chyba że ustawiono
+\texttt{NOPBENCH\_ADMIN\_PASSWORD}. Hasło jest rejestrowane w~maskowaniu logów GitHub
+Actions (\texttt{::add-mask::}), nigdy nie jest drukowane i~trafia wyłącznie do
+\path{<work>\secrets\legacy-admin.json} (pola \texttt{url}, \texttt{email},
+\texttt{password}, \texttt{generated}). ACL pliku jest ustawiana przez \texttt{icacls}
+z~wyłączonym dziedziczeniem: pełny dostęp mają bieżący użytkownik, grupa Administratorzy
+i~SYSTEM. Krok~6 czyta plik i~ponownie maskuje hasło; diagnostyka nigdy nie zbiera
+katalogu \path{secrets}. Baza danych nie ma hasła w~ogóle: witryna łączy się tożsamością
+swojej puli aplikacji (uwierzytelnianie Windows), a~adres \texttt{admin@nopbench.invalid}
+należy do zarezerwowanej domeny, więc nic nie jest nigdy dostarczane.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Common.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/4-deploy-and-install.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0003-legacy-host-iis-sqlexpress-unattended-install.md}}
+
+\subsection{Build na \texttt{windows-2022} (ADR 0002)}\label{sec:bench-build}
+
+\paragraph{Kontekst.} Wszystkie 31~projektów nopCommerce 3.90 celują w~.NET Framework
+\textbf{4.5.1}. MSBuild kompiluje względem \emph{asemblacji referencyjnych} frameworku
+docelowego, a~nie względem środowiska uruchomieniowego, a~pakiet docelowy (targeting pack)
+4.5.1 nie jest już zainstalowany nigdzie, dokąd job CI może sięgnąć:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}p{3.4cm} X@{}}
+\toprule
+Obraz hostowany (wrzesień 2026) & Visual Studio & Pakiety docelowe .NET Framework \\
+\midrule
+\texttt{windows-2022} & Enterprise 2022, 17.14 & 4.5.2, 4.6, 4.6.2, 4.7, 4.7.1, 4.7.2,
+  4.8, 4.8.1 \\
+\texttt{windows-2025} = \texttt{windows-latest} & Enterprise 2026, 18.x & 4.6.2, 4.7,
+  4.7.1, 4.7.2, 4.8, 4.8.1 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Dane pochodzą z~plików README repozytorium \path{actions/runner-images}. Bez pakietu
+build zatrzymuje się na błędzie:
+
+\begin{lstlisting}
+MSB3644: The reference assemblies for .NETFramework,Version=v4.5.1 were not found
+\end{lstlisting}
+
+Ograniczenie z~zadania: rozwiązać to bez modyfikowania kodu nopCommerce.
+
+\paragraph{Decyzje.}
+\begin{enumerate}
+  \item \textbf{Asemblacje referencyjne z~NuGet, przekazane jako właściwość.} Krok~2
+    pobiera z~nuget.org pakiet \texttt{Microsoft.NETFramework.ReferenceAssemblies.net451}
+    1.0.3 (publikowany przez Microsoft pakiet, którego SDK używa w~tym samym celu),
+    sprawdza jego przypięty SHA-256, rozpakowuje go w~katalogu roboczym i~przekazuje
+    MSBuild \texttt{/p:TargetFrameworkRootPath=<pakiet>\textbackslash{}build}. MSBuild
+    rozwiązuje wtedy \path{.NETFramework\v4.5.1} (asemblacje referencyjne, fasady,
+    \path{RedistList\FrameworkList.xml}) z~pakietu zamiast z~\texttt{Program Files}. Nic nie
+    jest instalowane na maszynie i~żaden plik upstream się nie zmienia; krok~2 sprawdza
+    po buildzie, że checkout jest nadal czysty.
+  \item \textbf{Runner \texttt{windows-2022}}, przypięty zamiast \texttt{windows-latest}:
+    \begin{itemize}
+      \item jego MSBuild 17.14 i~cele aplikacji webowych są najbliższym potomkiem toolchainu
+        Visual Studio 2015, dla którego pisano projekty;
+      \item \texttt{windows-latest} już raz się przesunął (na Windows Server 2025
+        z~Visual Studio 2026); przypięta etykieta chroni build legacy przed zmianą pod
+        spodem;
+      \item skrypty nie zależą od niczego specyficznego dla obrazu (MSBuild jest szukany na
+        \texttt{PATH} albo przez \texttt{vswhere}, asemblacje referencyjne pochodzą
+        z~\path{pins.json}), więc przejście na \texttt{windows-2025} to zmiana jednej
+        linii. Ręczny trigger workflowu ma wejście \texttt{runner}, żeby przenośność dało
+        się sprawdzić na żądanie, bez macierzy przy każdym pushu.
+    \end{itemize}
+  \item \textbf{Te same skrypty lokalnie i~w~CI, w~Windows PowerShell 5.1.} CI wywołuje
+    \path{scripts/1-fetch-nopcommerce.ps1} i~\path{scripts/2-build-legacy.ps1} bez
+    dodatkowych argumentów. Akcje \texttt{microsoft/setup-msbuild} i~\texttt{NuGet/setup-nuget}
+    (nuget.exe 7.9.0 -- ta sama wersja, której skrypty używają awaryjnie) tylko kładą
+    narzędzia na \texttt{PATH}.
+  \item \textbf{Publikacja tak, jak opisuje ją upstream.} \texttt{Deploying.Readme.txt}
+    nopCommerce mówi: przebuduj rozwiązanie, potem opublikuj \texttt{Nop.Web} w~Release.
+    Krok~2 robi dokładnie to z~wiersza poleceń (publikacja webowa do systemu plików
+    z~\texttt{DeployDefaultTarget=WebPublish}). \texttt{Nop.Web.csproj} ustawia
+    \texttt{FilesToIncludeForPublish=AllFilesInProjectFolder} i~własną listę wykluczeń,
+    więc opublikowany katalog zawiera już zbudowane wtyczki (\path{Plugins\*}) i~obszar
+    Administration, bez plików źródłowych, \path{*.csproj} i~plików stanu instalacji.
+  \item \textbf{Build hermetyczny.} \path{ImportDirectoryBuildProps=false}
+    i~\path{ImportDirectoryBuildTargets=false} nie pozwalają, by jakikolwiek plik
+    \texttt{Directory.Build.*} nad checkoutem wpłynął na projekty upstream.
+\end{enumerate}
+
+\paragraph{Rozważone alternatywy.} Przestawienie projektów na 4.5.2 albo 4.8 modyfikuje
+kod upstream i~zmienia to, co jest migrowane. Instalacja Developer Pack 4.5.1: framework
+stracił wsparcie w~styczniu 2016, pakietu nie ma na żadnym obecnym obrazie, a~instalacja
+w~każdym przebiegu jest wolna i~zmienia maszynę dewelopera. Skopiowanie asemblacji do
+\texttt{Program Files (x86)\textbackslash{}Reference Assemblies\textbackslash{}…\textbackslash{}v4.5.1}
+działa, ale pisze do miejsca ogólnomaszynowego, które przeżywa build, i~wymaga uprawnień
+administratora -- zostaje jako udokumentowana ścieżka awaryjna dla narzędzi ignorujących
+\texttt{TargetFrameworkRootPath}. \texttt{PackageReference} do pakietu asemblacji wymaga
+edycji każdego projektu, bo projekty używają \texttt{packages.config}.
+\texttt{windows-2019} wycofano z~runnerów hostowanych w~2025. Kontener Windows
+(\path{mcr.microsoft.com/dotnet/framework/sdk}) dodaje warstwę do buildu oraz do IIS
+i~SQL Server bez zysku: host ma MSBuild, a~problem asemblacji referencyjnych nie znika.
+
+\paragraph{Konsekwencje.} Asemblacje referencyjne są częścią przypiętych wejść:
+\path{pins.json} zapisuje wersję pakietu, URL i~SHA-256, a~\path{state\build.json} --
+których użyto. Środowisko uruchomieniowe się nie zmienia: witryna działa na .NET Framework
+4.8 maszyny, zastępującym 4.5.1 w~miejscu, jak na każdym produkcyjnym hoście tej
+aplikacji. Jeśli GitHub wycofa \texttt{windows-2022}, domyślnym runnerem zostaje
+\texttt{windows-2025} po zielonym przebiegu ręcznym z~\texttt{runner: windows-2025}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0002-build-on-windows-2022-with-packaged-reference-assemblies.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/2-build-legacy.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml}}
+
+\subsection{Host legacy: IIS, SQL Server Express i~instalacja nienadzorowana (ADR 0003)}\label{sec:bench-host}
+
+\paragraph{Kontekst.} P2 jest zrobione, gdy sklep odpowiada pod adresem URL: witryna
+zbudowana w~P1 musi działać pod IIS z~SQL Server i~danymi przykładowymi nopCommerce,
+bez nadzoru, na hostowanym runnerze Windows i~-- tymi samymi skryptami -- na stacji
+roboczej. Nagranie i~odtworzenia, które następują potem (P4, P7), wymagają hosta
+odtwarzalnego, startującego ze znanego stanu i~bez żadnego sekretu, który mógłby wyciec
+do publicznego repozytorium albo logu.
+
+\paragraph{1. SQL Server 2022 Express instalowany przez skrypt z~nośnika Microsoftu.}
+Wybrana jest instancja nazwana \texttt{SQLEXPRESS} z~pliku \texttt{SQLEXPR\_x64\_ENU.exe}:
+prawdziwa usługa Windows jak na produkcji, osiągalna dla tożsamości puli aplikacji IIS,
+obsługująca snapshoty baz (zadanie rdzenia S11), z~małym nośnikiem (jeden plik), który
+skrypt przypina przez SHA-256 i~sprawdza pod kątem ważnego podpisu Authenticode
+Microsoftu; CI buforuje zweryfikowany plik. Odrzucone: LocalDB (instancje per użytkownik;
+pula IIS wymagałaby ładowania profilu i~obejść współdzielenia, a~narzędzia odtwarzania
+jako inny użytkownik nie widziałyby tej samej instancji -- nie na tym działa sklep legacy);
+wydanie Developer (niepotrzebne funkcje, ponad 1~GB); kontener (Microsoft nie publikuje już
+obrazów Windows dla SQL Server, a~kontenery Linux nie działają na runnerze Windows);
+Chocolatey \texttt{sql-server-express} (ten sam nośnik i~przełączniki plus repozytorium
+stron trzecich w~łańcuchu zaufania; jego suma kontrolna posłużyła tylko do zasiania pinu);
+akcja GitHub w~rodzaju \texttt{mssqlsuite} (działałaby tylko w~CI, a~stacja robocza
+i~tak potrzebuje skryptu).
+
+Instalator działa z~\path{/SQLSYSADMINACCOUNTS=BUILTIN\Administrators}
+(operator z~podniesionymi uprawnieniami jest administratorem),
+\path{/SQLCOLLATION=SQL_Latin1_General_CP1_CI_AS} (kolejność i~równość w~bazie nie
+mogą zależeć od ustawień regionalnych hosta) i~\path{/SKIPRULES=RebootRequiredCheck}
+(włączenie IIS minutę wcześniej może zostawić oczekujący, niezwiązany restart). Pełną
+listę przełączników podaje sekcja~\ref{sec:bench-krok3}.
+
+\paragraph{2. Uwierzytelnianie Windows dla witryny, bez hasła w~żadnym connection
+stringu.} Tożsamość puli aplikacji \texttt{IIS APPPOOL\textbackslash{}nopcommerce-legacy}
+dostaje login Windows w~SQL Server wyłącznie z~rolą \textbf{\texttt{dbcreator}};
+instalator nopCommerce tworzy bazę i~przez to jest jej właścicielem. Connection string
+zapisywany przez nopCommerce w~\path{App_Data\Settings.txt} ma
+\texttt{Integrated Security=True}: nie ma hasła SQL do generowania, przechowywania,
+rotowania ani wycieku. Inne tożsamości, które później potrzebują bazy (reset stanu
+odtwarzania, kandydat w~swojej puli), dostają własny login w~ten sam sposób.
+
+\paragraph{3. IIS przez funkcje opcjonalne DISM, konfigurowany przez \texttt{appcmd}.}
+\texttt{dism.exe /Online /Enable-Feature /All} z~nazwami funkcji IIS i~ASP.NET 4.x działa
+tak samo w~Windows Server i~Windows 10/11, więc CI i~stacja robocza dzielą jedną ścieżkę
+kodu. \texttt{appcmd.exe} jest dostarczany z~IIS i~zachowuje się tak samo w~Windows
+PowerShell 5.1 i~PowerShell 7, w~przeciwieństwie do modułu \texttt{WebAdministration}.
+Kompresja odpowiedzi nie jest instalowana, więc nagrane treści pozostają czytelne. Pula
+aplikacji nie ma limitu bezczynności ani okresowego recyklingu: nagranie ani odtworzenie
+nie może obejmować restartu obserwowanej aplikacji.
+
+\paragraph{4. Dane przez instalator aplikacji, po HTTP.} Krok~4 wysyła formularz
+instalacyjny nopCommerce 3.90 -- pola \texttt{InstallModel}
+i~\path{Views/Install/Index.cshtml} -- dokładnie tak, jak wysyła go człowiek na
+\texttt{/install}, z~włączonym tworzeniem bazy i~danymi przykładowymi oraz przypiętą
+kolacją. Odrzucone alternatywy: uruchomienie SQL instalatora
+(\path{App_Data\Install\Fast\*.sql}) wprost zasiałoby dane obok systemu zamiast przez
+niego i~pominęłoby instalację wtyczek, którą wykonuje formularz; odtworzenie
+przygotowanego \texttt{.bak} wprowadziłoby do łańcucha binarną bazę nieznanego
+pochodzenia. Sukces nie jest przyjmowany na wiarę: formularz instalacji musiał zostać
+najpierw podany (więc witryna nie była już zainstalowana), odpowiedzią musi być
+przekierowanie instalatora na stronę główną, \path{App_Data\Settings.txt} musi istnieć,
+strona główna musi odpowiedzieć treścią nopCommerce, a~baza musi zawierać produkty
+przykładowe.
+
+\paragraph{5. Czysta instalacja przy każdym przebiegu.} Krok~4 usuwa witrynę, pulę
+aplikacji i~bazę przed wdrożeniem. Powtórzenie zbiega więc do tego samego stanu, zamiast
+go kumulować -- na tej własności polegają nagranie (P4) i~odtworzenia (P7). Witryna jest
+sprawdzana względem manifestu SHA-256 zapisanego przez build, więc to, co serwuje IIS,
+jest dowodliwie tym, co zbudowano.
+
+\paragraph{6. Jednorazowe dane administratora.} Instalator wymaga administratora sklepu;
+jego hasło jest generowane na przebieg i~nigdy nie opuszcza
+\path{<work>\secrets\legacy-admin.json} (sekcja~\ref{sec:bench-stan}).
+
+\paragraph{7. Port 8080.} Port 80 zostaje przy Default Web Site; 8080 jest wolny na
+hostowanym obrazie; proponowane porty proxy nagrywającego (8000) i~kandydata (8090) są
+w~TOPOLOGY. Krok~4 odmawia startu, jeśli port jest zajęty.
+
+\paragraph{Konsekwencje.}
+\begin{itemize}
+  \item Job hosta przy każdym przebiegu instaluje SQL Server Express (pobranie nośnika jest
+    buforowane); podsumowanie joba podaje czas każdej fazy.
+  \item Jeśli Microsoft podmieni plik pod przypiętym URL-em, krok~3 zatrzyma się na
+    sprawdzeniu SHA-256 z~oboma skrótami w~komunikacie. Aktualizacja przypięcia jest
+    wtedy zmianą przeglądaną w~review, nie automatyczną.
+  \item \textbf{Zaobserwowane raz: instalator nie uruchamia silnika.} Pierwszy przebieg CI
+    kroku~3 (przebieg 36229287543) zakończył się po 11~minutach błędem
+    „Could not find the Database Engine startup handle” (\texttt{0x851A0019}); następny,
+    z~identycznymi wejściami, zainstalował serwer w~2,5~minuty. Najlepiej znaną przyczynę
+    tego błędu -- dysk systemowy zgłaszający sektory atomowe większe niż 4~KB, których SQL
+    Server nie obsługuje -- wykluczono dla tego runnera: jego C: zgłasza 4096 bajtów.
+    Krok~3 dlatego (a)~loguje rozmiary sektorów i~tylko wtedy, gdy dysk systemowy zgłasza
+    więcej niż 4~KB, przenosi pliki danych na dysk katalogu roboczego; (b)~przy porażce
+    drukuje \texttt{ERRORLOG} silnika i~zdarzenia SQL Server, żeby przyczyna była w~logu
+    joba; (c)~usuwa na wpół zainstalowaną instancję i~uruchamia instalator jeszcze raz.
+    Druga porażka kończy job błędem.
+  \item Dane przykładowe to dane samego nopCommerce z~2017 roku. Zachowanie zależne od
+    czasu (np. przykładowy rabat, który wygasł 2020-01-01) jest nagrywane takie, jakie
+    jest.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0003-legacy-host-iis-sqlexpress-unattended-install.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/3-install-iis-sql.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/4-deploy-and-install.ps1}}
+
+\subsection{Narzędzia łańcucha i~rozgrzewka na eShopLegacyMVC (ADR 0004, P3)}\label{sec:bench-rozgrzewka}
+
+\paragraph{Kontekst.} P3 uruchamia cały łańcuch Second Key -- capture, replay, compare,
+gate, evidence -- raz na przykładowej aplikacji legacy Microsoftu, zanim łańcuch zostanie
+skierowany na nopCommerce, żeby problemy łańcucha wyszły na czymś małym. Zadanie jest
+zrobione, gdy powstaje pakiet dowodowy. Trzeba było zdecydować o~trzech rzeczach, z~których
+dwie przeżywają rozgrzewkę: skąd bench bierze narzędzia łańcucha i~jak nagranie jest
+cięte na scenariusze.
+
+\paragraph{1. Narzędzia łańcucha budowane z~przypiętych commitów, raz na przebieg
+workflowu.} \repopath{sk} (Second Key) i~Portcullis (analyzery bramki) nie są jeszcze
+publikowanymi pakietami. \path{pins.json} przypina każdy do commita
+(\texttt{chain.secondKey}, \texttt{chain.portcullis}). Workflow wielokrotnego użytku
+\path{chain-tools.yml} pobiera oba przez \texttt{actions/checkout} na tych commitach,
+sprawdza pobrany commit, buduje oba projekty wiersza poleceń za pomocą .NET 10 SDK
+wskazanego przez \path{global.json} repozytorium \repopath{sk} i~przekazuje je dalej jako
+artefakt \texttt{chain-tools}. Build jest zależny od frameworku i~przenośny, więc te same
+pliki działają na hoście Windows (capture, replay) i~w~Linuksie (compare, gate, evidence):
+\texttt{dotnet SecondKey.Cli.dll}. Skrypty znajdują narzędzie przez
+\texttt{NOPBENCH\_SK} / \texttt{NOPBENCH\_PORTCULLIS}, a~w~przeciwnym razie w~katalogu
+\path{<work>\tools\chain\<tool>}. Przesunięcie przypięcia jest przeglądaną zmianą
+\path{pins.json}, jak każde inne.
+
+\paragraph{2. Jeden scenariusz to jedna sesja, nazwana nagłówkiem żądania.}
+\texttt{sk replay} odtwarza nagranie scenariusz po scenariuszu, resetując każdą stronę
+przed każdym z~nich i~dając każdemu świeży słoik ciasteczek (cookie jar); \texttt{sk
+capture} rozstrzyga, do której sesji należy wymiana (exchange), na podstawie
+skonfigurowanego ciasteczka albo nagłówka. Skrypty ruchu ustawiają
+\texttt{x-bench-scenario: <id>} na każdym żądaniu scenariusza, a~capture dostaje ten
+nagłówek jako klucz sesji. Konsekwencje:
+\begin{itemize}
+  \item lista scenariuszy planu ruchu \emph{jest} listą scenariuszy odtworzenia, jeden do
+    jednego, a~werdykt da się odczytać wstecz: identyfikator sesji to \texttt{s-} i~pierwsze
+    12 cyfr szesnastkowych SHA-256(\texttt{x-bench-scenario} + znak nowej linii + id),
+    które krok nagrania drukuje dla każdego scenariusza;
+  \item scenariusz przeżywa aplikację, która w~trakcie zmienia swoje ciasteczko sesji --
+    nopCommerce wydaje nowe ciasteczko klienta przy logowaniu -- a~klucz oparty na
+    ciasteczku rozciąłby go na dwa scenariusze z~resetem pomiędzy;
+  \item jeden scenariusz ma jeden słoik ciasteczek, więc historia z~dwiema osobami to
+    dwa scenariusze.
+\end{itemize}
+Nagłówek jest nagrywany i~odtwarzany jak każdy inny; aplikacje go ignorują.
+
+\paragraph{3. Proxy nagrywające zatrzymuje się, gdy zawiera każdą wysłaną wymianę.}
+Skrypty ruchu liczą każde żądanie wysłane przez proxy. \texttt{sk capture} zapisuje każdą
+wymianę do pliku od razu, więc po ostatnim scenariuszu krok nagrania czeka, aż plik
+będzie zawierał dokładnie tyle wymian, i~wtedy zatrzymuje proces. Niezgodna liczba
+przerywa krok: wymiana, na którą aplikacja nie odpowiedziała, nie jest nagrana, a~taka,
+której skrypty nie wysłały, nie jest ruchem ze skryptu. Opcja \texttt{-{}-exit-after}
+wymaga liczby przed ruchem, a~czystego Ctrl+C nie da się dostarczyć procesowi w~tle
+w~Windows bez pomocnika współdzielącego konsolę.
+
+\paragraph{4. Aplikacja rozgrzewki: eShopLegacyMVC na własnych danych mock.}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+Źródło & \texttt{dotnet-architecture/eShopModernizing} na
+  \texttt{63bc9ec4414d7e281dc9f9d7bdcf70030950457d} (czubek \texttt{main} z~2023-10-25;
+  repozytorium nie ma tagów), pobierane po identyfikatorze commita i~sprawdzane jak
+  przypięcie nopCommerce \\
+Aplikacja & \path{eShopLegacyMVCSolution/src/eShopLegacyMVC}: ASP.NET MVC 5.2.7 i~Web API
+  na .NET Framework 4.7.2, Autofac, menedżer katalogu (lista, szczegóły, tworzenie,
+  edycja, usuwanie) i~Web API marek \\
+Dane & własny przełącznik aplikacji \texttt{UseMockData}, ustawiony na \texttt{true}
+  w~\textbf{opublikowanym} \path{Web.config} (źródło się nie zmienia): katalog 12
+  pozycji w~pamięci, bez bazy \\
+Build & restore MSBuild (projekt używa \texttt{PackageReference}) i~publikacja webowa do
+  systemu plików w~Release. Biblioteka narzędziowa celuje w~.NET Framework 4.6.1, którego
+  pakietu docelowego obraz już nie ma; jak w~ADR 0002 asemblacje referencyjne 4.6.1
+  i~4.7.2 pochodzą z~przypiętych pakietów NuGet, ułożone pod jednym
+  \texttt{TargetFrameworkRootPath} \\
+Host & IIS na runnerze \texttt{windows-2022}, witryna \texttt{eshop-legacy} na porcie
+  8081, pula bez limitu bezczynności i~okresowego recyklingu; proxy nagrywające na 8001 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Katalog mock żyje na jednej liście w~pamięci przez cały czas życia procesu roboczego
+(\texttt{CatalogServiceMock} zarejestrowany jako pojedyncza instancja), więc jedynym
+resetem jest nowy proces: \path{scripts/eshop/Reset-EShop.ps1} zatrzymuje i~uruchamia pulę
+aplikacji, po czym czeka na pełny katalog. Krok nagrania wywołuje go przed każdym
+scenariuszem, a~\texttt{sk replay} -- przed każdym scenariuszem po każdej stronie (reset
+\texttt{command} w~\path{warmup/eshop/secondkey.yaml}). Tworzenie, edycja i~usuwanie
+sprawdzają token anti-forgery wydany z~formularzem; reguła korelacji odtwarzania przenosi
+świeży token do formularza, który wysyła.
+
+\paragraph{5. A/A i~bramka na całym drzewie.} Rozgrzewka nie ma kandydata. Obie strony
+odtworzenia to ta sama witryna, więc werdykt pokazuje, co dokłada sam łańcuch: musi być
+\texttt{pass}, z~każdą zaakceptowaną klauzulą małego kontraktu rozgrzewki spełnioną
+i~żadną niewykonaną (unexercised). Portcullis skanuje kod legacy jako całe drzewo -- nie
+ma pull requesta, do którego zmienionych linii można by go zawęzić. Jego znaleziska to
+idiomy .NET Framework, które migracja musiałaby usunąć; \texttt{sk gate} raportuje, że
+jego błędy zablokowałyby zmianę, a~krok zapisuje ten wynik, zamiast na nim padać. P8
+bramkuje pull request kandydata tak, jak bramka ma być używana
+(sekcja~\ref{sec:portcullis}).
+
+\paragraph{6. Gdzie działa każdy krok.} Zgodnie z~TOPOLOGY: build, IIS, capture, replay
+i~skan źródeł na runnerze Windows, obok aplikacji; compare, gate i~evidence w~Linuksie,
+z~plików przesłanych przez job Windows.
+
+\paragraph{Konsekwencje.} Każdy workflow, który uruchamia łańcuch, wywołuje
+\path{chain-tools.yml}; aktualizacja narzędzia to jedna zmiana w~\path{pins.json}. Skrypty
+ruchu muszą ustawiać nagłówek scenariusza na każdym żądaniu i~wysyłać każde żądanie przez
+proxy; krok nagrania egzekwuje liczbę. Pakiet rozgrzewki jest artefaktem CI, a~nie
+opublikowanym wynikiem; jego liczby są w~\path{results/p3/} (sekcja~\ref{sec:bench-wyniki}).
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0004-chain-tools-and-eshop-warmup.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Chain.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/Reset-EShop.ps1}}
+
+\subsubsection{Ruch, kontrakt i~konfiguracja rozgrzewki}\label{sec:bench-rozgrzewka-ruch}
+
+Ruch rozgrzewki to siedem scenariuszy z~\path{scripts/eshop/EShop.Scenarios.ps1} --
+czynności osoby w~menedżerze katalogu eShopLegacyMVC. Każdy startuje z~tego samego
+katalogu 12 pozycji (dane przykładowe \path{PreconfiguredData.cs}: pozycja~1 „.NET Bot
+Black Hoodie” za \$19.50, pozycja~2 „.NET Black \& White Mug” za \$8.50, pozycja~3
+„Prism White T-Shirt” za \$12.00; marki 1--5, z~których 2 to „.NET”; typy 1--4,
+z~których 1 to „Mug”).
+
+Scenariusze: \textbf{E01} -- przeglądanie (\texttt{/}, strony listy
+\texttt{pageSize}/\texttt{pageIndex}, szczegóły pozycji 1 i~9, obraz
+\texttt{/items/1/pic} jako \texttt{image/png}); \textbf{E02} -- pozycje, których nie ma
+(szczegóły, edycja i~usuwanie pozycji 999 -- 404; \texttt{/Catalog/Details} bez
+identyfikatora -- 400); \textbf{E03} -- utworzenie pozycji „Bench Mug” (\$9.99), która
+pojawia się na liście („Showing 10 of 13 products”) i~pod \texttt{/Catalog/Details/13};
+\textbf{E04} -- tworzenie z~błędnymi wartościami odrzucone z~trzema komunikatami walidacji;
+\textbf{E05} -- zmiana ceny pozycji~2 na 10.50; \textbf{E06} -- usunięcie pozycji~3
+(szczegóły dają potem 404, a~lista -- w~brzmieniu aplikacji „Showing 12 of 11 products”
+-- jej nie zawiera); \textbf{E07} -- Web API marek (\texttt{/api/brands},
+\texttt{/api/brands/2}, \texttt{/api/brands/42} -- 404).
+
+Kontrakt rozgrzewki (\path{warmup/eshop/contract.yaml}, \texttt{metadata.name:
+eshop-legacy-mvc-warmup}) jest celowo mały: ma ćwiczyć łańcuch. Porównuje nagłówki
+\texttt{content-type} i~\texttt{location}, HTML -- przez ekstrakty, ma 6~ekstraktorów
+(\texttt{catalogNames}, \texttt{catalogPrices}, \texttt{catalogTotal}, \texttt{itemName},
+\texttt{itemPrice}, \texttt{validationMessages}) i~13~klauzul, z~czego 3~rodzaju \texttt{never} (23\%):
+\path{ESHOP-NEVER-SERVER-ERROR}, \path{ESHOP-ITEM-PAGE-NEVER-WITHOUT-PRICE}
+i~\path{ESHOP-REFUSED-FORM-NEVER-SILENT} (żadnej odpowiedzi 5xx, żadnej strony pozycji bez
+ceny, żadnego odrzuconego formularza bez komunikatu walidacji) oraz 10 rodzaju
+\texttt{must}: lista z~nazwami i~sumą, dodatnie ceny, stronicowanie 5 i~10 pozycji, 404
+dla pozycji 999, 400 dla szczegółów bez identyfikatora, przekierowania po edycji
+i~usunięciu, obrazek PNG, Web API z~pięcioma markami (w~tym „.NET”) i~404 dla marki 42.
+Klauzule używają operatorów \texttt{gte}, \texttt{equals}, \texttt{absent},
+\texttt{countEquals}, \texttt{countAtLeast}, \texttt{countAtMost}, \texttt{gt}
+i~\texttt{matches}, a~klauzula marek -- kwantyfikatora \texttt{any} nad
+\texttt{response.body.json[*].Brand}. Konfiguracja odtwarzania
+\path{warmup/eshop/secondkey.yaml} ma \texttt{scenarioMode: session},
+\texttt{timeoutSeconds: 120} (pierwsze żądanie po restarcie uruchamia aplikację
+i~kompiluje widoki), po obu stronach reset \texttt{command} uruchamiający
+\texttt{powershell -NoProfile -ExecutionPolicy Bypass -File}
+\path{scripts\eshop\Reset-EShop.ps1} oraz regułę korelacji \texttt{csrf}, która wyciąga wyrażeniem regularnym wartość ukrytego
+pola \texttt{\_\_RequestVerificationToken} ze strony i~wstawia ją do pola formularza
+o~tej samej nazwie (tworzenie, edycja i~usuwanie sprawdzają token). Ścieżka polecenia resetu jest względna, więc \repopath{sk} uruchamia się z~korzenia
+repozytorium. Sekcje \texttt{compare} i~\texttt{evidence} wskazują \path{contract.yaml}.
+Kolejność kroków, skrypty i~ich produkty opisuje sekcja~\ref{sec:bench-skrypty-eshop};
+liczby pierwszego pakietu -- sekcja~\ref{sec:bench-wyniki-p3}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/warmup/eshop/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/warmup/eshop/contract.yaml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/warmup/eshop/secondkey.yaml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/EShop.Scenarios.ps1}}
+
+\subsection{Nagranie ruchu nopCommerce (ADR 0005, P4)}\label{sec:bench-ruch}
+
+P4 nagrywa zestaw ruchu z~\repopath{docs/P4-TRAFFIC-PLAN.md} -- 30~zaplanowanych
+scenariuszy obejmujących katalog, koszyk, rabaty, podatki, wysyłkę i~checkout -- przez
+\texttt{sk capture} przed sklepem z~P2. Zadanie jest zrobione, gdy liczba scenariuszy jest
+zapisana. Nagranie jest wejściem wszystkiego, co następuje: P5 pisze na jego podstawie
+kontrakt i~odtwarza je A/A, P7 odtworzy je na kandydacie. Plan opiera każdą regułę na
+kodzie nopCommerce 3.90 i~cytuje go (\texttt{release-3.90}, commit \texttt{12d1f01};
+ścieżki względem \path{src/}, numery linii tego commita): opisuje, jak zachowuje się
+\emph{ten} sklep, a~nie jak sklep powinien się zachowywać w~ogóle. Identyfikatory
+scenariuszy (\texttt{T}) i~reguł (\texttt{R}) są stabilne, żeby oba dokumenty mogły je
+cytować.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0005-nopcommerce-traffic-recording.md}}
+
+\subsubsection{Zasady nagrania}\label{sec:bench-ruch-zasady}
+
+\begin{itemize}
+  \item \textbf{Stan początkowy.} \path{scripts/4-deploy-and-install.ps1} (świeża witryna,
+    świeża baza, dane przykładowe instalatora), potem konfiguracja z~sekcji~2 planu
+    (sekcja~\ref{sec:bench-ruch-konfiguracja}), potem snapshot bazy SQL Server
+    \texttt{nopcommerce\_legacy\_snapshot} robiony przez krok~7. Każdy scenariusz startuje
+    z~tego snapshotu -- przy nagrywaniu oraz po stronie legacy i~kandydata w~każdym
+    odtworzeniu -- więc scenariusze są niezależne od siebie i~od kolejności.
+  \item \textbf{Wyłącznie przez proxy nagrywające} (\url{http://127.0.0.1:8000/}
+    $\rightarrow$ \texttt{:8080}). Żądanie, które omija proxy, nie jest dowodem.
+    \texttt{sk capture} to proxy nagrywające oparte na YARP, tylko dla ruchu
+    przychodzącego, zapisujące \path{*.skcap}. System legacy pozostaje nietknięty: bez
+    zmian w~kodzie, bez rekompilacji, bez modułu IIS.
+  \item \textbf{Jeden scenariusz, jedna sesja.} Każdy scenariusz to jedna sesja
+    przeglądarki z~własnym słoikiem ciasteczek, a~każde żądanie niesie nagłówek
+    \texttt{x-bench-scenario: <id>} -- klucz sesji capture. Scenariusz jest więc jedną
+    sesją w~\path{*.skcap} i~jednym scenariuszem w~odtworzeniu. Historia z~dwiema osobami
+    to dwa scenariusze.
+  \item \textbf{Jak przeglądarka.} Własne linki i~formularze sklepu; każdy formularz
+    wysyłany ze wszystkimi polami, które daje strona; \texttt{\_\_RequestVerificationToken}
+    czytany ze strony tam, gdzie jest sprawdzany. Sklep przykładowy włącza anti-forgery dla
+    sklepu publicznego (\texttt{EnableXsrfProtectionForPublicStore = true}), co dotyczy
+    akcji oznaczonych \texttt{[PublicAntiForgery]} -- w~tym zestawie szacowania wysyłki
+    (\path{ShoppingCartController.GetEstimateShipping}) i~rejestracji
+    (\path{CustomerController.Register}). Dodawanie do koszyka, zmiany w~koszyku,
+    kupony, logowanie i~checkout jednostronicowy go nie sprawdzają.
+  \item \textbf{Host.} \texttt{sk capture} przekazuje dalej host celu (domyślne
+    zachowanie YARP), więc bezwzględne adresy, które nopCommerce buduje z~hosta żądania
+    (adresy skryptów checkoutu jednostronicowego), wskazują \texttt{:8080}. Przeglądarka,
+    która by za nimi poszła, opuściłaby proxy; sesje ze skryptu żądają wyłącznie ścieżek
+    względnych, a~przekierowania sprowadzają do ścieżki i~zapytania
+    (\texttt{Get-BenchLocationPath}), więc nic nie omija nagrania.
+  \item \textbf{Sondy (probes).} Język kontraktu zawęża klauzulę wyłącznie metodą,
+    ścieżką i~zapytaniem, więc żądanie, na którego odpowiedzi P5 stwierdza fakt właściwy
+    jednemu scenariuszowi, niesie w~zapytaniu \texttt{probe=<nazwa>}
+    (\path{/cart?probe=T11}, \path{/cart/estimateshipping?probe=T26-1024}). nopCommerce
+    ignoruje nieznane parametry zapytania na tych trasach; parametr jedynie nazywa żądanie.
+  \item \textbf{Deterministyczne wejścia.} Stałe produkty, ilości, adresy, kody kuponów
+    i~klienci -- R1 rejestruje się zawsze jako \texttt{r1@nopbench.invalid}; każdy
+    scenariusz startuje ze snapshotu, więc adres jest zawsze wolny.
+  \item \textbf{Brak wywołań wychodzących.} Używane są tylko metody płatności offline
+    (Check / Money Order, Manual) i~dostawcy stawek offline; PayPal i~wtyczki
+    przewoźników pozostają bezczynne, więc zadanie rdzenia S16 (zaślepki wywołań
+    wychodzących) nie jest temu zestawowi potrzebne.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Chain.ps1}}
+
+\subsubsection{Konfiguracja sklepu przed nagraniem}\label{sec:bench-ruch-konfiguracja}
+
+Dane przykładowe wyłączają reguły, o~które chodzi w~zestawie:
+\begin{itemize}
+  \item \textbf{Podatek jest wszędzie zerowy.} \texttt{Tax.FixedOrByCountryStateZip}
+    instaluje się w~trybie stałej stawki (\texttt{CountryStateZipEnabled = false}) i~nie
+    zapisuje żadnej stawki, więc każda kategoria podatku daje 0.
+  \item \textbf{Wysyłka nic nie kosztuje.} \texttt{Shipping.FixedOrByWeight} instaluje się
+    w~trybie stałej stawki bez zapisanej stawki, a~brak stawki daje 0.
+  \item \textbf{Żaden kupon przykładowy nie zmienia ceny.} \texttt{123} to rabat \$10
+    „przypisany do SKU”, do którego nie jest przypisany żaden produkt; \texttt{456} (20\%
+    sumy zamówienia) wygasł 2020-01-01.
+\end{itemize}
+
+\paragraph{Decyzja (ADR 0005, 1): sklep konfigurowany przez własny panel
+administracyjny, przed nagraniem, z~odczytem zwrotnym.}
+\path{scripts/6-configure-store.ps1} loguje się jako administrator utworzony w~kroku~4
+i~używa stron administracyjnych oraz punktów AJAX, które klika człowiek -- nigdy SQL --
+więc każdy wiersz, który zapisuje nopCommerce, jest wierszem, który zapisałby sam, razem
+z~pamięcią podręczną i~zdarzeniami. Każda zmiana jest odczytywana z~powrotem, a~formularz
+ustawień lub produktu wysłany z~powrotem jest ponownie czytany i~porównywany pole po polu,
+więc nic innego nie zmienia się niezauważenie. Żądania administratora idą wprost do
+witryny, nigdy przez proxy nagrywające: konfiguracja nie jest ruchem, a~hasło
+administratora nie może trafić do nagrania.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.1cm}@{}}
+\caption{Konfiguracja sklepu przed nagraniem (plan, sekcja~2)}\label{tab:bench-konfig}\\
+\toprule
+Obszar & Konfiguracja & Używa \\
+\midrule
+\endfirsthead
+\toprule
+Obszar & Konfiguracja & Używa \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Dostawca podatku & przełączenie na „by country / state / zip”. Kategoria podatku
+  \emph{Electronics \& Software}: US / New York / zip \texttt{10001} $\rightarrow$
+  9,000\%; US / New York / dowolny zip $\rightarrow$ 8,875\%; US / California
+  $\rightarrow$ 7,250\%; US / dowolny stan $\rightarrow$ 5,000\%; Canada / Ontario / zip
+  \texttt{K1A 0B1} $\rightarrow$ 13,000\%. Nic dla Germany. „Apple MacBook Pro 13-inch”
+  zwolniony z~podatku & T21--T23 \\
+Wysyłka & stała stawka na metodę: Ground \$10.00, 2nd Day Air \$25.00, Next Day Air
+  \$40.00. Darmowa wysyłka powyżej \$1,000.00, bez podatku & T24--T26 \\
+Rabaty (każdy wymaga swojego kuponu, więc żaden nie przecieka do innych scenariuszy) &
+  \texttt{SAVE10} 10\% sumy częściowej zamówienia · \texttt{TAKE50} \$50.00 od sumy
+  zamówienia · \texttt{PCT20MAX100} 20\% sumy częściowej, najwyżej \$100.00 ·
+  \texttt{SHIPFREE} 100\% wysyłki · \texttt{ONCE5} \$5.00 od sumy zamówienia, 1~raz na
+  klienta · \texttt{FUTURE10} 10\% sumy częściowej od 2099-01-01 · \texttt{MEMBERS15}
+  15\% sumy częściowej z~wymaganiem „customer role is Registered”
+  (\texttt{DiscountRules.CustomerRoles}) & T11--T20 \\
+Zadania w~tle & wyłączenie zadań harmonogramu włączonych przez instalację przykładową --
+  „Send emails” (co 60~s), „Keep alive” (300~s), „Delete guests” (600~s), „Update
+  currency exchange rates” (3600~s, wywołanie wychodzące) -- i~restart aplikacji. Wersja
+  3.90 uruchamia je na timerach wewnątrz aplikacji webowej, a~\texttt{Task.Execute} czyta
+  swój wiersz przed blokiem \texttt{try}: przy przywracaniu bazy ten odczyt rzuca wyjątek
+  na wątku timera i~kładzie proces roboczy, a~sklep odpowiada 500, aż się zrestartuje.
+  Każdy scenariusz zaczyna się od przywrócenia & każdy scenariusz \\
+Katalog & wycofanie publikacji „HP Envy 6-1180ca 15.6-Inch Sleekbook” i~wyłączenie
+  ustawienia katalogu „Allow viewing of unpublished product details page” -- instalacja
+  przykładowa je włącza (\texttt{AllowViewUnpublishedProductPage = true}), przez co strona
+  nieopublikowanego produktu jest podawana każdemu z~oznaczeniem „discontinued”. Stan
+  „Lenovo IdeaCentre 600 All-in-One PC” ustawiony na 3 (produkt już zarządza stanem bez
+  zamówień oczekujących) & T02, T05--T07, T28 \\
+\end{xltabular}
+}
+
+Waluta (USD, format wyświetlania \texttt{en-US}), wyświetlanie podatku (bez podatku),
+zaokrąglanie cen w~trakcie obliczeń, anonimowy checkout i~checkout jednostronicowy
+zostają takie, jak po instalacji. Krok~6 tworzy każdy rabat formularzem
+\path{/Admin/Discount/Create} z~\texttt{RequiresCouponCode = true} i~nazwą
+„Bench <kod>”; typ to \texttt{DiscountTypeId} 20 (suma częściowa zamówienia) dla
+\texttt{SAVE10}, \texttt{PCT20MAX100} (z~\texttt{MaximumDiscountAmount = 100}),
+\texttt{FUTURE10} (z~\texttt{StartDateUtc = 2099-01-01 00:00}) i~\texttt{MEMBERS15},
+1 (suma zamówienia) dla \texttt{TAKE50} i~\texttt{ONCE5} (z~\texttt{DiscountLimitationId
+= 25}, „N razy na klienta”, i~\texttt{LimitationTimes = 1}) oraz 10 (wysyłka) dla
+\texttt{SHIPFREE}. Wymaganie roli Registered dla \texttt{MEMBERS15} dołącza wtyczka
+\texttt{DiscountRulesCustomerRoles} do domyślnej grupy wymagań rabatu.
+
+Zadania harmonogramu są uruchamiane z~włączonych wierszy przy starcie aplikacji -- stąd
+restart. Krok~6 wyłącza wszystkie, restartuje aplikację przez „Restart application”
+w~panelu i~czeka na nowy wpis „Application started” w~logu sklepu. Żadne z~czterech zadań
+(wysyłanie e-maili z~kolejki, pingowanie witryny, usuwanie gości, aktualizacja kursów
+walut) nie jest częścią tego, co ćwiczy zestaw ruchu.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0005-nopcommerce-traffic-recording.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/6-configure-store.ps1}}
+
+\subsubsection{Persony i~scenariusze T01--T30}\label{sec:bench-ruch-scenariusze}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l l X@{}}
+\toprule
+Persona & Kto & Uwagi \\
+\midrule
+G1 & gość robiący zakupy & własny słoik ciasteczek \\
+G2 & drugi gość & próbuje dostać się do cudzego zamówienia \\
+R1 & klient, który rejestruje się w~T28 & \texttt{r1@nopbench.invalid}, z~hasłem podanym
+  przy rejestracji \\
+S1 & klient przykładowy \texttt{steve\_gates@nopCommerce.com} & zarejestrowany; właściciel
+  przykładowego zamówienia~1; hasło nadawane przez instalator klientom przykładowym --
+  publiczne dane przykładowe, nie sekret \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Przykładowe zamówienie~2 należy do \texttt{arthur\_holmes@nopCommerce.com}, który nigdy
+nie działa; jego zamówienie jest „cudzym zamówieniem” w~T30. Administrator konfiguruje
+sklep i~nie występuje w~żadnym scenariuszu. Tabela~\ref{tab:bench-scenariusze} to plan
+scenariuszy (plan podaje dla każdego także miejsce w~kodzie 3.90, które go uzasadnia).
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}l >{\raggedright\arraybackslash}p{1.35cm} l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\caption{Scenariusze zestawu ruchu (plan, sekcja~4)}\label{tab:bench-scenariusze}\\
+\toprule
+Id & Obszar & Persona & Kroki & Ćwiczona reguła biznesowa \\
+\midrule
+\endfirsthead
+\toprule
+Id & Obszar & Persona & Kroki & Ćwiczona reguła biznesowa \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+T01 & Katalog & G1 & \texttt{GET /} & strona główna wymienia produkty oznaczone „show on
+  home page”; atrybucja w~stopce \\
+T02 & Katalog & G1 & \texttt{GET /notebooks}, potem \texttt{?orderby=10},
+  \texttt{?orderby=5}, \texttt{?pagesize=3\&pagenumber=2} & lista kategorii: tylko
+  produkty opublikowane, sortowane po cenie albo nazwie, stronicowane \\
+T03 & Katalog & G1 & \texttt{GET /computers} & kategoria nadrzędna wymienia swoje
+  podkategorie \\
+T04 & Katalog & G1 & \texttt{GET} \path{/lenovo-ideacentre-600-all-in-one-pc},
+  \path{/apple-macbook-pro-13-inch}, \path{/build-your-own-computer} & strona produktu:
+  nazwa, SKU, cena, atrybuty z~dopłatami \\
+T05 & Katalog & G1 & \texttt{GET} \path{/hp-envy-6-1180ca-156-inch-sleekbook} (nieopublikowany
+  w~konfiguracji) & produkt nieopublikowany nie jest pokazywany \\
+T06 & Wyszuki\-wanie & G1 & \texttt{GET /search?q=apple}, \texttt{?q=APPLE},
+  \texttt{?q=AP\_MBP\_13}, \texttt{?q=ap}, \texttt{?q=\%20apple\%20} & wyszukiwanie po
+  nazwach (kolacja bazy), dokładne dopasowanie SKU, przycięte wejście, minimalna długość~3 \\
+T07 & Koszyk & G1 & Lenovo z~\texttt{/desktops} (ilość~1), potem ze strony produktu
+  z~ilością~5 & dodanie do koszyka; limit stanu bez zamówień oczekujących \\
+T08 & Koszyk & G1 & MacBook z~ilością~1, potem 2 & minimalna ilość zamówienia
+  (w~danych przykładowych 2) \\
+T09 & Koszyk & G1 & „Build your own computer” bez wymaganych atrybutów, potem
+  z~wybranymi Processor, RAM i~HDD & atrybuty wymagane; dopłaty za atrybuty w~cenie
+  jednostkowej \\
+T10 & Koszyk & G1 & dwie pozycje; \texttt{POST /cart} \texttt{updatecart}
+  z~\texttt{itemquantity\{id\}=3}; potem zaznaczenie \texttt{removefromcart} na jednej
+  pozycji; potem \texttt{itemquantity\{id\}=0} na drugiej & zmiana ilości; usunięcie
+  polem wyboru; ilość 0 usuwa \\
+T11 & Rabaty & G1 & Lenovo × 2 (\$1,000.00); \texttt{POST /cart}
+  \texttt{applydiscountcouponcode} z~\texttt{SAVE10} & rabat procentowy od sumy
+  częściowej zamówienia \\
+T12 & Rabaty & G1 & kod „\texttt{\textvisiblespace{}save10\textvisiblespace{}}” (spacje, małe litery); na świeżym koszyku
+  \texttt{SAVE10} z~U+180E na końcu & kod kuponu jest przycinany i~porównywany bez względu
+  na wielkość liter \\
+T13 & Rabaty & G1 & kody \texttt{456} (przykładowy, wygasły), \texttt{FUTURE10},
+  \texttt{NOSUCH} & kupony wygasłe, jeszcze nieaktywne i~nieznane są odrzucane, każdy
+  z~własnym komunikatem \\
+T14 & Rabaty & G1 & „Pride and Prejudice” (\$24.00, wysyłany, bez stawki podatku dla
+  Books); checkout do potwierdzenia z~Ground; \texttt{TAKE50} & stały rabat od sumy
+  zamówienia większy niż całe zamówienie \\
+T15 & Rabaty & G1 & MacBook × 2 (\$3,600.00); \texttt{PCT20MAX100} & maksymalna kwota
+  rabatu procentowego \\
+T16 & Rabaty & G1 & Lenovo × 1; checkout do kroku potwierdzenia z~Ground;
+  \texttt{SHIPFREE} & rabat na wysyłkę \\
+T17 & Rabaty & G1 & „\$25 Virtual Gift Card” i~„Pride and Prejudice” w~koszyku;
+  \texttt{SAVE10} & rabaty od sumy częściowej i~całkowitej są odrzucane, gdy w~koszyku
+  jest karta podarunkowa \\
+T18 & Rabaty & G1, S1 & \texttt{MEMBERS15} jako G1; logowanie jako S1
+  i~\texttt{MEMBERS15} & wymaganie rabatu: rola klienta \\
+T19 & Rabaty & S1 & zamówienie z~\texttt{ONCE5}; nowy koszyk i~ponownie \texttt{ONCE5} &
+  ograniczenie „N razy na klienta”, śledzone dla klientów zarejestrowanych \\
+T20 & Rabaty & G1 & przykładowy kupon \texttt{123} & rabat na SKU nieprzypisany do żadnego
+  produktu jest przyjmowany i~niczego nie zmienia \\
+T21 & Podatki & G1 & Lenovo × 1; checkout z~adresem rozliczeniowym US / New York /
+  \texttt{10001}; stop na potwierdzeniu & stawka według kraju, stanu i~dokładnego kodu
+  pocztowego \\
+T22 & Podatki & G1 & jak T21 z~US / New York / \texttt{10002}, potem US / California,
+  US / Texas, Germany; potem MacBook × 2 z~US / New York / \texttt{10001} & stawki
+  zastępcze (dowolny kod, dowolny stan, brak stawki) i~produkt zwolniony z~podatku \\
+T23 & Podatki & G1 & jak T21 z~Canada / Ontario / \texttt{k1a 0b1} (małe litery) &
+  dopasowanie kodu pocztowego ignoruje wielkość liter \\
+T24 & Wysyłka & G1 & Lenovo × 1: checkout do kroku metody wysyłki; osobno szacowanie
+  wysyłki na \texttt{/cart} dla US / New York / \texttt{10001} & metody i~stałe stawki;
+  szacunek zgodny z~checkoutem \\
+T25 & Wysyłka & G1 & tylko MacBook × 2 (produkt z~darmową wysyłką); szacowanie & darmowa
+  wysyłka, gdy każda pozycja ma darmową wysyłkę \\
+T26 & Wysyłka & G1 & Lenovo × 2 (dokładnie \$1,000.00), szacowanie; dodanie „Pride and
+  Prejudice”, ponowne szacowanie & „darmowa wysyłka powyżej X” znaczy ściśle powyżej \\
+T27 & Checkout & G1 & checkout jednostronicowy gościa: Lenovo × 1, adres rozliczeniowy
+  US / New York / \texttt{10001}, wysyłka na ten sam adres, Ground, Check / Money Order,
+  potwierdzenie; \texttt{GET /checkout/completed/\{id\}}, \texttt{GET /orderdetails/\{id\}}
+  & checkout gościa od początku do końca; sumy przeliczane na serwerze \\
+T28 & Checkout & R1 & rejestracja na \texttt{/register}; Lenovo × 2 z~\texttt{SAVE10};
+  Next Day Air; płatność Manual, najpierw kartą \texttt{4111 1111 1111 1112}, potem
+  \texttt{4111 1111 1111 1111}; potwierdzenie; strona Lenovo & checkout klienta
+  zarejestrowanego; cyfra kontrolna karty; stan maleje (3 $\rightarrow$ 1); koszyk
+  opróżniony \\
+T29 & Zamówie\-nia & S1 & logowanie; \texttt{GET /order/history},
+  \texttt{/orderdetails/1}, \texttt{/orderdetails/pdf/1} & historia zamówień i~szczegóły
+  własnego zamówienia \\
+T30 & Zamówie\-nia & G1, G2, S1 & G1 składa zamówienie gościa (jak T27); G2 żąda
+  \texttt{/orderdetails/\{id\}}, \texttt{/orderdetails/print/\{id\}},
+  \texttt{/orderdetails/pdf/\{id\}}, \texttt{/reorder/\{id\}} i~\texttt{/order/history};
+  S1 żąda \texttt{/orderdetails/2} & nikt nie widzi ani nie ponawia cudzego zamówienia;
+  goście nie mają historii zamówień \\
+\end{xltabular}
+}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md}}
+
+\subsubsection{Nagranie: sesje, nagłówek scenariusza, reset i~sondy}\label{sec:bench-ruch-nagranie}
+
+Nagranie realizuje plan z~doprecyzowaniami, z~których każde wymusiła zasada „jeden
+scenariusz = jedna sesja startująca ze snapshotu” albo to, jak zachował się sklep.
+\finding{Nagrano 38~sesji scenariuszy obejmujących 30~zaplanowanych scenariuszy
+i~290~wymian.}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Plan & Nagrane jako & Dlaczego \\
+\midrule
+T12 & T12 (\texttt{\textvisiblespace{}save10\textvisiblespace{}}), T12B (\texttt{SAVE10}+U+180E) & „na świeżym koszyku”
+  oznacza świeżą sesję \\
+T18 & T18A (G1), T18B (S1) & dwie osoby, dwie sesje \\
+T22 & T22A (US/NY/\texttt{10002}), T22B (US/CA), T22C (US/TX), T22D (Germany), T22E
+  (MacBook × 2, US/NY/\texttt{10001}) & jeden adres na checkout, każdy ze snapshotu \\
+-- & T22F: rozliczenie na US/NY/\texttt{10001}, wysyłka na US/TX; podatek nowojorski &
+  R30 („podatek idzie za adresem rozliczeniowym”) wymaga adresu rozliczeniowego innego niż
+  adres wysyłki; w~T21--T23 są takie same \\
+T27 & \texttt{GET /checkout/completed/} bez identyfikatora & tego żąda skrypt checkoutu
+  (\texttt{ConfirmOrder.init(…, '…checkout/completed/')}); strona pokazuje ostatnie
+  zamówienie klienta \\
+T28 „strona Lenovo” & dodanie 2 kolejnych Lenovo jest odrzucane: „The maximum quantity
+  that can be added is 1.” & pokazuje spadek stanu 3 $\rightarrow$ 1 w~odpowiedzi, a~nie
+  tylko na stronie \\
+T30 & T30A (G2: szczegóły, wydruk, PDF i~ponowienie zamówienia~2 oraz
+  \texttt{/order/history}), T30B (S1: \texttt{/orderdetails/2}) & zamówienie G1 nie
+  istniałoby w~sesji G2 -- każdy scenariusz startuje ze snapshotu -- więc „cudzym
+  zamówieniem” jest przykładowe zamówienie~2 Arthura Holmesa \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Reset przed scenariuszem (ADR 0005, 2).} Po kroku~6
+\path{scripts/7-record-traffic.ps1} robi snapshot bazy i~przywraca go przed każdym
+scenariuszem -- dokładnie tak, jak reset \texttt{sqlServerSnapshot} w~\texttt{sk replay}
+robi to przed każdym scenariuszem po każdej stronie. W~efekcie nagranie i~każde
+odtworzenie zaczynają każdy scenariusz od tych samych wierszy, łącznie z~wartościami
+identity -- zamówienie złożone w~scenariuszu dostaje za każdym razem ten sam numer;
+scenariusze są niezależne od siebie i~od kolejności, a~każdy da się nagrać osobno
+(\texttt{-Only}); historia z~dwiema osobami nie może zakładać, że zamówienie pierwszej
+istnieje w~sesji drugiej (stąd T30 na przykładowym zamówieniu). Przywrócenie zamyka każde
+połączenie z~bazą, w~tym połączenia z~puli sklepu. Krok~7 wysyła po każdym przywróceniu,
+przed scenariuszem, jedno żądanie wprost do witryny i~zapisuje odpowiedź: to dowód, czy
+odtworzenie może przywrócić bazę i~od razu ruszyć. To samo wymaga, by nic nie używało
+bazy według własnego harmonogramu -- stąd wyłączone zadania w~tle
+(sekcja~\ref{sec:bench-ruch-konfiguracja}).
+
+\paragraph{Sondy w~zapytaniu (ADR 0005, 3).} Wiele reguł planu to fakty o~odpowiedzi
+jednego scenariusza pod adresem, którego używa każdy scenariusz -- koszyk po
+\texttt{SAVE10} (\texttt{POST /cart}), szacunek dla koszyka za \$1,000.00
+(\texttt{POST /cart/estimateshipping}). Takie żądania niosą dodatkowy parametr
+\texttt{probe=<scenariusz lub krok>}, który nopCommerce ignoruje na tych trasach,
+a~kontrakt może po nim wybierać. Alternatywa -- jedna klauzula na URL, stwierdzająca to,
+co wspólne wszystkim scenariuszom -- sprowadziłaby większość reguł do „odpowiada 200”.
+Zmiana żądania jest dopuszczalna, bo sonda jest częścią nagrania: legacy i~kandydat
+dostają te same bajty. Sondę niosą: T07, T08, T09 (odrzucone dodanie i~koszyk);
+T10-quantity, T10-remove, T10-zero; T11, T12, T12B, T13-expired, T13-future,
+T13-unknown, T14, T15, T16, T17, T18A, T18B, T19, T20 (odpowiedź na kupon albo koszyk);
+T21, T22A--T22F, T23 (koszyk po checkoucie); T24 (szacunek i~odpowiedź kroku
+rozliczenia, która wymienia metody wysyłki); T25, T26-1000, T26-1024 (szacunki); T27
+(strona zakończenia i~szczegóły zamówienia); T28 (odrzucona karta, strona zakończenia,
+szczegóły zamówienia, pusty koszyk \texttt{T28-after}, odrzucone dodanie); T29 (historia
+zamówień); T30A i~T30B (każde żądanie: historia zamówień gościa jest odrzucana pod
+adresem, którego używa też Steve, więc każde potrzebuje nazwy).
+
+\paragraph{Scenariusz, który zawiedzie, nie zatrzymuje nagrania (ADR 0005, 4).} Każdy
+scenariusz sprawdza po drodze to, czego potrzebuje (\texttt{Invoke-BenchStep},
+\texttt{Assert-NopTotal}): scenariusz, który nie dotarł do tego, co ćwiczy, nie jest
+dowodem. Krok~7 uruchamia każdy scenariusz także po porażce innego, drukuje własny log
+nopCommerce dla nieudanego, zanim następne przywrócenie go wymaże, i~na końcu kończy się
+błędem z~listą wszystkich nieudanych scenariuszy. Krok~6 robi to samo dla obszarów
+(podatki, katalog, wysyłka, rabaty, zadania w~tle). Jeden przebieg pokazuje wszystkie
+problemy.
+
+\paragraph{Konsekwencje.} Zestaw ruchu to 38~sesji dla 30~zaplanowanych scenariuszy.
+Konfiguracja odtwarzania P5 wskazuje ten sam snapshot i~bazę w~resecie
+\texttt{sqlServerSnapshot}. \path{*.skcap} zawiera wyłącznie dane sklepu przykładowego:
+opublikowane hasło klienta przykładowego, hasło, z~którym rejestruje się R1, testowe
+numery kart. Ciasteczka są domyślnie redagowane przez \texttt{sk capture}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0005-nopcommerce-traffic-recording.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/7-record-traffic.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/traffic/NopCommerce.Scenarios.ps1}}
+
+\subsubsection{Znaleziska z~nagrywania}\label{sec:bench-ruch-znaleziska}
+
+Napisanie i~nagranie zestawu pokazało rzeczy, które P5 stwierdza w~kontrakcie, a~P7
+porówna:
+\begin{itemize}
+  \item \textbf{T05 wymaga ustawienia katalogu.} Samo wycofanie publikacji zostawia stronę
+    produktu otwartą dla wszystkich (\texttt{AllowViewUnpublishedProductPage = true}
+    w~ustawieniach przykładowych).
+  \item \textbf{Przywrócenie bazy przy działającym zadaniu harmonogramu kładzie sklep} --
+    stąd wiersz zadań w~tle w~konfiguracji. Widziane raz w~pierwszym pełnym nagraniu:
+    pierwsze żądania po przywróceniu dostały 500, potem aplikacja wystartowała ponownie.
+  \item \textbf{Checkout zaczyna się od przycisku Checkout w~koszyku.} Sklep przykładowy
+    ma wymagany atrybut zamówienia „Gift wrapping”, zapisywany przy wysłaniu formularza
+    koszyka (\texttt{ShoppingCartController.StartCheckout}); zamówienie klienta, który
+    poszedł wprost na \texttt{/onepagecheckout}, jest odrzucane z~„Please select Gift
+    wrapping;”. Każdy checkout w~zestawie idzie: koszyk $\rightarrow$ Checkout
+    $\rightarrow$ (gość: „Checkout as Guest”) $\rightarrow$ \texttt{/checkout}
+    $\rightarrow$ checkout jednostronicowy, jak w~przeglądarce.
+  \item \textbf{Szacunek wysyłki oferuje też odbiór osobisty „Pickup (\$1.99)”} --
+    przykładowy punkt odbioru -- a~darmowa wysyłka nie znosi tej opłaty: koszyk MacBooków
+    jest szacowany na \$0.00 dla każdej metody wysyłki i~\$1.99 dla odbioru (T25). R33
+    i~R34 dotyczą metod wysyłki; opcja odbioru jest nagrana taka, jaka jest.
+  \item \textbf{T18A: wymaganie roli klienta odmawia z~pustym komunikatem.} Reguła nie
+    ustawia \texttt{UserError}, \texttt{ValidateDiscount} przekazuje ten \texttt{null}
+    dalej, a~\texttt{ApplyDiscountCoupon} pokazuje go jako jedyny komunikat -- pole kuponu
+    zawiera jeden pusty komunikat porażki, a~nie „The coupon code you entered couldn't be
+    applied”. R24 jest spełniona; komunikat to zachowanie legacy, które migracja może
+    „naprawić”.
+  \item \textbf{T12B: \texttt{SAVE10} z~U+180E jest odrzucany} („The coupon code you
+    entered couldn't be applied to your order”) na .NET Framework 4.8.
+  \item \textbf{Kwoty ujemne są zapisywane w~nawiasach}: \texttt{(\$100.00)},
+    \texttt{(\$34.00)}, \texttt{(\$75.00)} -- format walutowy \texttt{en-US} .NET Framework
+    4.8 na Windows Server 2022 (pierwsza sonda NLS $\rightarrow$ ICU). Skrypty przy
+    nagrywaniu przyjmują obie formy, \texttt{(\$x)} i~\texttt{-\$x}
+    (\texttt{Get-NopNegative}); to kontrakt przypina formę, którą pisze system legacy.
+  \item \textbf{Zerowa suma zamówienia pomija kroki płatności} -- decyduje o~tym
+    \path{CheckoutController.OpcLoadStepAfterShippingMethod}. Dlatego T14 najpierw
+    przechodzi checkout, a~\texttt{TAKE50} stosuje na końcu, zgodnie z~planem.
+\end{itemize}
+
+Dwa z~tych znalezisk zmieniły sposób nagrywania, a~nie tylko to, co stwierdza P5: krok~6
+wyłącza zadania w~tle i~restartuje aplikację, a~krok~7 sprawdza pierwszą odpowiedź po
+każdym przywróceniu; każdy checkout zaczyna się od przycisku Checkout w~koszyku.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/traffic/NopCommerce.Scenarios.ps1}}
+
+\subsubsection{Tryby awarii i~lista kontrolna planu ruchu}\label{sec:bench-ruch-awarie}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna \\
+\midrule
+Każda kwota podatku i~wysyłki w~nagraniu to \$0.00 & pominięto konfigurację (sekcja~2
+  planu): dane przykładowe nie mają stawek \\
+Kupon przechodzi na legacy, a~u~kandydata jest „not found” & wyszukiwanie rabatu
+  kandydata przeszło z~SQL (kolacja, bez rozróżniania wielkości liter) do pamięci
+  (porównanie porządkowe, ordinal) \\
+Odtworzenia rozjeżdżają się od pierwszego scenariusza & odtworzenie nie wystartowało ze
+  snapshotu S11 albo nagranie ominęło proxy \\
+Reguła \texttt{never} przechodzi, niczego nie sprawdzając & scenariusz nie dotarł do tego,
+  czego reguła pilnuje (np. T30 bez prawdziwego numeru zamówienia): każda reguła
+  \texttt{never} potrzebuje pozytywnego bliźniaka w~tym samym scenariuszu -- R44 z~R43,
+  R24 z~zarejestrowaną połową T18, R39 z~poprawną kartą w~T28 \\
+Numery zamówień rozjeżdżają się między legacy a~kandydatem & scenariusze biegły
+  z~różnych snapshotów albo dodatkowe żądanie utworzyło zamówienie \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{checklista}
+  \item Konfiguracja z~sekcji~2 zastosowana przez panel administracyjny, potem zrobiony
+    snapshot S11.
+  \item Każde żądanie każdego scenariusza przeszło przez proxy nagrywające.
+  \item Każda persona używała własnego słoika ciasteczek; tokeny anti-forgery czytane ze
+    strony tam, gdzie są sprawdzane.
+  \item Każda reguła z~sekcji~5 jest ćwiczona przez nagrany scenariusz, a~każda reguła
+    \texttt{never} ma pozytywnego bliźniaka.
+  \item Liczba scenariuszy i~skrót manifestu witryny legacy (\path{state\build.json}) są
+    zapisane razem z~\path{*.skcap}.
+  \item Sondy NLS $\rightarrow$ ICU z~sekcji~6 są w~nagraniu.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md}}
+
+\subsection{Kontrakt i~dowód A/A (ADR 0006, P5)}\label{sec:bench-kontrakt}
+
+P5 zamienia sekcję~5 planu ruchu w~kontrakt Second Key (sekcja~\ref{sec:formaty}).
+Zadanie jest zrobione, gdy kontrakt przechodzi walidację (\texttt{sk validate}) i~jest
+spełniony na systemie legacy. Kandydata jeszcze nie ma (P6), więc „spełniony na legacy”
+trzeba pokazać samym sklepem legacy, a~kontrakt musi być napisany tak, by P7 mogło
+rozliczyć z~niego zmigrowany sklep. \path{contract/contract.yaml} opisuje, co sklep musi
+robić i~czego nigdy nie może robić na zestawie ruchu P4, jako klauzule nad nagranymi
+żądaniami; \path{contract/secondkey.yaml} opisuje, jak ruch jest odtwarzany.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0006-nopcommerce-contract-and-aa-proof.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md}}
+
+\subsubsection{Reguły planu i~sposób pisania klauzul}\label{sec:bench-kontrakt-reguly}
+
+Sekcja~5 planu ruchu ma 46~reguł (R01--R46), każdą z~cytatem kodu 3.90, z~którego
+pochodzi: 37 rodzaju \texttt{must} i~9 rodzaju \texttt{never} (R05, R19, R20, R23, R24,
+R32, R39, R44, R45), czyli 19,6\%. Reguła \texttt{must} stwierdza, co zawiera odpowiedź
+albo stan po niej; reguła \texttt{never} -- czego nie ma. „Pokazane” znaczy: w~HTML strony
+wskazanej w~scenariuszu; fakty o~zamówieniach można też stwierdzać na delcie bazy (zadanie
+rdzenia S4). Kontrakt pisze się według sześciu zasad:
+\begin{itemize}
+  \item \textbf{Z~reguł planu.} Każda klauzula w~polu \texttt{why} podaje reguły, które
+    wyraża; tabela~\ref{tab:bench-mapa} mapuje reguły na klauzule.
+  \item \textbf{Tytuł mówi dokładnie, co sprawdzają asercje} (ADR 0006, decyzja~4):
+    „Billed to US / New York / 10001, the \$500.00 Lenovo with Ground shows tax 45.00
+    (9\%)”, a~nie „tax is correct”. Werdykt i~pakiet drukują tytuły, więc czytelnik musi
+    wiedzieć, co zostało spełnione, bez otwierania YAML.
+  \item \textbf{Zakres przez sondę.} Klauzula wybiera żądanie scenariusza przez
+    \texttt{when: \{ query: \{ probe: "\textasciicircum{}T11\$" \} \}}
+    (sekcja~\ref{sec:bench-ruch-nagranie}).
+  \item \textbf{HTML czytany przez ekstraktory.} Strona jest porównywana i~sprawdzana tylko
+    przez wartości wyciągnięte ekstraktorami (\texttt{compare.html: extracts}): wiersze
+    sum koszyka, komunikaty kuponów, tytuły list, sumy zamówień. Znaczniki nie są
+    zachowaniem.
+  \item \textbf{Każda klauzula \texttt{never} ma pozytywnego bliźniaka} w~tym samym
+    scenariuszu, żeby nieobecność nie była spełniona dlatego, że nic się nie wydarzyło:
+    odrzucony \texttt{MEMBERS15} gościa obok \texttt{(\$75.00)} klienta zarejestrowanego,
+    odrzucona karta obok złożonego zamówienia, odrzucone strony zamówień obok własnych.
+  \item \textbf{Zachowanie legacy przypięte takie, jakie jest} (ADR 0006, decyzja~2),
+    łącznie z~tym, co migracja mogłaby chcieć „naprawić”: rabaty zapisywane jako
+    \texttt{(\$100.00)}, pusty komunikat gościa dla \texttt{MEMBERS15}, opłata \$1.99 za
+    odbiór, której darmowa wysyłka nie znosi, odmowa dla \texttt{SAVE10}+U+180E. Kandydat,
+    który zmieni jedno z~nich, łamie klauzulę, a~człowiek rozstrzyga, czy to regresja,
+    czy poprawka -- różnica nigdy nie jest wchłaniana przez regułę normalizacji.
+\end{itemize}
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.9cm} >{\raggedright\arraybackslash}X@{}}
+\caption{Reguły planu i~klauzule kontraktu (za \texttt{contract/README.md})}\label{tab:bench-mapa}\\
+\toprule
+Reguły planu & Klauzule \\
+\midrule
+\endfirsthead
+\toprule
+Reguły planu & Klauzule \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+R01 strony sklepu & \path{STOREFRONT-ANSWERS-WITH-FOOTER}, \path{COMPUTERS-LISTS-ITS-SUBCATEGORIES} \\
+R02 strona główna & \path{HOME-LISTS-THE-FOUR-HOME-PAGE-PRODUCTS} \\
+R03, R04 sortowanie, stronicowanie & \path{NOTEBOOKS-BY-PRICE-ASCENDING}, \path{NOTEBOOKS-BY-NAME}, \path{NOTEBOOKS-PAGE-TWO-OF-THREE-PER-PAGE} \\
+R05 nieopublikowane (\texttt{never}) & \path{UNPUBLISHED-NEVER-LISTED}, \path{UNPUBLISHED-PAGE-NEVER-SERVED}; bliźniak \path{UNPUBLISHED-PAGE-NOT-FOUND} \\
+R06 strony produktów & \path{LENOVO-PAGE-NAME-SKU-PRICE}, \path{MACBOOK-PAGE-NAME-SKU-PRICE}, \path{COMPUTER-PAGE-ATTRIBUTE-ADJUSTMENTS} \\
+R07, R08 wyszukiwanie & \path{SEARCH-FINDS-MACBOOK-BY-NAME-CASE-AND-SKU}, \path{SEARCH-TERM-MINIMUM-LENGTH} \\
+R09--R14 koszyk & \path{LISTING-ADD-TO-CART-SUCCEEDS}, \path{T07-CART-HOLDS-ONE-LENOVO}, \path{QUANTITY-ABOVE-STOCK-REFUSED}, \path{QUANTITY-BELOW-MINIMUM-REFUSED}, \path{REQUIRED-ATTRIBUTE-REFUSED}, \path{T09-ATTRIBUTES-PRICED-INTO-UNIT-PRICE}, \path{T10-*} \\
+R15, R17, R18, R21, R22, R25--R27 rabaty & \path{SAVE10-*}, \path{COUPON-TRIMMED-AND-CASE-INSENSITIVE}, \path{*-COUPON-MESSAGE}, \path{PCT20MAX100-*}, \path{SHIPFREE-*}, \path{ONCE5-*}, \path{COUPON-123-*}, \path{TAKE50-*}, \path{MEMBERS15-FOR-A-REGISTERED-CUSTOMER}, \path{MEMBERS15-GUEST-GETS-AN-EMPTY-MESSAGE} \\
+R19, R20, R23, R24 rabaty (\texttt{never}) & \path{REFUSED-COUPON-NEVER-*}, \path{CART-TOTAL-NEVER-NEGATIVE}, \path{GIFT-CARD-CART-NEVER-DISCOUNTED}, \path{MEMBERS15-NEVER-FOR-A-GUEST}, \path{MEMBERS15-GUEST-NEVER-TOLD-APPLIED} \\
+R28--R30 podatki & \path{TAX-US-*}, \path{TAX-NO-RATE-GERMANY}, \path{TAX-ZIP-MATCH-IGNORES-CASE}, \path{TAX-FOLLOWS-BILLING-ADDRESS} \\
+R32 zwolnienie z~podatku (\texttt{never}) & \path{TAX-EXEMPT-NEVER-TAXED}, \path{TAX-EXEMPT-CART-PRICED} \\
+R33--R35 wysyłka & \path{ESTIMATE-OFFERS-FIXED-RATES-AND-PICKUP}, \path{CHECKOUT-OFFERS-THE-SAME-RATES}, \path{FREE-SHIPPING-*}, \path{NO-FREE-SHIPPING-AT-EXACTLY-1000} \\
+R31, R36--R38, R40, R41 zamówienia & \path{GUEST-ORDER-*}, \path{REGISTERED-ORDER-TOTALS}, \path{ORDER-EMPTIES-THE-CART}, \path{ORDER-LOWERS-STOCK} \\
+R39 cyfra kontrolna karty (\texttt{never}) & \path{BAD-CARD-NEVER-REACHES-CONFIRM}, \path{BAD-CARD-NUMBER-REFUSED} \\
+R42, R43 własne zamówienia & \path{HISTORY-LISTS-OWN-ORDERS-ONLY}, \path{OWN-ORDER-DETAILS-SHOWN}, \path{OWN-ORDER-PDF-INVOICE} \\
+R44, R45 cudze zamówienie (\texttt{never}) & \path{OTHERS-ORDER-NEVER-SHOWN}, \path{OTHERS-ORDER-NEVER-NAMES-ITS-OWNER}, \path{OTHERS-ORDER-SENDS-TO-LOGIN}, \path{GUEST-NEVER-GETS-ORDER-HISTORY}, \path{NOBODY-REORDERS-OTHERS-ORDER} \\
+R46 format waluty & \path{CART-UNIT-PRICES-WRITTEN-IN-USD}; kwoty rabatów przypięte jako \texttt{(\$100.00)} w~klauzulach rabatów \\
+§6 sondy NLS $\rightarrow$ ICU & \path{COUPON-WITH-U180E-REFUSED}; kwoty w~stylu \texttt{(\$100.00)} powyżej \\
+-- & \path{SIGN-IN-RETURNS-HOME}, \path{REGISTRATION-COMPLETES}, \path{NEVER-A-SERVER-ERROR} \\
+\end{xltabular}
+}
+
+Dwie reguły nie mają własnej klauzuli. \textbf{R16} (rabat procentowy liczony
+w~pojedynczej precyzji i~zaokrąglany „half to even”): nagrane kwoty nie odróżniają tego
+obliczenia od dokładnej arytmetyki dziesiętnej, więc klauzule rabatów przypinają kwoty.
+\textbf{R37} (sumy złożonego zamówienia równe sumom z~kroku potwierdzenia): jedna klauzula
+widzi jedno żądanie, więc klauzule szczegółów zamówienia stwierdzają sumy, które pokazał
+krok potwierdzenia.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0006-nopcommerce-contract-and-aa-proof.md}}
+
+\subsubsection{Struktura pliku i~liczby}\label{sec:bench-kontrakt-struktura}
+
+Plik zaczyna się od \texttt{apiVersion: secondkey/v1} i~\texttt{kind: Contract}; blok
+\texttt{metadata} podaje nazwę \path{nopcommerce-390}, tytuł, opis systemu („nopCommerce
+release-3.90 (12d1f01), IIS, .NET Framework 4.8, SQL Server 2022 Express”), rewizję~1
+i~właściciela \texttt{bench}. Sekcja \texttt{compare} porównuje
+nagłówki \texttt{content-type} i~\texttt{location}, a~HTML -- przez ekstrakty
+(\texttt{html: extracts}). Walidacja: \texttt{sk validate contract/contract.yaml}.
+Kontrakt ma \textbf{76~klauzul -- 61 rodzaju \texttt{must} i~15 rodzaju \texttt{never}}
+(udział nieobecności 19,7\%) -- nad 32~ekstraktorami i~z~trzema maskami normalizacji;
+wszystkie klauzule są zaakceptowane. Każda ma proweniencję \texttt{origin: designed},
+\texttt{status: accepted}, \texttt{author: bench}, \texttt{date: 2026-09-26}. Pełną listę
+klauzul z~zakresami i~tytułami podaje dodatek~\ref{app:klauzule}.
+
+Policzone z~pliku: klauzule mają łącznie 134~asercje. Operatory: \texttt{equals} (86),
+\texttt{contains} (21), \texttt{matches} (13), \texttt{countEquals} (4),
+\texttt{absent} (4), \texttt{exists} (3), \texttt{lt}, \texttt{gt} i~\texttt{gte} (po
+1); kwantyfikator \texttt{any} występuje w~9~asercjach (wiersze sum zamówień). Selektory
+to \path{response.status}, \path{response.body.json.<pole>},
+\path{response.body.text}, \path{response.headers.<nazwa>[0]}
+i~\path{extract.<nazwa>}; gdy operator wartości działa na ekstraktorze
+z~\texttt{all: true}, selektor kończy się \texttt{[*]} (lekcja rozgrzewki,
+sekcja~\ref{sec:bench-wyniki-p3}). Jedyna
+klauzula bez \texttt{when}, \path{NEVER-A-SERVER-ERROR}, obejmuje każde żądanie zestawu
+(\texttt{response.status gte 500}).
+
+Ekstraktory (29 z~HTML, 3 z~JSON) grupują się według stron:
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Zakres \texttt{when} & Ekstraktory \\
+\midrule
+\endfirsthead
+\toprule
+Zakres \texttt{when} & Ekstraktory \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{GET} strony sklepu & \texttt{footer} (\texttt{.footer-powered-by} na dziewięciu
+  stronach, które otwiera ruch); \texttt{homeProducts} (\path{^/$}),
+  \texttt{listingProducts} (\path{^/(notebooks|search)$}), \texttt{subcategories}
+  (\path{^/computers$}), \texttt{searchWarning} (\path{^/search$}); dla trzech stron
+  produktów \texttt{productName}, \texttt{productSku}, \texttt{productPrice} (atrybut
+  \texttt{content} elementu \texttt{span[itemprop=price]}, \texttt{as: decimal});
+  \texttt{attributeOptions} (\path{^/build-your-own-computer$}) \\
+\path{^/cart$}, każda metoda & \texttt{cartProducts}, \texttt{cartQuantities} (wartość
+  pola \texttt{qty-input}, \texttt{integer}), \texttt{cartUnitPrices},
+  \texttt{cartLineTotals}, \texttt{cartSubtotal}, \texttt{cartShipping},
+  \texttt{cartTax}, \texttt{cartTotal} (\texttt{decimal}, \texttt{culture: en-US});
+  \texttt{cartUnitPriceTexts}, \texttt{cartSubtotalDiscount},
+  \texttt{cartTotalDiscount} (tekst, bez konwersji -- stąd przypięta forma
+  \texttt{(\$100.00)}); \texttt{couponMessages} (\texttt{.message-success},
+  \texttt{.message-failure} w~\texttt{.coupon-box}); \texttt{cartEmpty} \\
+\texttt{POST} wysyłka & \texttt{shippingEstimates} (\path{^/cart/estimateshipping$},
+  \texttt{.shipping-results .option-name}); \texttt{checkoutGround},
+  \texttt{checkoutSecondDayAir}, \texttt{checkoutNextDayAir}
+  (\path{^/checkout/OpcSaveBilling/$} z~sondą \texttt{T24}; \texttt{from: json},
+  \texttt{selector: update\_section.html}, wyrażenie regularne na etykiecie metody) \\
+\texttt{GET} zamówienia i~klienci & \texttt{placedOrderNumber}
+  (\path{^/checkout/completed/$}, liczba z~\texttt{.order-number strong});
+  \texttt{orderNumber}, \texttt{orderStatus}, \texttt{orderTotals} (wiersze
+  \texttt{table.cart-total}) dla \path{^/orderdetails/[0-9]+$}; \texttt{historyOrders}
+  (\path{^/order/history$}); \texttt{registrationResult} (\path{^/registerresult/1$}) \\
+\end{xltabular}
+}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/contract/contract.yaml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md}}
+
+\subsubsection{Normalizacja: trzy maski}\label{sec:bench-kontrakt-maski}
+
+Każda maska dotyczy wartości, której sklep nie wyprowadza z~samego żądania i~snapshotu,
+więc dwie odpowiedzi na to samo żądanie mogą się w~niej różnić (ADR 0006, decyzja~3):
+
+\begin{lstlisting}
+normalize:
+  masks:
+    patterns:
+      - { name: pdf-bytes, regex: '^JVBERi0[A-Za-z0-9+/=]*$', replacement: '<pdf>' }
+      - { name: anti-forgery-token, regex: '(?<=name="__RequestVerificationToken" type="hidden" value=")[^"]+', replacement: '<token>' }
+      - { name: cart-line-picture, regex: '(?<=\b(?:alt="Picture of |title="Show details for ))[^"]*|(?<=\bsrc=")[^"]*/content/images/thumbs/[^"]*', replacement: '<cached picture>' }
+\end{lstlisting}
+
+\begin{itemize}
+  \item \texttt{pdf-bytes} -- bajty faktury PDF. Każde renderowanie zawiera czas
+    utworzenia i~losowy identyfikator dokumentu, więc dwa renderowania nigdy się nie
+    zgadzają; maska obejmuje treści base64 zaczynające się od \texttt{\%PDF-}, a~kontrakt
+    stwierdza status i~typ faktury.
+  \item \texttt{anti-forgery-token} -- wartość tokenu anti-forgery, świeża w~każdym
+    formularzu renderowanym przez MVC. Krok potwierdzenia checkoutu jednostronicowego
+    odpowiada JSON-em, którego \texttt{update\_section.html} zawiera podsumowanie
+    zamówienia -- formularz z~takim tokenem.
+  \item \texttt{cart-line-picture} -- adres, tekst \texttt{alt} i~tytuł linku obrazka
+    pozycji koszyka. Wersja 3.90 buforuje je przez trzy minuty według identyfikatora
+    pozycji koszyka (\path{ShoppingCartModelFactory.PrepareCartItemPictureModel}); każdy
+    scenariusz startuje z~tego samego snapshotu, więc jego pierwsza pozycja zawsze dostaje
+    ten sam identyfikator i~przez te trzy minuty pokazuje obrazek produktu, który ostatnio
+    miał ten identyfikator -- przebieg A/A zobaczył pozycję Lenovo z~obrazkiem karty
+    podarunkowej \$25. Widać to w~minikoszyku odpowiedzi na dodanie do koszyka
+    i~w~podsumowaniu zamówienia kroku potwierdzenia. Ten bufor to stan, którego
+    przywrócenie bazy nie resetuje. Czyszczenie go przed każdym scenariuszem też by go
+    zresetowało, ale tylko przez panel administracyjny albo restart aplikacji, przed
+    każdym scenariuszem po obu stronach -- także u~kandydata P7 -- więc kontrakt maskuje
+    te trzy wartości i~mówi to wprost.
+\end{itemize}
+
+JSON jest porównywany w~całości, łącznie z~HTML w~środku, więc maskowane są tylko te
+wartości: reszta sekcji -- nazwy produktów, ceny, ilości, sumy -- nadal się liczy. Strony
+są porównywane przez ekstrakty, a~żaden ekstraktor nie czyta tokenu ani obrazka. Nic
+więcej nie jest normalizowane: z~jednego snapshotu i~tych samych żądań sklep legacy
+odpowiada tak samo po obu stronach odtworzenia A/A, łącznie z~numerami zamówień. Różnica,
+której nic nie wyjaśnia, jest regresją, więc zaliczony przebieg A/A pokazuje też, że te
+trzy maski to wszystko, czego porównanie potrzebuje.
+
+Plan ruchu (sekcja~7) wymieniał jako wartości do normalizacji przez komparator (zadanie
+rdzenia S12) ciasteczko \texttt{Nop.customer} i~identyfikatory GUID klientów, tokeny
+anti-forgery oraz ciasteczka \texttt{ASP.NET\_SessionId} i~\texttt{NOPCOMMERCE.AUTH},
+identyfikatory GUID zamówień i~znaczniki czasu (daty zamówień, „created on”, nagłówek
+\texttt{Date}) oraz nagłówki transportowe w~rodzaju \texttt{Content-Length}; numerów
+zamówień nie normalizuje się (\texttt{CustomOrderNumberMask = "\{ID\}"}). Kontrakt nie ma
+masek na te wartości poza tokenem: porównuje tylko nagłówki \texttt{content-type}
+i~\texttt{location}, a~HTML -- wyłącznie przez ekstrakty.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/contract/contract.yaml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0006-nopcommerce-contract-and-aa-proof.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md}}
+
+\subsubsection{Konfiguracja odtwarzania i~dowód A/A}\label{sec:bench-kontrakt-aa}
+
+\path{contract/secondkey.yaml} trzyma to, czego nie da się powiedzieć w~wierszu poleceń
+(nagranie, przebieg i~oba adresy bazowe podaje \path{scripts/8-replay.ps1}); ścieżki są
+względne wobec pliku:
+
+\begin{lstlisting}
+version: 1
+replay:
+  scenarioMode: session
+  # Generous: the first request of a scenario follows a database restore.
+  timeoutSeconds: 120
+  legacy:
+    reset:
+      sqlServerSnapshot: { connectionStringEnv: NOPBENCH_SK_SQL, database: nopcommerce_legacy, snapshot: nopcommerce_legacy_snapshot }
+  candidate:
+    reset:
+      sqlServerSnapshot: { connectionStringEnv: NOPBENCH_SK_SQL, database: nopcommerce_legacy, snapshot: nopcommerce_legacy_snapshot }
+  # The cart, estimate-shipping and registration forms carry an anti-forgery token issued
+  # with the page; the replay posts the one the page it just loaded issued.
+  correlation:
+    - name: csrf
+      regex: 'name="__RequestVerificationToken" type="hidden" value="([^"]+)"'
+      formField: __RequestVerificationToken
+compare:
+  contract: contract.yaml
+evidence:
+  contract: contract.yaml
+\end{lstlisting}
+
+Connection string resetu jest czytany ze zmiennej \texttt{NOPBENCH\_SK\_SQL}, którą
+ustawia krok~8 (uwierzytelnianie Windows, bez sekretu).
+
+\paragraph{Dowód: odtworzenie A/A na jednym sklepie i~jednej bazie (ADR 0006, 1).}
+Krok~8 odtwarza nagranie P4 przez \texttt{sk replay}; legacy i~kandydat to oba
+\url{http://localhost:8080/}, a~każda strona jest przywracana do snapshotu nagrania przed
+każdym scenariuszem. \texttt{sk replay} kończy scenariusz po jednej stronie, zanim
+zresetuje drugą, więc jedna baza obsługuje obie. Przebieg trafia do Linuksa, gdzie
+krok~9 wymaga od \texttt{sk compare} wyniku \texttt{pass} z~każdą zaakceptowaną klauzulą
+spełnioną i~żadną niewykonaną -- każda klauzula jest sprawdzana dwa razy, raz na stronę,
+na odpowiedziach, których sklep legacy naprawdę udzielił. \finding{Kontrakt, który nie
+przechodzi A/A, myli się co do systemu legacy albo odtworzenie nie jest powtarzalne;
+jedno i~drugie odebrałoby sens werdyktowi P7 -- dlatego A/A jest bramką.} P7 odtworzy to
+samo nagranie na kandydacie z~\texttt{-Candidate}, z~tym samym resetem i~kontraktem;
+klauzula spełniona tutaj, a~złamana tam, jest regresją z~konstrukcji.
+
+\paragraph{Co znalazł pierwszy przebieg A/A.} Pierwszy przebieg tej bramki nie przeszedł,
+a~oba powody leżały po stronie kontraktu, nie sklepu:
+\begin{itemize}
+  \item \textbf{Strona główna wymienia cztery produkty, nie sześć.} Dane przykładowe
+    oznaczają „show on home page” cztery produkty; dwa kolejne, których oczekiwał
+    kontrakt, są zakomentowane w~instalatorze 3.90 (\texttt{CodeFirstInstallationService}).
+    Klauzula była złamana po obu stronach (\texttt{violated-both}) -- kontrakt mylił się co
+    do systemu legacy, a~po to jest bramka.
+    \path{HOME-LISTS-THE-FOUR-HOME-PAGE-PRODUCTS} wymienia teraz te cztery.
+  \item \textbf{17~odpowiedzi JSON różniło się między dwoma odtworzeniami tego samego
+    żądania.} 14 to podsumowanie zamówienia kroku potwierdzenia ze świeżym tokenem
+    anti-forgery; 3 to minikoszyk odpowiedzi na dodanie do koszyka, w~którym pozycja
+    Lenovo miała po jednej stronie obrazek karty podarunkowej \$25. Obie wartości są
+    teraz maskowane (same wartości), a~drugi przebieg przeszedł.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/contract/secondkey.yaml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0006-nopcommerce-contract-and-aa-proof.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md}}
+
+\subsection{Skrypty: kroki 1--9, biblioteki i~rozgrzewka}\label{sec:bench-skrypty}
+
+Ponumerowane skrypty w~\path{scripts/} to strona legacy benchu w~kolejności uruchamiania;
+CI uruchamia je bez zmian, więc porażkę z~CI odtwarza się na dowolnej maszynie Windows tym
+samym krokiem. Konwencje wspólne: Windows PowerShell 5.1 i~PowerShell 7 (CI -- 5.1, joby
+linuksowe -- \texttt{pwsh}); wyłącznie ASCII, bo 5.1 czyta skrypt bez BOM jako ANSI;
+\texttt{Set-StrictMode -Version 3.0} i~\texttt{\$ErrorActionPreference = 'Stop'}; każdy
+skrypt dot-source'uje \path{lib/NopBench.Common.ps1} (kroki łańcucha także
+\path{lib/NopBench.Chain.ps1}) i~działa samodzielnie; sam sprawdza swoje warunki wstępne;
+nic nie zapisuje w~repozytorium; kończy się jawnym \texttt{exit 0}, a~porażka rzuca
+wyjątek, więc kod ostatniego polecenia natywnego nie decyduje o~wyniku. W~GitHub Actions
+skrypty grupują log (\texttt{::group::}), dopisują tabele do podsumowania joba
+i~maskują sekrety. Przy blokadzie polityki wykonywania: \texttt{powershell
+-ExecutionPolicy Bypass -File}. Każda wartość ma domyślną
+(tabela~\ref{tab:bench-parametry}; gwiazdka oznacza parametry, których nie wymienia README
+skryptów).
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.9cm} l >{\raggedright\arraybackslash}p{4.1cm} >{\raggedright\arraybackslash}X@{}}
+\caption{Parametry i~zmienne środowiskowe kroków 1--9}\label{tab:bench-parametry}\\
+\toprule
+Nazwa & Krok & Domyślnie & Znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Nazwa & Krok & Domyślnie & Znaczenie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{-WorkRoot}, \texttt{NOPBENCH\_WORK} & wszystkie & \path{C:\nopbench}
+  (\path{$HOME/nopbench} poza Windows) & katalog roboczy \\
+\texttt{-Destination}; \texttt{-Force} & 1 & \path{<work>\legacy-src}; wyłączony & miejsce
+  checkoutu; ponowne pobranie mimo zweryfikowanego checkoutu \\
+\texttt{-SourceDir} & 2 & z~\path{fetch.json}, inaczej \path{<work>\legacy-src} &
+  czysty checkout przypiętego commita \\
+\texttt{-SiteDir} & 2 & \path{<work>\legacy-site} & cel publikacji (zastępowany) \\
+\texttt{-MSBuild}; \texttt{-NuGet} & 2 & z~\texttt{PATH}, inaczej \texttt{vswhere};
+  z~\texttt{PATH}, inaczej przypięty \texttt{NuGet.CommandLine} & narzędzia buildu \\
+\texttt{-SkipIis}, \texttt{-SkipSql} & 3 & wyłączone & zostaw tę połowę (naprawy) \\
+\texttt{-SiteDir} & 4 & z~\path{build.json}, inaczej \path{<work>\legacy-site} &
+  witryna; sprawdzana z~\path{legacy-site.sha256} \\
+\texttt{-InstallDir} & 4 & \path{C:\inetpub\nopcommerce-legacy} & katalog IIS
+  (zastępowany) \\
+\texttt{-SiteName} & 4 & \texttt{nopcommerce-legacy} & witryna, pula i~login SQL
+  \texttt{IIS APPPOOL\textbackslash{}<nazwa>} \\
+\texttt{-Port} & 4 & \texttt{8080} & port HTTP; zajęty port jest odrzucany \\
+\texttt{-SqlServer} & 4 & z~\path{platform.json}, inaczej \texttt{.\textbackslash{}SQLEXPRESS} & instancja SQL
+  Server \\
+\texttt{-DatabaseName} & 4 & \texttt{nopcommerce\_legacy} & usuwana i~tworzona przy
+  każdym przebiegu \\
+\texttt{-AdminEmail} & 4 & \texttt{admin@nopbench.invalid} & e-mail administratora \\
+\texttt{-Install\-TimeoutSeconds}* & 4 & \texttt{1200} & limit klienta HTTP instalatora \\
+\texttt{-Warmup\-TimeoutSeconds}* & 4; 5 & \texttt{900}; \texttt{600} & czas na pierwszą
+  odpowiedź sklepu \\
+\path{NOPBENCH_ADMIN_PASSWORD} & 4 & generowane & znane hasło administratora
+  (poza plikami repozytorium) \\
+\texttt{-BaseUrl} & 5, 6 & z~\path{deploy.json}, inaczej \url{http://localhost:8080/} &
+  sklep do testu lub konfiguracji \\
+\texttt{-Out}; \texttt{-ProxyUrl} & 7 & \path{<work>\traffic\nopcommerce.skcap};
+  \url{http://127.0.0.1:8000/} & nagranie; nasłuch proxy \\
+\texttt{-Only} & 7 & wszystkie & wybrane scenariusze; nagranie częściowe, nie zestaw ruchu \\
+\texttt{-Capture}; \texttt{-Candidate} & 8 & nagranie z~\path{traffic.json}; sklep legacy
+  (A/A) & co odtworzyć; adres drugiej strony (P7) \\
+\texttt{-Out}* & 8 & \path{<work>\replay\run.skrun} & przebieg \\
+\texttt{-Run}, \texttt{-OutDir} & 9 & \path{<work>\replay\run.skrun}, \path{<work>\replay} &
+  przebieg do oceny; miejsce werdyktu i~pakietu \\
+\texttt{-Pdf} & 9 & \texttt{auto} & \texttt{sk evidence -{}-pdf}: \texttt{auto},
+  \texttt{required} (bez przeglądarki z~Chromium -- błąd), \texttt{off} \\
+\texttt{NOPBENCH\_SK\_SQL} & ustawia 8 & z~\path{deploy.json} & connection string resetu
+  dla \repopath{sk}; bez sekretu \\
+\texttt{NOPBENCH\_SK}, \texttt{NOPBENCH\_PORTCULLIS} & łańcuch &
+  \path{<work>\tools\chain\secondkey\SecondKey.Cli.dll}, \path{<work>\tools\chain\portcullis\Portcullis.Cli.dll}
+  & narzędzia łańcucha \\
+\end{xltabular}
+}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Common.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/4-deploy-and-install.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/5-smoke.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/8-replay.ps1}}
+
+\subsubsection{Kroki 1--3: pobranie, build, platforma}\label{sec:bench-krok1}
+
+\paragraph{\texttt{1-fetch-nopcommerce.ps1}} (git; Windows lub Linux; tworzy
+\path{<work>\legacy-src} i~\path{fetch.json}). \texttt{git ls-remote -{}-tags} dla tagu
+i~jego rozwinięcia \texttt{\textasciicircum\{\}} (do 3~prób): commit tagu musi równać się
+przypięciu, inaczej krok odmawia budowania przesuniętego tagu. Zweryfikowany checkout
+jest używany ponownie (chyba że \texttt{-Force}); w~przeciwnym razie \texttt{git init},
+\texttt{core.autocrlf=false} (końce linii upstream bajt w~bajt, więc pliki statyczne nie
+zależą od ustawień git maszyny), \texttt{core.longpaths=true}, \texttt{fetch -{}-depth 1
+-{}-no-tags} samego tagu i~\texttt{checkout -{}-detach}. Na końcu \texttt{HEAD} musi równać
+się przypięciu, a~\texttt{git status -{}-porcelain -{}-untracked-files=no} być pusty (pliki
+nieśledzone -- wyjście buildu -- są dozwolone).
+
+\paragraph{\texttt{2-build-legacy.ps1}} (Windows, Visual Studio 2022 lub Build Tools
+2022 z~obciążeniem web, git; bez uprawnień administratora; tworzy
+\path{<work>\legacy-site}, \path{build.json}, \path{legacy-site.sha256} oraz
+\path{logs\build.binlog} i~\path{publish.binlog}). Odmawia budowania drzewa innego niż
+czysty checkout pinu. Znajduje MSBuild i~nuget.exe, rozpakowuje przypięte asemblacje
+referencyjne (sprawdza \path{mscorlib.dll}, \path{System.Web.dll},
+\path{RedistList\FrameworkList.xml}) i~zapisuje, czy maszyna ma własny pakiet 4.5.1.
+Potem \texttt{nuget restore} (upstream commituje pakiety, więc to raczej weryfikacja),
+build rozwiązania i~publikacja \texttt{Nop.Web}:
+
+\begin{lstlisting}
+common:  /p:Configuration=Release /p:TargetFrameworkRootPath=<package>\build
+         /p:ImportDirectoryBuildProps=false /p:ImportDirectoryBuildTargets=false
+build:   /m /nr:false /v:minimal /t:Build "/p:Platform=Any CPU" /bl:<work>\logs\build.binlog
+publish: /p:Platform=AnyCPU /p:BuildProjectReferences=false /p:DeployOnBuild=true
+         /p:DeployDefaultTarget=WebPublish /p:WebPublishMethod=FileSystem
+         /p:PublishUrl=<site> /p:DeleteExistingFiles=true
+         /p:AutoParameterizationWebConfigConnectionStrings=false /bl:<work>\logs\publish.binlog
+\end{lstlisting}
+
+Kontrola witryny: obecne \path{Global.asax}, \path{Web.config}, asemblacje
+\texttt{Nop.Web}, \texttt{Nop.Admin}, \texttt{Nop.Core}, \texttt{Nop.Data},
+\texttt{Nop.Services}, \texttt{Nop.Web.Framework}, widoki sklepu i~Administration,
+motyw \texttt{DefaultClean}, \path{App_Data\Install\SqlServer.StoredProcedures.sql},
+zasoby lokalizacji i~\path{Plugins\bin}; nieobecne \path{App_Data\Settings.txt}
+i~\path{InstalledPlugins.txt} (oznaczyłyby witrynę jako zainstalowaną), pliki
+\path{.cs} i~\path{.csproj} oraz \texttt{debug="true"}; każdy projekt wtyczki jako katalog
+z~\path{Description.txt} i~\path{Nop.Plugin.*.dll}. Drzewo źródeł jest sprawdzane
+ponownie po buildzie. Manifest to wiersze \texttt{<SHA-256>~~<ścieżka>} (separator
+\texttt{/}) sortowane porządkowo, niezależnie od kultury maszyny, zgodne z~\texttt{sha256sum
+-c}.
+
+\paragraph{\texttt{3-install-iis-sql.ps1}}\label{sec:bench-krok3} (uprawnienia
+administratora; idempotentny; tworzy \path{platform.json}). IIS: \texttt{dism.exe /Online
+/Enable-Feature /All /NoRestart} z~funkcjami \path{IIS-DefaultDocument},
+\path{IIS-StaticContent}, \path{IIS-HttpErrors}, \path{IIS-HttpLogging},
+\path{IIS-RequestFiltering}, \path{IIS-NetFxExtensibility45},
+\path{IIS-ISAPIExtensions}, \path{IIS-ISAPIFilter}, \path{IIS-ASPNET45} (kod 3010
+jest akceptowany), start \texttt{WAS} i~\texttt{W3SVC}, kontrola handlera
+\path{ExtensionlessUrlHandler-Integrated-4.0}. SQL Server (gdy nie ma usługi
+\texttt{MSSQL\$SQLEXPRESS}): pobranie z~weryfikacją SHA-256, podpis Authenticode ze
+statusem \texttt{Valid} i~\texttt{O=Microsoft Corporation}, rozpakowanie, test sektorów
+(\texttt{fsutil fsinfo sectorinfo}; ponad 4096~B na dysku systemowym przenosi dane do
+\path{<work>\sqldata} albo kończy krok błędem ze wskazówką
+\texttt{ForcedPhysicalSectorSizeInBytes}) i~instalator (dwie próby; po nieudanej -- 60
+ostatnich linii \texttt{ERRORLOG}, zdarzenia \texttt{MSSQL*}, deinstalacja i~sprzątanie):
+
+\begin{lstlisting}
+/Q /ACTION=Install /IACCEPTSQLSERVERLICENSETERMS /FEATURES=SQLENGINE
+/INSTANCENAME=SQLEXPRESS /INSTANCEID=SQLEXPRESS /SQLSYSADMINACCOUNTS="BUILTIN\Administrators"
+/SQLCOLLATION=SQL_Latin1_General_CP1_CI_AS /TCPENABLED=1 /NPENABLED=0 /UPDATEENABLED=False
+/SKIPRULES=RebootRequiredCheck [/INSTALLSQLDATADIR="<work>\sqldata"]
+\end{lstlisting}
+
+Istniejąca instancja jest używana ponownie; inna kolacja serwera daje tylko ostrzeżenie,
+bo krok~4 tworzy bazę z~przypiętą kolacją jawnie.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/1-fetch-nopcommerce.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/2-build-legacy.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/3-install-iis-sql.ps1}}
+
+\subsubsection{Kroki 4--5: wdrożenie, instalator, smoke test}\label{sec:bench-krok4}
+
+\paragraph{\texttt{4-deploy-and-install.ps1}} (uprawnienia administratora, po krokach 2
+i~3). Kolejno: kontrola każdego wiersza manifestu i~liczby plików (brak manifestu --
+ostrzeżenie i~wdrożenie bez weryfikacji); usunięcie witryny, puli i~bazy
+(\texttt{SINGLE\_USER WITH ROLLBACK IMMEDIATE}, \texttt{DROP DATABASE}) oraz do 30~s
+oczekiwania na zwolnienie portu; pula .NET CLR v4.0 w~potoku zintegrowanym
+z~\texttt{ApplicationPoolIdentity}, \texttt{loadUserProfile=true}, zerowym
+\texttt{idleTimeout} i~\texttt{periodicRestart.time},
+\texttt{enable32BitAppOnWin64=false}; \texttt{icacls} \texttt{(OI)(CI)M} dla tożsamości
+puli \emph{przed} kopiowaniem (pliki dziedziczą), \texttt{robocopy /MIR} (kody poniżej 8
+to sukces); witryna z~powiązaniem \texttt{http/*:<port>:}; login \texttt{CREATE LOGIN …
+FROM WINDOWS} z~rolą \texttt{dbcreator}. Instalator: oczekiwanie na formularz
+\texttt{GET /install} (z~polem \texttt{AdminEmail}) i~wysłanie pól \texttt{InstallModel}:
+
+\begin{lstlisting}
+AdminEmail=<-AdminEmail>  AdminPassword=<password>  ConfirmPassword=<password>
+InstallSampleData=true  DataProvider=sqlserver  SqlConnectionInfo=sqlconnectioninfo_raw
+DatabaseConnectionString=Data Source=<server>;Initial Catalog=<database>;Integrated Security=True;Persist Security Info=False
+SqlAuthenticationType=windowsauthentication  SqlServerCreateDatabase=true
+UseCustomCollation=true  Collation=SQL_Latin1_General_CP1_CI_AS
+\end{lstlisting}
+
+Sukcesem jest tylko 302 na \texttt{/}; inaczej krok drukuje błędy walidacji formularza
+i~kończy się błędem. Potem strona główna musi zawierać „nopCommerce”, a~plik
+\path{App_Data\Settings.txt} istnieć; krok odczytuje liczbę tabel, produktów
+(\texttt{Deleted = 0}) i~kolację bazy do \path{deploy.json}, zapisuje plik danych
+administratora (sekcja~\ref{sec:bench-stan}) i~podsumowanie.
+
+\paragraph{\texttt{5-smoke.ps1}} (dowolna maszyna, która sięga sklepu; bez uprawnień).
+Jeden gość, jeden słoik ciasteczek; najpierw oczekiwanie na stronę główną (pierwsze
+żądanie kompiluje widoki i~ładuje wtyczki), potem pięć kontroli: \emph{home}
+(\texttt{GET /}, „Welcome to our store”), \emph{category} (\texttt{GET /desktops},
+\texttt{<h1>Desktops</h1>} i~Lenovo), \emph{product}
+(\texttt{GET} \path{/lenovo-ideacentre-600-all-in-one-pc}: nazwa, SKU \texttt{LE\_IC\_600},
+\texttt{\$500.00}; identyfikator produktu ze strony), \emph{add}
+(\texttt{POST /addproducttocart/catalog/\{id\}/1/1}, \texttt{"success":true}) i~\emph{cart}
+(\texttt{GET /cart}: \texttt{<h1>Shopping cart</h1>} i~produkt, bez „Your Shopping Cart is
+empty!”). Każda strona HTML musi mieć stopkę „Powered by nopCommerce” -- dowód, że
+odpowiedział nopCommerce, a~licencja wymaga jej na każdej stronie. Kontrole są
+bezwarunkowe i~nigdy pomijane; wynik każdej trafia do \path{smoke.json} i~podsumowania,
+a~krok zawodzi na końcu, jeśli zawiodła którakolwiek.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/4-deploy-and-install.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/5-smoke.ps1}}
+
+\subsubsection{Krok 6: konfiguracja sklepu}\label{sec:bench-krok6}
+
+\path{6-configure-store.ps1} wymaga pliku danych administratora i~\path{deploy.json}.
+Sesja administratora idzie wprost do witryny z~nagłówkiem \texttt{x-bench-configuration}
+(nie nagłówkiem scenariusza); każdy \texttt{POST} panelu niesie token anti-forgery ze
+strony. Podatki: strona
+\path{/Admin/Tax/ConfigureProvider?systemName=Tax.FixedOrByCountryStateZip}, adresy
+\texttt{SaveMode}, \texttt{AddRateByCountryStateZip}
+i~\texttt{RatesByCountryStateZipList} czytane ze skryptu strony, identyfikatory kategorii,
+krajów i~stanów z~list wyboru; po dodaniu lista stawek musi mieć dokładnie pięć
+oczekiwanych wierszy. Katalog: najpierw dowód, że adres HP Envy serwuje ten produkt
+(inaczej późniejsze 404 niczego by nie dowodziło); \texttt{IsTaxExempt=true} dla MacBooka
+przez formularz produktu, \texttt{Published=false} (HP Envy) i~\texttt{StockQuantity=3}
+(Lenovo) przez edycję zbiorczą z~odczytem; \texttt{AllowViewUnpublishedProductPage=false},
+po czym zwykły gość musi dostać 404. Wysyłka: stawki przez
+\texttt{UpdateFixedShippingRate} i~ustawienia \texttt{FreeShippingOverXEnabled=true},
+\texttt{FreeShippingOverXValue=1000}, \texttt{FreeShippingOverXIncludingTax=false}.
+Rabaty: formularze \path{/Admin/Discount/Create} z~odczytem pól; wymaganie roli dla
+\texttt{MEMBERS15} dodaje strona konfiguracji wtyczki
+(\path{/Plugins/DiscountRulesCustomerRoles/Configure}). Zadania w~tle: \texttt{TaskUpdate}
+z~\texttt{Enabled=false}, \texttt{POST} na \path{/Admin/Common/RestartApplication}
+i~oczekiwanie do 300~s na nowy wpis „Application
+started” w~tabeli \texttt{dbo.Log} -- sama odpowiedź nie dowodzi restartu. Porównanie
+formularzy przed i~po zapisie pomija token i~pola \texttt{downloadurl<liczba>} generowane
+przy każdym renderowaniu; w~ustawieniach wysyłki dopuszcza też zmianę
+\texttt{ShippingOriginAddress.Id}, bo pierwszy zapis tworzy pusty rekord adresu nadania.
+Nieudany obszar daje adnotację \texttt{::error::}, następne obszary i~tak działają, a~krok
+kończy się błędem z~ich listą. Na sklepie już skonfigurowanym krok zawodzi, więc ponowna
+konfiguracja wymaga kroku~4. Wynik: \path{store-config.json}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/6-configure-store.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md}}
+
+\subsubsection{Kroki 7--9: nagranie, odtworzenie, werdykt}\label{sec:bench-krok7}
+
+\paragraph{\texttt{7-record-traffic.ps1}} (host sklepu; wymaga \path{deploy.json},
+\path{store-config.json} -- bez niego „każda kwota podatku i~wysyłki to \$0.00” --
+i~\repopath{sk}). Robi snapshot (istniejący jest używany ponownie), startuje proxy i~czeka
+do 60~s na wiersz \texttt{sk capture: recording} w~\path{logs\traffic-capture.log}:
+
+\begin{lstlisting}
+dotnet <SecondKey.Cli.dll> capture --listen http://127.0.0.1:8000 --target http://localhost:8080/ --out <work>\traffic\nopcommerce.skcap --session-key x-bench-scenario
+\end{lstlisting}
+
+Przed każdym scenariuszem przywraca snapshot (\texttt{SINGLE\_USER}, \texttt{RESTORE
+DATABASE … FROM DATABASE\_SNAPSHOT}, \texttt{MULTI\_USER}; do 3~prób) i~odpytuje witrynę
+wprost do pierwszego 200 (do 120~s; wcześniejsze odpowiedzi dają ostrzeżenie), potem
+uruchamia scenariusz w~nowej sesji przez proxy. Porażka scenariusza daje
+\texttt{::error::} i~pięć najnowszych wpisów \texttt{dbo.Log}; kolejne scenariusze
+działają dalej. Proxy jest zatrzymywane po liczbie wymian, nagranie przechodzi
+\texttt{sk validate}, a~\path{traffic.json} i~podsumowanie zawierają tabelę scenariuszy
+z~identyfikatorami sesji.
+
+\paragraph{\texttt{8-replay.ps1}} (host sklepu; \repopath{sk}; bez \texttt{-Capture}
+wymaga \path{traffic.json}, które nie opisuje nagrania częściowego). Tryb „A/A”, gdy
+kandydat równa się adresowi legacy, inaczej „legacy vs candidate”. Krok ustawia dla
+procesu \repopath{sk} \texttt{NOPBENCH\_SK\_SQL} (\texttt{Data Source=<serwer>;Integrated
+Security=True;Encrypt=False}), uruchamia z~korzenia repozytorium poniższe polecenie
+i~usuwa zmienną:
+
+\begin{lstlisting}
+dotnet <SecondKey.Cli.dll> replay --config contract\secondkey.yaml --capture <skcap> --out <work>\replay\run.skrun --legacy <legacy> --candidate <candidate>
+\end{lstlisting}
+
+Następnie waliduje przebieg i~czyta z~niego wiersze \texttt{exchange.result} (wyniki,
+błędy, statusy) i~\texttt{state.reset} (scenariusze, nieudane resety, czasy). Wynik bez
+odpowiedzi, nieudany reset albo liczba scenariuszy inna niż w~\path{traffic.json} kończy
+krok błędem („to nie jest uczciwe porównanie”). Wynik: \path{replay.json}.
+
+\paragraph{\texttt{9-verdict.ps1}} (dowolna maszyna z~\repopath{sk}; w~CI Linux).
+\texttt{sk validate} kontraktu i~przebiegu; \texttt{sk compare} do \path{verdict.json}
+(akceptowane kody 0, 1, 2 -- ich znaczenie w~sekcji~\ref{sec:cli}) i~jego walidacja;
+\texttt{sk evidence} z~\texttt{-{}-pdf} do pustego katalogu \path{replay\evidence}, po czym
+każdy plik jest sprawdzany z~SHA-256 w~\path{manifest.json}, a~pakiet musi zawierać
+\path{index.html}, \path{verdict.json}, \path{contract.yaml}, \path{run.skrun}
+i~\path{statement.intoto.json}. Krok liczy, które maski wyjaśniły wymiany
+\texttt{equal-under-contract} (\texttt{normalizedBy}), a~przy porażce loguje każdą
+niespełnioną klauzulę z~maksymalnie trzema wymianami i~tekstem odpowiedzi legacy oraz do
+dziesięciu wymian \texttt{regression}/\texttt{fix-candidate} z~różnicami.
+\textbf{Bramka:} w~trybie A/A (także przy braku \path{replay.json}) krok zawodzi -- po
+zapisaniu pakietu, który wyjaśnia porażkę -- gdy wynik nie jest \texttt{pass} albo
+jakakolwiek zaakceptowana klauzula nie jest spełniona lub jest niewykonana. W~trybie
+„legacy vs candidate” zapisuje werdykt i~pakiet bez tej bramki. Wynik:
+\path{state\verdict.json}.
+
+\paragraph{\texttt{collect-diagnostics.ps1}} nie jest krokiem: zbiera po porażce kroku
+3, 4 albo 5 pliki przekazania, konfigurację IIS, logi IIS i~\texttt{HTTPERR}, zdarzenia
+z~ostatnich 3~godzin, podsumowanie instalatora i~\texttt{ERRORLOG} SQL Server, pliki
+\path{App_Data} i~50 ostatnich wpisów tabeli \texttt{Log} do \path{<work>\diagnostics}
+(\texttt{-OutputDir}). Działa „w~miarę możliwości” (pominięte sekcje trafiają do
+\path{skipped.txt}), sam nigdy nie zawodzi i~nigdy nie zbiera \path{<work>\secrets}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/7-record-traffic.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/8-replay.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/9-verdict.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/collect-diagnostics.ps1}}
+
+\subsubsection{Biblioteki}\label{sec:bench-biblioteki}
+
+\begin{itemize}
+  \item \path{lib/NopBench.Common.ps1}: log, grupy, maski i~podsumowanie Actions; katalog
+    roboczy, \path{pins.json} i~pliki przekazania; \texttt{Invoke-BenchNative} (lista
+    akceptowanych kodów wyjścia; łagodzi \texttt{ErrorActionPreference}, bo 5.1 zamienia
+    przekierowany stderr w~błędy); \texttt{Invoke-BenchGit} z~ponawianiem;
+    \texttt{Test-BenchPinnedCheckout}; \texttt{Get-BenchVerifiedDownload} (plik z~pasującym
+    SHA-256 używany ponownie, pobranie do \path{.partial}, do 4~prób, niezgodny skrót
+    usuwa plik -- nic niezweryfikowanego nie zostaje); pakiety NuGet; \texttt{appcmd};
+    klient \texttt{System.Net.Http} z~ciasteczkami, bez automatycznych przekierowań
+    i~z~User-Agent przeglądarki (zachowuje się tak samo w~5.1 i~7, w~przeciwieństwie do
+    \texttt{Invoke-WebRequest}); SQL z~uwierzytelnianiem Windows; tworzenie
+    i~przywracanie snapshotów (pliki \path{.ss} obok plików danych; snapshoty są w~każdym
+    wydaniu SQL Server od 2016 SP1, także Express).
+  \item \path{lib/NopBench.Chain.ps1}: narzędzia łańcucha (kody wyjścia \repopath{sk} są
+    jego interfejsem, więc wywołujący wymienia akceptowane), proxy nagrywające, licznik
+    wymian (wiersze \texttt{\{"type":"http.exchange"}), identyfikator sesji; sesja
+    scenariusza z~licznikiem żądań liczonych także przy błędzie transportu (proxy mogło je
+    nagrać); \texttt{Invoke-BenchStep} (status, treść obowiązkowa i~zakazana, typ treści,
+    \texttt{Location}; niespełnienie rzuca wyjątek z~wyciągiem odpowiedzi); formularze
+    jak w~przeglądarce (\texttt{Get-BenchForm}: pola w~kolejności dokumentu, zaznaczone
+    pola wyboru, wybrane opcje, bez przycisków, plików i~pól wyłączonych).
+  \item \path{lib/NopBench.Shop.ps1}: sklep 3.90 tak, jak używa go przeglądarka --
+    dokładnie żądania stron i~skryptów sklepu (\path{public.ajaxcart.js},
+    \path{public.onepagecheckout.js}): sondy, dodawanie do koszyka, formularz koszyka
+    (wysyłany jako urlencoded, choć strona ma multipart -- akcje czytają go tak samo,
+    a~korelacja odtwarzania sięga pola tokenu), kupony, szacowanie wysyłki, logowanie,
+    rejestracja, wejście przyciskiem Checkout i~checkout jednostronicowy krok po kroku
+    (domyślnie Ground i~\texttt{Payments.CheckMoneyOrder}; błędna karta wysyłana
+    najpierw).
+  \item \path{traffic/NopCommerce.Scenarios.ps1}: 38~scenariuszy, stałe danych
+    przykładowych (Lenovo -- produkt~3, MacBook -- 4, komputer -- 1, książka -- 39, karta
+    podarunkowa -- 43, HP Envy -- 8), \texttt{Assert-NopTotal} (wiersze bloku sum jako
+    wyrażenia regularne) i~\texttt{Get-NopNegative} (przy nagrywaniu obie formy kwoty
+    ujemnej).
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Common.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Chain.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Shop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/traffic/NopCommerce.Scenarios.ps1}}
+
+\subsubsection{Skrypty rozgrzewki (\texttt{scripts/eshop})}\label{sec:bench-skrypty-eshop}
+
+Te same konwencje; CI uruchamia je w~\path{warmup-eshop.yml}. IIS dostarcza
+\path{scripts/3-install-iis-sql.ps1} z~\texttt{-SkipSql}.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.9cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Skrypt & Parametry (domyślne) & Co robi i~co tworzy \\
+\midrule
+\endfirsthead
+\toprule
+Skrypt & Parametry (domyślne) & Co robi i~co tworzy \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\path{1-build-eshop.ps1} & \texttt{-SiteDir} (\path{<work>\eshop-site}),
+  \texttt{-MSBuild} & commit pobierany po identyfikatorze (pin bez tagu), czysty checkout,
+  asemblacje 4.6.1 i~4.7.2 pod jednym korzeniem, \texttt{/t:Restore} i~publikacja,
+  kontrola plików; \texttt{UseMockData=true} w~opublikowanym \path{Web.config};
+  \path{eshop-build.json} \\
+\path{2-deploy-eshop.ps1} & \texttt{-SiteDir}, \texttt{-SiteName} (\texttt{eshop-legacy}),
+  \texttt{-Port} (8081), \texttt{-WarmupTimeoutSeconds} (600) & czyste wdrożenie jak
+  krok~4 (Modify, bo aplikacja pisze log log4net); czeka na katalog 12~pozycji;
+  \path{eshop-deploy.json} \\
+\path{3-record-eshop.ps1} & \texttt{-Out} (\path{<work>\eshop\traffic.skcap}),
+  \texttt{-ProxyUrl} (\url{http://127.0.0.1:8001/}) & reset przed każdym scenariuszem,
+  E01--E07 przez proxy, zatrzymanie po liczbie wymian, \texttt{sk validate}; porażka
+  scenariusza przerywa nagranie; \path{eshop-traffic.json} \\
+\path{4-replay-eshop.ps1} & \texttt{-Capture}, \texttt{-Out} (\path{<work>\eshop\run.skrun})
+  & \texttt{sk replay} A/A z~\path{warmup\eshop\secondkey.yaml}; błąd przy wyniku bez
+  odpowiedzi lub nieudanym resecie; \path{eshop-replay.json} \\
+\path{5-scan-eshop.ps1} & \texttt{-Out} (\path{<work>\eshop\portcullis.sarif}) &
+  \texttt{Portcullis.Cli.dll scan} ze \texttt{-{}-provenance-repo} i~\texttt{-{}-sarif};
+  raport JSON zapisany obok; kod 1 (bramka blokuje) to wynik, nie porażka; SARIF musi mieć
+  wersję 2.1.0; \path{eshop-scan.json} \\
+\path{6-verdict-eshop.ps1} & \texttt{-Run}, \texttt{-Sarif}, \texttt{-OutDir}
+  (\path{<work>\eshop}), \texttt{-Pdf} (\texttt{auto}) & \texttt{sk validate},
+  \texttt{sk compare} (kody 0--2), \texttt{sk gate -{}-sarif} (kody 0--1), \texttt{sk
+  evidence} z~SARIF, kontrola manifestu; błąd, jeśli A/A nie przechodzi w~pełni;
+  \path{eshop-verdict.json} \\
+\path{Reset-EShop.ps1} & \texttt{-TimeoutSeconds} (300) & zatrzymanie i~start puli (po
+  60~s na stan), potem oczekiwanie na „Showing 10 of 12 products” \\
+\end{xltabular}
+}
+
+Narzędzia łańcucha da się zbudować ręcznie (jedynym wymaganiem jest .NET 10 SDK) albo
+wskazać zbudowane gdzie indziej przez \texttt{NOPBENCH\_SK} i~\texttt{NOPBENCH\_PORTCULLIS}:
+
+\begin{lstlisting}
+git clone https://github.com/konradcinkusz/letsgolegacy.secondkey.git secondkey
+git -C secondkey checkout 967c49c0005c4412180914f43437d75b43f148dc   # chain.secondKey.commit
+dotnet build secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj -c Release -o <work>/tools/chain/secondkey
+git clone https://github.com/konradcinkusz/letsgolegacy.portcullis.git portcullis
+git -C portcullis checkout 84e1925fe0d85cf23415f0d33c98590f86128722  # chain.portcullis.commit
+dotnet build portcullis/src/Portcullis.Cli/Portcullis.Cli.csproj -c Release -o <work>/tools/chain/portcullis
+\end{lstlisting}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/1-build-eshop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/2-deploy-eshop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/3-record-eshop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/4-replay-eshop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/5-scan-eshop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/6-verdict-eshop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/Reset-EShop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md}}
+
+\subsection{Workflowy CI}\label{sec:bench-ci}
+
+Repozytorium ma cztery workflowy. Wszystkie mają \texttt{permissions: contents: read}
+i~przypinają akcje przez SHA commita z~wersją w~komentarzu (Dependabot aktualizuje SHA
+i~komentarz razem, jednym cotygodniowym pull requestem). Checkouty w~workflowach łańcucha
+używają \texttt{persist-credentials: false}, a~checkout w~\path{secret-scan.yml} pobiera
+całą historię (\texttt{fetch-depth: 0}); \path{legacy-build.yml}
+i~\path{warmup-eshop.yml} mają \texttt{concurrency} na workflow i~numer PR (albo ref) z~\texttt{cancel-in-progress}.
+Joby, które uruchamiają skrypty, ustawiają przez \texttt{GITHUB\_ENV} zmienną
+\texttt{NOPBENCH\_WORK} na \path{$env:RUNNER_TEMP\nopbench} (Windows) albo
+\path{$env:RUNNER_TEMP/nopbench} (Linux).
+Rozkład jobów łańcucha (TOPOLOGY):
+
+\begin{lstlisting}
+legacy-build.yml
+  lint  (ubuntu-24.04)   PSScriptAnalyzer on scripts/
+  build (windows-2022)   1-fetch -> 2-build          -> artifact legacy-site (site + manifest)
+  tools (ubuntu-24.04)   chain-tools.yml: sk and Portcullis at their pinned commits -> chain-tools
+  iis   (windows-2022)   needs build, tools: 3-install-iis-sql -> 4-deploy-and-install -> 5-smoke
+                         -> 6-configure-store -> 7-record-traffic (sk capture) -> nopcommerce-traffic
+                         -> 8-replay (sk replay, A/A)                        -> nopcommerce-replay
+  verdict (ubuntu-24.04) needs tools, iis: 9-verdict (sk compare, sk evidence) -> nopcommerce-evidence-pack
+
+warmup-eshop.yml (P3)
+  tools   (ubuntu-24.04)  chain-tools.yml: sk and Portcullis at their pinned commits -> chain-tools
+  legacy  (windows-2022)  eshop 1-build -> IIS -> 2-deploy -> 3-record (sk capture)
+                          -> 4-replay (sk replay, A/A) -> 5-scan (Portcullis) -> eshop-recordings
+  verdict (ubuntu-24.04)  6-verdict: sk compare, sk gate, sk evidence       -> eshop-evidence-pack
+\end{lstlisting}
+
+\paragraph{\texttt{legacy-build.yml}.} Triggery: \texttt{pull\_request}, \texttt{push} na
+\texttt{main} i~\texttt{workflow\_dispatch} z~wejściem \texttt{runner}
+(\texttt{windows-2022} -- domyślny i~wspierany, \texttt{windows-2025} -- do sprawdzenia
+przenośności). Domyślna powłoka to \texttt{powershell}, czyli Windows PowerShell 5.1:
+skrypty muszą w~niej działać, więc CI to udowadnia. Joby: \texttt{lint} (ubuntu-24.04,
+10~min) -- PSScriptAnalyzer i~kontrola ASCII (sekcja~\ref{sec:bench-higiena});
+\texttt{build} (wybrany runner, 45~min) -- \texttt{microsoft/setup-msbuild},
+\texttt{NuGet/setup-nuget} z~nuget.exe 7.9.0, bufor \path{downloads} z~kluczem
+\texttt{legacy-build-downloads-<hash(pins.json)>} (każdy plik ponownie weryfikowany), kroki
+1 i~2; \texttt{tools} -- \path{chain-tools.yml}; \texttt{iis} (needs: build, tools; 60~min)
+-- pobranie artefaktów \texttt{legacy-site} i~\texttt{chain-tools}, .NET 10 przez
+\texttt{actions/setup-dotnet}, bufor nośnika SQL Server
+(\texttt{legacy-iis-downloads-<hash>}, ponownie weryfikowany skrótem i~podpisem), kroki
+3--8, przy porażce \path{collect-diagnostics.ps1}; \texttt{verdict} (needs: tools, iis;
+ubuntu-24.04, 15~min, \texttt{pwsh}) -- pobranie narzędzi i~przebiegu, krok~9
+z~\texttt{-Pdf required}, bo obraz hostowany ma Google Chrome, więc pakiet musi mieć PDF.
+
+\paragraph{\texttt{chain-tools.yml}.} Tylko \texttt{workflow\_call}. Job \texttt{build}
+(ubuntu-24.04, 15~min, \texttt{DOTNET\_NOLOGO}, \texttt{DOTNET\_CLI\_TELEMETRY\_OPTOUT}):
+odczyt pinów przez \texttt{jq}, checkout \repopath{sk} i~Portcullis na przypiętych
+commitach, SDK z~\path{global.json} repozytorium \repopath{sk}, asercja, że \texttt{HEAD}
+obu checkoutów równa się pinom, \texttt{dotnet build} obu projektów CLI w~Release do
+\path{chain-tools/secondkey} i~\path{chain-tools/portcullis}, próba
+\texttt{SecondKey.Cli.dll -{}-help}, plik \path{COMMITS} i~tabela w~podsumowaniu.
+
+\paragraph{\texttt{warmup-eshop.yml}.} Triggery jak w~\path{legacy-build.yml} (bez
+wejścia). Joby: \texttt{tools}; \texttt{legacy} (windows-2022, 45~min) -- narzędzia, .NET
+10, MSBuild, bufor \texttt{warmup-eshop-downloads-<hash>}, krok~1 rozgrzewki, IIS przez
+\path{3-install-iis-sql.ps1} z~\texttt{-SkipSql}, kroki 2--5; \texttt{verdict}
+(ubuntu-24.04, 15~min) -- krok~6 z~\texttt{-Pdf required}.
+
+\paragraph{\texttt{secret-scan.yml}.} Triggery \texttt{pull\_request} i~\texttt{push} na
+\texttt{main}; job \texttt{gitleaks} (ubuntu-latest) pobiera całą historię
+(\texttt{fetch-depth: 0} -- poświadczenie dodane i~usunięte później i~tak zostało
+wypchnięte), instaluje gitleaks 8.28.0 zweryfikowany skrótem SHA-256 z~pliku sum wydania
+(akcje są przypięte przez SHA, więc skaner -- przez skrót) i~uruchamia
+\texttt{gitleaks detect -{}-redact -{}-config .gitleaks.toml -{}-verbose}.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.9cm} >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X l@{}}
+\caption{Artefakty CI}\label{tab:bench-artefakty}\\
+\toprule
+Artefakt & Job (kiedy) & Zawartość (względem \texttt{<work>}) & Dni \\
+\midrule
+\endfirsthead
+\toprule
+Artefakt & Job (kiedy) & Zawartość (względem \texttt{<work>}) & Dni \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\path{legacy-site} & build (brak plików = błąd) & \path{legacy-site},
+  \path{state\build.json}, \path{state\legacy-site.sha256} & 7 \\
+\path{legacy-build-logs} & build (porażka) & \path{logs} (binlogi MSBuild) & 7 \\
+\path{chain-tools} & chain-tools (brak = błąd) & \path{secondkey}, \path{portcullis},
+  \path{COMMITS} & 7 \\
+\path{nopcommerce-traffic} & iis (zawsze) & \path{traffic}, \path{state\traffic.json},
+  \path{state\store-config.json}, \path{logs\traffic-capture.log*} & 30 \\
+\path{nopcommerce-replay} & iis (zawsze) & \path{replay}, \path{state\replay.json},
+  \path{state\traffic.json} & 30 \\
+\path{legacy-iis-diagnostics} & iis (porażka) & \path{diagnostics} & 7 \\
+\path{nopcommerce-evidence-pack} & verdict (zawsze) & \path{replay/evidence} & 30 \\
+\path{eshop-recordings} & legacy (zawsze) & \path{eshop}, \path{state\eshop-*.json},
+  \path{logs\eshop-capture.log*} & 14 \\
+\path{eshop-build-logs} & legacy (porażka) & \path{logs\*.binlog} & 7 \\
+\path{eshop-evidence-pack} & verdict (zawsze; brak = błąd) & \path{eshop/evidence} & 30 \\
+\end{xltabular}
+}
+
+Artefakty są przesyłane względem katalogu roboczego, więc pobranie do innego katalogu
+roboczego odtwarza \path{legacy-site}, \path{traffic}, \path{replay} i~\path{state} tak,
+jak były. \textbf{Co jest bramką:} pull request przechodzi, gdy przejdą: lint (żadnego
+znaleziska PSScriptAnalyzer, same znaki ASCII); build (pin, czyste drzewo, kontrole
+witryny); kroki 3--6 (smoke test, konfiguracja z~odczytem); nagranie (każdy scenariusz
+dotarł do celu, liczba wymian się zgadza, \texttt{sk validate}); odtworzenie (bez wyników
+bez odpowiedzi i~nieudanych resetów, pełna liczba scenariuszy); werdykt A/A kontraktu
+i~werdykt A/A rozgrzewki (\texttt{pass}, każda zaakceptowana klauzula spełniona, żadna
+niewykonana); skan gitleaks. Wynik \texttt{sk gate} na drzewie eShopLegacyMVC jest
+zapisywany, a~nie egzekwowany. Workflowy CI wszystkich repozytoriów frameworku opisuje
+dodatek~\ref{app:ci}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/chain-tools.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/warmup-eshop.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/dependabot.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md}}
+
+\subsection{Wyniki P3, P4 i~P5}\label{sec:bench-wyniki}
+
+Liczby pochodzą z~przebiegów CI, które zamknęły zadania; pakiety i~nagrania z~tych
+przebiegów są artefaktami przechowywanymi przez 30~dni, a~każdy kolejny przebieg
+workflowu tworzy je od nowa.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md}}
+
+\subsubsection{P3: pierwszy pakiet rozgrzewki}\label{sec:bench-wyniki-p3}
+
+Zrobione, gdy powstaje pakiet: przebieg \texttt{warmup-eshop} 36240136388 (2026-09-26,
+commit \texttt{3510b98}), artefakt \texttt{eshop-evidence-pack}.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+Aplikacja & eShopLegacyMVC z~\texttt{dotnet-architecture/eShopModernizing@63bc9ec}, dane
+  mock, IIS na \texttt{windows-2022} \\
+Narzędzia & \repopath{sk} na \texttt{967c49c}, Portcullis na \texttt{84e1925} \\
+Nagrane & \textbf{7~scenariuszy, 27~wymian} przez \texttt{sk capture} (E01--E07) \\
+Odtworzone & A/A: 54~wyniki, 14~resetów (restart puli przed każdym scenariuszem po każdej
+  stronie), 0~bez odpowiedzi, 50,5~s \\
+Werdykt & \textbf{pass} -- 27 \texttt{equal}, 0 \texttt{equal-under-contract},
+  0 \texttt{regression}, 0 \texttt{fix-candidate} \\
+Kontrakt & 13~klauzul, wszystkie zaakceptowane: \textbf{13 spełnionych}, 0~niewykonanych;
+  udział nieobecności 23\% (3 \texttt{never}) \\
+Bramka & Portcullis na kodzie legacy, całe drzewo: 27~znalezisk --
+  \texttt{PORTCULLIS\_MIG\_SYSTEM\_WEB} 20 ostrzeżeń,
+  \texttt{PORTCULLIS\_MIG\_HTTPCONTEXT\_CURRENT} 4 błędy,
+  \texttt{PORTCULLIS\_MIG\_CONFIGURATION\_MANAGER} 3 błędy. \texttt{sk gate}:
+  \texttt{fail}, 7 blokujących -- zapisane, nie egzekwowane: to idiomy, które migracja
+  musi usunąć, a~żadna zmiana nie była bramkowana \\
+Pakiet & \path{contract.yaml}, \path{index.html}, \path{report.pdf} (Google Chrome na
+  runnerze linuksowym), \path{run.skrun}, \path{sarif/portcullis.sarif},
+  \path{statement.intoto.json}, \path{verdict.json}, \path{manifest.json} -- każdy
+  SHA-256 sprawdzony ponownie z~manifestem \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Czasy w~tym przebiegu: build i~publikacja 52~s; IIS 22~s; wdrożenie 21~s (pierwsza
+odpowiedź po 14~s); nagranie 28~s (około 3~s na restart); odtworzenie 50~s; skan 3~s;
+werdykt i~pakiet 13~s; cały workflow 4,5~minuty. Czego rozgrzewka nauczyła przebiegi
+nopCommerce: łańcuch działa od początku do końca na hoście Windows i~jobie linuksowym,
+między którymi przechodzą tylko pliki; scenariusz jako sesja nazwana nagłówkiem i~proxy
+zatrzymywane po liczbie wymian przeszły do P4 bez zmian; \textbf{operator wartości na
+ekstraktorze z~\texttt{all: true} wymaga \texttt{[*]}} -- \texttt{gt} na
+\texttt{extract.catalogPrices} porównuje samą tablicę i~nigdy nie jest spełniony, więc
+klauzula wybiera \texttt{extract.catalogPrices[*]} (wyłapane przed CI, na lokalnym
+zastępniku aplikacji; kontrakt P5 stosuje tę samą regułę).
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md}}
+
+\subsubsection{P4: zestaw ruchu nopCommerce}\label{sec:bench-wyniki-p4}
+
+Zrobione, gdy liczba scenariuszy jest zapisana: \finding{38~scenariuszy i~290~wymian},
+nagranych przez \texttt{sk capture} przed sklepem z~P2 w~przebiegu \texttt{legacy-build}
+36253613672 (2026-09-26, commit \texttt{45fb761}); nagranie to artefakt
+\texttt{nopcommerce-traffic} tego przebiegu. Każdy przebieg \texttt{legacy-build}
+nagrywa zestaw od nowa i~zapisuje liczby scenariusz po scenariuszu w~podsumowaniu joba.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+Aplikacja & nopCommerce 3.90 (\texttt{12d1f01}) z~danymi przykładowymi, IIS na
+  \texttt{windows-2022}, SQL Server 2022 Express \\
+Sklep & skonfigurowany według sekcji~2 planu przez panel (krok~6), każda zmiana odczytana:
+  stawki podatku według kraju, stanu i~kodu, stałe stawki wysyłki i~darmowa wysyłka powyżej
+  \$1,000.00, siedem kuponów, zmiany katalogu; cztery zadania harmonogramu wyłączone,
+  aplikacja zrestartowana -- z~powrotem po 14~s, z~nowym wpisem „Application started” \\
+Narzędzie & \texttt{sk capture} na \texttt{967c49c} na \texttt{127.0.0.1:8000}; jedna
+  sesja na scenariusz, nazwana nagłówkiem \texttt{x-bench-scenario}; \texttt{sk validate}
+  akceptuje \path{.skcap} \\
+Nagrane & \textbf{38~scenariuszy, 290~wymian} w~166~s -- 30~zaplanowanych scenariuszy
+  (T01--T30), niektóre jako kilka sesji \\
+Stan startowy & każdy scenariusz ze snapshotu \texttt{nopcommerce\_legacy\_snapshot}
+  skonfigurowanego sklepu: 38~przywróceń po 3,3--3,4~s; pierwsze żądanie po każdym dostało
+  od razu 200 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l r r X@{}}
+\toprule
+Obszar & Scenariusze & Wymiany & \\
+\midrule
+Katalog & 5 & 10 & T01--T05 \\
+Wyszukiwanie & 1 & 5 & T06 \\
+Koszyk & 4 & 19 & T07--T10 \\
+Rabaty & 12 & 80 & T11, T12, T12B, T13--T17, T18A, T18B, T19, T20 \\
+Podatki & 8 & 98 & T21, T22A--T22F, T23 -- każdy to checkout na adres rozliczeniowy \\
+Wysyłka & 3 & 27 & T24--T26 \\
+Checkout & 2 & 36 & T27 (gość), T28 (zarejestrowany: odrzucona karta, potem zamówienie) \\
+Zamówienia & 3 & 15 & T29, T30A, T30B \\
+\midrule
+\textbf{Razem} & \textbf{38} & \textbf{290} & \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md}}
+
+\subsubsection{P5: werdykt A/A kontraktu}\label{sec:bench-wyniki-p5}
+
+Zrobione, gdy kontrakt przechodzi walidację i~jest spełniony na systemie legacy.
+\texttt{sk validate} akceptuje \path{contract.yaml} i~\path{secondkey.yaml}, a~odtworzenie
+A/A w~przebiegu \texttt{legacy-build} 36255313866 (2026-09-26, commit \texttt{c6732ab})
+daje \texttt{sk compare} wynik \textbf{pass: 76 z~76 zaakceptowanych klauzul spełnionych,
+0~niewykonanych}. Pakiet to artefakt \texttt{nopcommerce-evidence-pack}. Każdy przebieg
+\texttt{legacy-build} nagrywa, odtwarza, porównuje i~pakuje od nowa i~zawodzi, jeśli werdykt
+A/A nie jest taki sam.
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l X@{}}
+\toprule
+Nagranie & zestaw P4 nagrany w~tym samym przebiegu: 38~scenariuszy, 290~wymian \\
+Narzędzia & \repopath{sk} na \texttt{967c49c}; odtworzenie na hoście Windows obok IIS,
+  porównanie i~pakiet w~Linuksie \\
+Odtworzone & A/A, legacy i~kandydat to \url{http://localhost:8080}: 580~wyników
+  (200~×~500, 302~×~78, 404~×~2), 0~bez odpowiedzi; 76~resetów
+  \texttt{sqlServerSnapshot}, 0~nieudanych, średnio 3,3~s; łącznie 300~s \\
+Werdykt & \textbf{pass} -- 290~wymian w~38~scenariuszach: 272 \texttt{equal},
+  18 \texttt{equal-under-contract}, 0 \texttt{regression}, 0 \texttt{fix-candidate} \\
+Kontrakt & 76~klauzul, wszystkie zaakceptowane: \textbf{76 spełnionych}, 0~niespełnionych,
+  0~niewykonanych; 15 \texttt{never} -- udział nieobecności 19,7\%; 32~ekstraktory \\
+Normalizacja & 18 wymian \texttt{equal-under-contract} według masek, które usunęły ich
+  różnice (wymiana może mieć dwie): \texttt{anti-forgery-token} 14 (podsumowanie zamówienia
+  kroku potwierdzenia), \texttt{cart-line-picture} 17 (te same 14 i~3 minikoszyki),
+  \texttt{pdf-bytes} 1 (faktura) \\
+Pakiet & \path{contract.yaml}, \path{index.html}, \path{report.pdf} (Google Chrome na
+  runnerze linuksowym), \path{run.skrun}, \path{statement.intoto.json},
+  \path{verdict.json}, \path{manifest.json} -- każdy SHA-256 sprawdzony ponownie \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md}}
+
+\subsection{Runbook P6: przebieg modernize-dotnet (praca człowieka)}\label{sec:bench-p6}
+
+P6 wykonuje człowiek: osoba z~subskrypcją GitHub Copilot uruchamia agenta migracyjnego
+Microsoftu (GitHub Copilot app modernization for .NET, „modernize-dotnet”) na przypiętym
+nopCommerce i~przekazuje wynik benchowi. Runbook \repopath{docs/P6-RUNBOOK.md} czyni to
+mechanicznym: gdzie trafia kod, jakie standardy dostaje agent, co wpisać, co zapisać i~czego
+potrzebują P7 i~P8. Kryterium ukończenia (WORKPLAN): kandydat się buduje, a~istniejące
+testy przechodzą. Wejście: nopCommerce \texttt{release-3.90} na
+\texttt{12d1f0139149a9d6e84964d325d62bae6ac748f6} oraz skill standardów z~zadania R4
+w~\path{letsgolegacy.secondkey-standards} (sekcja~\ref{sec:standardy}). Wyjście: pull request
+w~forku nopCommerce, którego commit czołowy jest kandydatem, zapis przebiegu i~godziny
+w~dzienniku P10. Runbook napisano przed pierwszym przebiegiem P6; zapis tego przebiegu ma się
+stać przykładem.
+
+\begin{enumerate}
+  \item \textbf{Przed startem.} Potrzebne: GitHub Copilot z~trybem agenta (Pro, Business
+    albo Enterprise); jeden klient z~agentem modernizacji -- Visual Studio 2026 (albo 2022
+    17.14+) z~\emph{GitHub Copilot app modernization}, VS Code z~rozszerzeniem o~tej nazwie
+    albo GitHub Copilot CLI (polecenia runbooka są te same, różni się tylko krok~5.2);
+    Windows z~MSBuild Visual Studio dla .NET Framework, .NET 10 SDK, git i~GitHub CLI
+    (\texttt{gh}) -- bazowy build legacy idzie przez MSBuild, kandydat przez
+    \texttt{dotnet}; prawo zapisu do repozytorium benchu (dla zapisu przebiegu);
+    \textbf{zrobione R4}: otagowane wydanie repozytorium standardów z~\path{generated/skills/}
+    -- bez niego P6 się nie zaczyna. Uruchom stoper i~zapisz czas startu: wszystko do
+    otwarcia pull requesta liczy się jako godziny P6; czas CI benchu -- nie.
+  \item \textbf{Fork i~gałęzie.} Kandydat to zmodyfikowany nopCommerce, więc żyje tam, gdzie
+    obowiązuje już licencja nopCommerce -- w~forku upstream -- i~nigdy w~repozytorium
+    benchu.
+\begin{lstlisting}
+# 2.1 Fork upstream once, into the account that owns the bench (public, as upstream is).
+gh repo fork nopSolutions/nopCommerce --clone=false
+
+# 2.2 Take the pinned commit from upstream, shallow, with upstream's exact bytes.
+git init nop-p6 && cd nop-p6
+git config core.autocrlf false
+git remote add upstream https://github.com/nopSolutions/nopCommerce.git
+git remote add fork https://github.com/<your-account>/nopCommerce.git
+git fetch --depth 1 upstream tag release-3.90
+git rev-parse "release-3.90^{commit}"          # must print 12d1f0139149a9d6e84964d325d62bae6ac748f6
+git checkout -b secondkey/p6-base 12d1f0139149a9d6e84964d325d62bae6ac748f6
+\end{lstlisting}
+    Jeśli \texttt{rev-parse} wypisze cokolwiek innego, zatrzymaj się: tag przesunął się
+    w~upstream (krok~1 benchu też by go odrzucił). Gałąź \texttt{secondkey/p6-base} to
+    przypięty commit plus jeden commit ze skillem standardów i~nigdy się nie zmienia;
+    \texttt{secondkey/p6-candidate} powstaje z~niej i~zawiera wszystko, co zmienią agent
+    i~człowiek, tylko w~trakcie P6. Pull request idzie z~kandydata do bazy, więc jego diff
+    to dokładnie migracja.
+  \item \textbf{Standardy dla agenta.}
+\begin{lstlisting}
+# 3.1 Get the standards at the R4 release tag (write the tag into the record).
+git clone --depth 1 --branch <standards-tag> https://github.com/konradcinkusz/letsgolegacy.secondkey-standards.git ../standards
+
+# 3.2 Copy every generated skill into the target's .github/skills/.
+mkdir -p .github/skills
+cp -R ../standards/generated/skills/. .github/skills/
+git -C ../standards rev-parse HEAD             # the standards commit, for the record
+
+# 3.3 Commit it alone, on the base branch.
+git add .github/skills
+git commit -m "Add Second Key standards skills (<standards-tag>, <standards-commit>)"
+git push -u fork secondkey/p6-base
+git checkout -b secondkey/p6-candidate
+git push -u fork secondkey/p6-candidate
+\end{lstlisting}
+    Każdy skill to katalog z~\path{SKILL.md}; Copilot odkrywa skille w~\path{.github/skills/}
+    otwartego repozytorium. Nie edytuj ich tutaj -- zmiana standardu to zmiana R4.
+  \item \textbf{Bazowa linia testów legacy.} „Istniejące testy przechodzą” wymaga linii
+    bazowej: które z~własnych testów nopCommerce przechodzą na niezmienionym kodzie. 3.90
+    ma pięć projektów NUnit~3 w~\path{src/Tests} (\texttt{Nop.Core.Tests},
+    \texttt{Nop.Data.Tests}, \texttt{Nop.Services.Tests}, \texttt{Nop.Web.MVC.Tests},
+    \texttt{Nop.Tests}). Drzewo legacy to to samo, które buduje bench, więc z~klonu benchu:
+\begin{lstlisting}
+.\scripts\1-fetch-nopcommerce.ps1     # C:\nopbench\legacy-src, verified at 12d1f01
+.\scripts\2-build-legacy.ps1          # builds every project, the test projects included
+nuget install NUnit.ConsoleRunner -Version 3.22.0 -OutputDirectory C:\nopbench\tools
+$runner = 'C:\nopbench\tools\NUnit.ConsoleRunner.3.22.0\tools\nunit3-console.exe'
+& $runner (Get-ChildItem C:\nopbench\legacy-src\src\Tests\*\bin\Release\*.Tests.dll).FullName --result=C:\nopbench\p6-legacy-tests.xml
+\end{lstlisting}
+    Zapisz sumę, zaliczone, niezaliczone i~pominięte dla każdej asemblacji. Test, który
+    zawodzi na legacy, nie jest regresją, gdy zawodzi u~kandydata; test zaliczony na legacy
+    i~niezaliczony u~kandydata -- jest.
+  \item \textbf{Uruchomienie agenta.} (5.1) Otwórz \texttt{nop-p6} na gałęzi
+    \texttt{secondkey/p6-candidate} w~wybranym kliencie, zalogowany do GitHub Copilot,
+    i~przed czymkolwiek innym zapytaj: „List the skills you have loaded from this
+    repository.” -- odpowiedź wklej do zapisu. Jeśli brakuje skilli Second Key, zatrzymaj
+    się i~popraw krok~3 (akceptacja R4 to właśnie to: agent podejmuje skill). (5.2) Uruchom
+    modernizację: w~Visual Studio otwórz \path{src\NopCommerce.sln} i~uruchom
+    \emph{GitHub Copilot app modernization} (menu kontekstowe rozwiązania albo Copilot Chat
+    w~trybie agenta z~wybranym agentem modernizacji); w~VS Code otwórz katalog, Copilot
+    Chat w~trybie \textbf{Agent} z~agentem app modernization; w~Copilot CLI --
+    \texttt{copilot} w~korzeniu repozytorium z~włączonym agentem. Nazwy menu zmieniają się
+    między wydaniami: \emph{gdzie} kliknąć mówi dokumentacja narzędzia, \emph{co} mu dać --
+    runbook. Wyślij dosłownie:
+\begin{lstlisting}
+Modernize the solution in src/NopCommerce.sln from .NET Framework 4.5.1 to .NET 10.
+Migrate the ASP.NET MVC 5 web application (Nop.Web, the Administration area and the
+plugins) to ASP.NET Core on .NET 10. Keep the SQL Server database schema, the public
+URLs and the observable behaviour of the storefront unchanged. Keep the existing unit
+test projects and make them build and run on .NET 10. Follow the standards in
+.github/skills. Commit your work on the current branch in logical steps.
+\end{lstlisting}
+    Każdy kolejny prompt, każde pytanie agenta i~każdy wybór trafiają do zapisu dosłownie,
+    po kolei. Agent commituje sam; nie rób squasha. (5.3) Jeśli musisz zmienić kod sam
+    (agent utknął albo prosi), zrób osobny commit z~komunikatem zaczynającym się od
+    \texttt{human:} i~uzasadnieniem -- pakiet dowodowy odróżnia zmiany agenta od zmian
+    człowieka po tym prefiksie.
+  \item \textbf{Build i~testy kandydata.}
+\begin{lstlisting}
+dotnet --version                                   # record it
+dotnet build src\NopCommerce.sln -c Release        # must succeed
+dotnet test  src\NopCommerce.sln -c Release --logger "trx;LogFileName=p6-candidate-tests.trx"
+\end{lstlisting}
+    P6 jest zrobione, gdy build się udaje, a~każdy test zaliczony w~linii bazowej
+    przechodzi. Zapisz liczby obok bazowych. Test zaliczony na legacy, który agent usunął,
+    pominął albo opróżnił, nie liczy się jako zaliczony -- napisz o~tym w~zapisie.
+  \item \textbf{Pull request kandydata.}
+\begin{lstlisting}
+git push fork secondkey/p6-candidate
+gh pr create --repo <your-account>/nopCommerce --base secondkey/p6-base --head secondkey/p6-candidate \
+  --title "P6: modernize-dotnet candidate - nopCommerce 3.90 to .NET 10" \
+  --body-file p6-record.md
+git rev-parse HEAD                                  # the candidate commit
+\end{lstlisting}
+    Nie scalaj go. Jego commit czołowy jest kandydatem; późniejsze commity tworzą nowego
+    kandydata.
+  \item \textbf{Zapis przebiegu.} Napisz \path{p6-record.md} (treść pull requesta), dodaj
+    ten sam plik do benchu jako \path{results/p6/run-record.md} w~pull requeście i~wpisz
+    godziny do dziennika P10. Szablon:
+\begin{lstlisting}
+# P6 run record
+
+| | |
+|---|---|
+| Operator | <name> |
+| Started / finished (UTC) | <yyyy-mm-dd hh:mm> / <yyyy-mm-dd hh:mm> |
+| Hours (hands-on / waiting on the agent) | <h> / <h> |
+| Client and version | <Visual Studio 2026 18.x / VS Code x.y + extension a.b / Copilot CLI x.y> |
+| Modernization agent version | <as shown by the client> |
+| Model | <model selected in Copilot> |
+| .NET SDK | <dotnet --version> |
+| Legacy commit | 12d1f0139149a9d6e84964d325d62bae6ac748f6 |
+| Standards | <standards-tag> at <standards-commit> |
+| Skills the agent listed | <paste> |
+| Candidate PR / head commit | <url> / <sha> |
+| Legacy tests (total / passed / failed / skipped) | <n / n / n / n> |
+| Candidate tests (total / passed / failed / skipped) | <n / n / n / n> |
+| Tests passing on legacy but not on the candidate | <none, or list> |
+| Human commits | <none, or list with reasons> |
+
+## Prompts and answers
+
+1. <prompt, verbatim>
+   - Agent: <summary of the answer, or the question it asked>
+   - Choice: <what you answered>
+
+## Notes
+
+<anything surprising: files the agent deleted, packages it replaced, warnings it ignored>
+\end{lstlisting}
+  \item \textbf{Przekazanie do P7 i~P8.} P7 bierze commit czołowy PR kandydata, przypina go
+    w~benchu, buduje, wdraża na hoście Windows obok legacy (\url{http://localhost:8090/},
+    własna baza przywrócona z~tego samego snapshotu), odtwarza na obu nagranie P4
+    i~porównuje: \path{verdict.json}. P8 uruchamia reguły migracji Portcullis na liniach
+    zmienionych przez PR: SARIF dołączony do pakietu. P9 publikuje pakiet, który cytuje PR,
+    jego commit czołowy, wersję standardów i~ten zapis. Nowy push do
+    \texttt{secondkey/p6-candidate} po starcie P7 to nowy kandydat: P7 i~P8 biegną ponownie
+    na nowym commicie, a~zapis to odnotowuje.
+\end{enumerate}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna \\
+\midrule
+Agent nie wspomina standardów Second Key & \path{.github/skills/} nie ma w~otwartym
+  katalogu albo wersja klienta nie ładuje skilli repozytorium: krok~5.1 wyłapuje to przed
+  jakąkolwiek zmianą kodu \\
+Diff PR ma tysiące niezwiązanych linii & gałęzie nie powstały z~przypiętego commita albo
+  przekonwertowano końce linii (\texttt{core.autocrlf}) \\
+„Testy przechodzą”, ale uruchomiono ich mniej & agent wykluczył, pominął albo usunął
+  projekty testów; porównaj liczby z~linią bazową \\
+P7 nie odtwarza buildu & kandydat zależy od czegoś, co jest tylko na maszynie operatora
+  (lokalne źródło NuGet, SDK w~wersji preview); zapisz SDK i~każde źródło \\
+Kandydat zmienił się w~trakcie P7 & ktoś wypchnął zmiany na gałąź kandydata: P7 przypina
+  commit, nigdy gałąź \\
+\texttt{git push} odmawia z~„shallow update not allowed” & fork utworzono z~„copy the
+  default branch only”, więc brakuje historii przypiętego commita: pobierz tag bez
+  \texttt{-{}-depth} albo utwórz fork ponownie z~ustawieniami domyślnymi \texttt{gh repo
+  fork} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\begin{checklista}
+  \item Fork utworzony; \texttt{secondkey/p6-base} to przypięty commit plus commit skilli,
+    nic więcej.
+  \item Skille skopiowane z~otagowanego wydania standardów; tag i~commit są w~zapisie.
+  \item Linia bazowa testów legacy zapisana (liczby dla każdej asemblacji).
+  \item Agent wymienił skille Second Key, zanim cokolwiek zmienił.
+  \item Każdy prompt, pytanie i~wybór zapisane dosłownie; zmiany człowieka to osobne
+    commity \texttt{human:}.
+  \item \texttt{dotnet build} się udaje; każdy test zaliczony na legacy przechodzi
+    u~kandydata.
+  \item Pull request otwarty do \texttt{secondkey/p6-base}, nie scalony; jego commit
+    czołowy zapisany.
+  \item Zapis zacommitowany do benchu jako \path{results/p6/run-record.md}; godziny dodane
+    do dziennika P10.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
+
+\subsection{Status i~plany P7--P10}\label{sec:bench-plany}
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X l@{}}
+\toprule
+Id & Produkt & Zrobione, gdy & Status \\
+\midrule
+P1 & repozytorium, przypięty nopCommerce 3.x, build na runnerze Windows & CI go buduje &
+  zrobione (\#1) \\
+P2 & legacy pod IIS (topologia demo) z~SQL Server i~danymi & sklep odpowiada pod URL-em &
+  zrobione (\#2) \\
+P3 & rozgrzewka łańcucha na eShopModernizing & powstaje pakiet; po S15 rdzenia &
+  zrobione (\#4) \\
+P4 & zestaw ruchu nopCommerce nagrany do \path{*.skcap} & liczba scenariuszy zapisana &
+  zrobione (\#5) \\
+P5 & kontrakt nopCommerce: reguły „must” i~„never”, około 20\% asercji nieobecności &
+  przechodzi walidację i~jest spełniony na legacy; po S8 rdzenia & zrobione (\#6) \\
+P6 & przebieg modernize-dotnet ze skillem standardów z~R4 & kandydat się buduje,
+  istniejące testy przechodzą -- \textbf{praca człowieka, wymaga GitHub Copilot} &
+  planowane \\
+P7 & odtworzenie i~porównanie legacy z~kandydatem; przegląd różnic & istnieje
+  \path{verdict.json}, a~różnica NLS $\rightarrow$ ICU jest znaleziona albo jej brak
+  udokumentowany & planowane \\
+P8 & reguły migracji Portcullis na PR kandydata (R2, R3) & SARIF jest dołączony do
+  pakietu & planowane \\
+P9 & publikacja pakietu, kontraktu i~liczb (scenariusze, różnice, regresje, zabite
+  mutanty) & publiczne & planowane \\
+P10 & dziennik godzin wdrożenia dla P4--P7 & godziny są w~opublikowanym raporcie &
+  planowane \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+P9 tego repozytorium jest bramką fazy 01 (sekcja~\ref{sec:status}). Plan P4, runbook P6
+i~dziennik P10 przygotowano przed zadaniami, które ich używają (\#3).
+
+\paragraph{P7: legacy kontra kandydat.} Mechanizm jest gotowy: krok~8 z~\texttt{-Candidate}
+odtwarza to samo nagranie na kandydacie z~tym samym resetem i~kontraktem, a~krok~9
+w~trybie „legacy vs candidate” zapisuje werdykt i~pakiet bez bramki A/A. Kandydat ma
+działać na \url{http://localhost:8090/} z~własną kopią bazy; jego tożsamość dostaje własny
+login SQL (ADR 0003). Sondy NLS $\rightarrow$ ICU (sekcja~6 planu) to hipotezy do
+potwierdzenia albo obalenia, nie znaleziska:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{1.9cm}@{}}
+\toprule
+Sonda & Ścieżka w~kodzie i~dlaczego może się różnić & Gdzie \\
+\midrule
+\textbf{Ujemne kwoty walutowe} w~sumach koszyka & \texttt{ShoppingCartModelFactory}
+  formatuje \texttt{-discount} przez \texttt{PriceFormatter.GetCurrencyString}
+  (\texttt{ToString("C", new CultureInfo("en-US"))}); NLS zapisuje ujemną kwotę
+  \texttt{en-US} jako \texttt{(\$100.00)}, dane ICU -- jako \texttt{-\$100.00}.
+  Najmocniejszy kandydat & T11, T14, T15 -- R27 \\
+Wielkość liter kuponu & \texttt{CustomerExtensions.ApplyDiscountCouponCode} zapisuje
+  \texttt{couponCode.Trim().ToLower()} w~\emph{bieżącej} kulturze, a~\texttt{ValidateDiscount}
+  porównuje z~\texttt{InvariantCultureIgnoreCase}; wielkość liter i~porównanie znaków spoza
+  ASCII może się różnić (P4 może dodać kupony z~\texttt{ß}, \texttt{İ}) & T12 -- R17 \\
+Przycinanie kuponu & \texttt{String.Trim()} idzie za danymi Unicode środowiska: U+180E był
+  białym znakiem w~starszych wersjach Unicode, w~nowszych nie jest & T12 \\
+Porównanie kodu pocztowego & \texttt{GetTaxRate} z~\texttt{InvariantCultureIgnoreCase};
+  różnić mogą się tylko litery, więc sondą są kody kanadyjskie & T23 -- R29 \\
+Sortowanie po nazwie & \texttt{ProductLoadAllPaged} sortuje w~SQL; decyduje kolacja bazy,
+  więc różnica oznacza, że kandydat przeniósł sortowanie do .NET & T02 -- R03 \\
+Daty i~godziny & daty zamówień na stronach szczegółów i~historii; nowsze dane ICU wstawiają
+  wąską twardą spację przed AM/PM w~\texttt{en-US} & T29 \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{P8, P9.} P8 uruchomi reguły migracji Portcullis (zadania R2, R3) na liniach,
+które zmienia pull request kandydata, i~dołączy SARIF do pakietu
+(sekcja~\ref{sec:portcullis}). P9 opublikuje pakiet, kontrakt i~liczby: scenariusze,
+różnice, regresje i~zabite mutanty; pakiet cytuje PR, jego commit czołowy, wersję
+standardów i~zapis P6.
+
+\paragraph{P10: dziennik godzin.} Liczba godzin potrzebnych do objęcia prawdziwego systemu
+legacy przez Second Key jest jedną z~liczb raportu fazy 01. Zakres: P4--P7 to wdrożenie
+we właściwym sensie; P1 i~P2 są zapisywane osobno jako jednorazowy nakład pracy na uruchomienie strony
+legacy. Zasady: jeden wiersz na sesję pracy na jednym zadaniu i~wykonawcę; godziny zegarowe
+faktycznie spędzone, dziesiętnie (0,25 = 15~minut), a~czekanie na CI albo agenta tylko wtedy,
+gdy nic innego się nie działo -- jako osobny wiersz „waiting”; wykonawca to osoba albo
+agent (\texttt{agent: <model> (<tool>)}), nigdy oba, a~godziny agenta i~człowieka nie są
+sumowane; każdy wiersz ma dowód (PR, przebieg, zapis); szacunki są oznaczone. Stan
+dziennika w~migawce: siedem wierszy agenta z~jednej sesji około dwóch godzin (P1 0,40 i~0,35;
+P2 0,30 i~0,45; przygotowanie P4 0,40; przygotowanie P6 0,15; P10 0,05; podział między
+wiersze to szacunek z~czasów commitów i~przebiegów), zero godzin człowieka. Suma: P1--P2
+-- 1,50~h agenta, przygotowania P4 i~P6 -- 0,55~h, P10 -- 0,05~h, wdrożenie P4--P7 --
+0. Minuty runnerów są prowadzone osobno: \#1 -- 3~przebiegi (jeden nieudany), 4,5~min
+Windows i~1,2~min Linux; \#2 -- 3~przebiegi (jeden nieudany), 28,3 i~1,5~min; \#3 -- około
+7 i~0,5~min na przebieg. Zielony przebieg całego workflowu legacy trwał wtedy około
+7~minut (build 1,5, IIS z~SQL Server, instalatorem i~smoke testem 5--5,5, lint 0,5
+równolegle); nieudany przebieg P2 trwał 13,4~minuty, z~czego 11 w~instalatorze SQL Server.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P10-ONBOARDING-HOURS.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0006-nopcommerce-contract-and-aa-proof.md}}
+
+\subsection{Higiena repozytorium: lint, skan sekretów, polityka nagrań}\label{sec:bench-higiena}
+
+\paragraph{Lint.} \path{PSScriptAnalyzerSettings.psd1} ustawia \texttt{Severity = Error,
+Warning}, wyłącza \texttt{PSAvoidUsingWriteHost} (skrypty są interaktywnymi runbookami,
+których wyjściem jest log dla człowieka, a~nie dane potoku) i~włącza
+\texttt{PSUseCompatibleSyntax} dla wersji 5.1 i~7.0 oraz \texttt{PSUseCompatibleCommands}
+z~profilami Windows PowerShell 5.1 i~PowerShell 7.0. Job \texttt{lint} uruchamia
+\texttt{Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings
+./PSScriptAnalyzerSettings.psd1} i~zawodzi przy jakimkolwiek znalezisku, a~osobny krok
+zawodzi przy znaku spoza ASCII w~\path{scripts/}. Wyjątki są w~kodzie, jako
+\texttt{SuppressMessageAttribute} z~uzasadnieniem (np.
+\texttt{PSUseShouldProcessForStateChangingFunctions} dla funkcji tworzących obiekty
+w~pamięci, \texttt{PSAvoidUsingPlainTextForPassword} dla logowania klientów sklepu
+przykładowego).
+
+\paragraph{Skan sekretów.} Każdy klon włącza raz, przed pierwszym commitem, hook
+\texttt{pre-commit} (\texttt{git config core.hooksPath .githooks}; Git for Windows
+uruchamia go w~swoim bashu). Hook wymaga gitleaks i~bez niego odmawia commitu -- CI i~tak
+skanuje -- a~uruchamia \texttt{gitleaks protect -{}-staged -{}-redact -{}-config
+.gitleaks.toml}. Po trafieniu: jeśli to poświadczenie, zdejmij je ze stage i~czytaj ze
+środowiska; jeśli nie (dane przykładowe, które muszą wyglądać jak sekret), dodaj ścieżkę
+albo kształt do allowlisty \path{.gitleaks.toml} w~tym samym commicie, żeby wyjątek przeszedł
+review. Ten sam skan biegnie w~CI po całej historii (\path{secret-scan.yml}).
+\path{.gitleaks.toml} rozszerza reguły domyślne (\texttt{useDefault = true}) o~regułę
+\texttt{sqlserver-connection-string-with-password}: connection string SQL Server
+z~hasłem w~treści (sekretem jest samo hasło, grupa~1). Bench łączy się przez
+\texttt{Integrated Security} (ADR 0003), więc hasło w~treści nigdy nie jest tu uprawnione;
+allowlista przepuszcza tylko wartość zaczynającą się od \texttt{<} -- symbol zastępczy
+mówiący, skąd pochodzi hasło. Sekrety trafiają do skryptów wyłącznie przez zmienne
+środowiskowe.
+
+\paragraph{Polityka nagrań.} Nagranie (\path{*.skcap}, \path{*.skrun}) czegokolwiek poza
+własnym sklepem przykładowym benchu nigdy nie jest commitowane. \path{.gitignore} ignoruje
+\path{*.skcap} i~\path{*.skrun} (poza \path{samples/**}, \path{schemas/samples/**}
+i~\path{tests/**/fixtures/**}), a~także \path{.secondkey/}, \path{evidence-out/}
+i~lokalne pliki \path{.env}. Nagrania opuszczają CI wyłącznie jako artefakty
+(tabela~\ref{tab:bench-artefakty}). Żądania konfiguracyjne administratora nigdy nie
+przechodzą przez proxy nagrywające, więc \path{*.skcap} zawiera tylko dane sklepu
+przykładowego (opublikowane hasło klienta przykładowego, hasło R1, testowe numery kart),
+a~ciasteczka są domyślnie redagowane przez \texttt{sk capture}. Zasady bezpieczeństwa
+całego frameworku opisuje sekcja~\ref{sec:bezpieczenstwo}.
+
+\paragraph{Własność i~zależności.} \path{.github/CODEOWNERS} przypisuje każdą ścieżkę
+właścicielowi repozytorium i~jawnie wymienia te, które decydują o~tym, co bench dowodzi:
+\path{/.github/}, \path{/.githooks/}, \path{/.gitleaks.toml}, \path{/contract/}
+i~\path{/pins.json}. \path{.github/dependabot.yml} aktualizuje akcje GitHub raz
+w~tygodniu, jedną grupą.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/PSScriptAnalyzerSettings.psd1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.githooks/pre-commit},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.gitleaks.toml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.gitignore},
+\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/CODEOWNERS},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/dependabot.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Shop.ps1}}

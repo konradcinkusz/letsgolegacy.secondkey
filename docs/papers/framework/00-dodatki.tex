@@ -13,6 +13,12 @@
 % Długie tabele z kolumnami X (longtable + tabularx w jednym środowisku).
 \usepackage{xltabular}
 
+% Pod kodowaniem T1 krój maszynowy składa "--" jako półpauzę, więc opcja
+% --exit-after w \repopath{} wychodziłaby jako "–exit-after". microtype wyłącza tę
+% ligaturę w krojach maszynowych; poza tym tylko poprawia skład akapitów.
+\usepackage{microtype}
+\DisableLigatures[-]{encoding = *, family = tt*}
+
 % Znaki Unicode, których inputenc nie zna bez deklaracji.
 \DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
 \DeclareUnicodeCharacter{2190}{\ensuremath{\leftarrow}}
@@ -45,7 +51,7 @@
     {ó}{{\'o}}1 {ś}{{\'s}}1 {ź}{{\'z}}1 {ż}{{\.z}}1
     {Ą}{{\k{A}}}1 {Ć}{{\'C}}1 {Ę}{{\k{E}}}1 {Ł}{{\L{}}}1 {Ń}{{\'N}}1
     {Ó}{{\'O}}1 {Ś}{{\'S}}1 {Ź}{{\'Z}}1 {Ż}{{\.Z}}1
-    {—}{{---}}1 {–}{{--}}1 {„}{{,,}}1 {”}{{''}}1 {→}{{$\rightarrow$}}1
+    {—}{{---}}1 {–}{{--}}1 {„}{{,,}}1 {”}{{''}}1 {→}{{$\rightarrow$}}1 {…}{{\ldots}}1
 }
 \lstset{style=kod}
 

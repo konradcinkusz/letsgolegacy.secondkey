@@ -1,10 +1,11 @@
-flowchart LR
-  LEG["System legacy<br/>(kod nietknięty)"] -- "ruch przez proxy<br/>sk capture" --> SKCAP[("*.skcap")]
-  SKCAP --> CON["contract.yaml<br/>klauzule must / never,<br/>ekstraktory, normalizacja"]
-  STD["standardy<br/>(skill)"] --> AG["agent migracyjny"]
+flowchart TB
+  LEG["System legacy<br/>(kod nietknięty)"] -- "sk capture<br/>(proxy)" --> SKCAP[("*.skcap")]
+  STD["standardy migracji<br/>(skill)"] --> AG["agent migracyjny"]
   AG --> CAND["kandydat<br/>(pull request)"]
+  SKCAP --> CON["contract.yaml<br/>klauzule must / never,<br/>ekstraktory, normalizacja"]
+  SKCAP -- "sk replay: legacy<br/>i kandydat, reset<br/>przed scenariuszem" --> SKRUN[("*.skrun")]
+  CAND -- "druga strona<br/>replay" --> SKRUN
   CAND -- "Portcullis:<br/>zmienione linie" --> SARIF[("*.sarif")]
-  SKCAP -- "sk replay: obie strony,<br/>reset przed scenariuszem" --> SKRUN[("*.skrun")]
   SKRUN -- "sk compare" --> VER[("verdict.json")]
   CON --> VER
   VER -- "sk evidence" --> PACK["pakiet dowodowy<br/>index.html, report.pdf,<br/>manifest.json,<br/>statement.intoto.json"]

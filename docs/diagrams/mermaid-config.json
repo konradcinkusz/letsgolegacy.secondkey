@@ -1,5 +1,6 @@
 {
   "theme": "base",
+  "layout": "dagre",
   "themeVariables": {
     "fontFamily": "DejaVu Sans, Liberation Sans, Arial, sans-serif",
     "fontSize": "15px",
@@ -19,11 +20,18 @@
   "flowchart": {
     "htmlLabels": true,
     "curve": "basis",
-    "padding": 12,
-    "wrappingWidth": 260
+    "padding": 8,
+    "nodeSpacing": 28,
+    "rankSpacing": 36,
+    "wrappingWidth": 220
   },
   "sequence": {
     "mirrorActors": false,
-    "showSequenceNumbers": false
+    "showSequenceNumbers": false,
+    "actorMargin": 30,
+    "messageMargin": 30,
+    "boxMargin": 6,
+    "noteMargin": 8,
+    "width": 130
   }
 }

@@ -1,0 +1,246 @@
+\section{Repozytoria fazy 02 i 03}\label{sec:faza02}
+
+Trzy repozytoria przygotowują komponenty Second Key, które według planów pracy powstaną po
+fazie 01: \path{letsgolegacy.secondkey-capture} (C1 od fazy 02),
+\path{letsgolegacy.secondkey-sandbox} (C12) i~\path{letsgolegacy.secondkey-portal} (C11).
+W~migawkach (commity \repopath{e56068e}, \repopath{75042c6} i~\repopath{e73546f}
+z~2026-09-25) każde z~nich zawiera tylko \path{README.md}, \path{docs/WORKPLAN.md},
+\path{LICENSE} i~\path{.gitignore}: nie ma kodu, workflowów CI, testów ani ADR, a~każda
+pozycja planu ma status „planned” (jedyny wyjątek to decyzja D7 w~sandboxie, „proposed”).
+Rozdział opisuje więc cel, zakres, zaplanowane prace i~ich status oraz zależności od fazy 01
+-- wyłącznie tak, jak podają je źródła.
+
+\finding{Portal (C11) jest w~tym rozdziale, bo jest trzecim z~repozytoriów planowanych po
+fazie 01, ale jego README i~WORKPLAN przypisują całą jego pracę do fazy 03, a~nie 02.}
+
+\zrodla{\path{letsgolegacy.secondkey-capture/README.md},
+\path{letsgolegacy.secondkey-sandbox/README.md},
+\path{letsgolegacy.secondkey-portal/README.md}}
+
+\subsection{Umiejscowienie i~bramka fazy 01}\label{sec:faza02-bramka}
+
+Tabela „Repositories” w~README rdzenia przypisuje komponenty do repozytoriów:
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Repozytorium & Zawiera \\
+\midrule
+\path{letsgolegacy.secondkey} (rdzeń) & C0 CLI, C1 capture HTTP (faza 01), C2, C3, C6, C7, C8, C9, C10 \\
+\path{letsgolegacy.portcullis} & C5 -- bramka \\
+\path{letsgolegacy.secondkey-standards} & C4 -- pakiet standardów \\
+\path{letsgolegacy.secondkey-capture} & C1 od fazy 02 (SQL, kolejki, PII) \\
+\path{letsgolegacy.secondkey-sandbox} & C12 -- pakowanie wewnątrz granicy klienta \\
+\path{letsgolegacy.secondkey-portal} & C11 -- portal dowodów \\
+\path{letsgolegacy.secondkey-nopcommerce-bench} & Publiczny okaz: nopCommerce 3.x \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Bramka fazy 01.} Plan pracy rdzenia nazywa fazę 01 „demo” z~bramką: publiczny
+evidence pack (pakiet dowodowy) na nopCommerce 3.x; sekcja „Phase 02 and later” zaczyna się od zastrzeżenia,
+że faza 02 startuje dopiero po bramce fazy 01. Plan pracy benchu wskazuje swój ticket P9 jako
+bramkę fazy: publikację pakietu dowodowego, kontraktu i~liczb (scenariusze, różnice,
+regresje, zabite mutanty); w~migawce P9 ma status „planned” (rozdział~\ref{sec:bench}).
+Plany trzech repozytoriów fazy 02 same nie powołują się na tę bramkę; wynika ona z~planów
+rdzenia i~benchu.
+
+Z~planu rdzenia wynikają też zależności tych repozytoriów od fazy 01 i~od siebie
+nawzajem:
+
+\begin{itemize}
+  \item \textbf{Artefakty.} \repopath{*.skcap} (zdarzenia JSONL korelowane identyfikatorem
+        żądania) produkuje C1 capture, a~czytają C2 miner i~C6 replay; \repopath{verdict.json}
+        czytają C10 i~C11 portal; \repopath{evidence.dsse} (in-toto/DSSE, podpisywany przez
+        C10 od fazy 03) czytają C11 portal i~audytor (rozdział~\ref{sec:formaty}).
+  \item \textbf{Przeniesienie C1.} W~tabeli fazy 02 rdzenia pozycja „C1 SQL/queues/PII” ma
+        opis: przenosi się do \path{letsgolegacy.secondkey-capture} (strona Windows/IIS,
+        własny cykl wydań), faza 02. Capture HTTP fazy 01 (ticket S9 rdzenia: proxy nagrywające
+        YARP zapisujące \repopath{*.skcap}, tylko ruch przychodzący) jest zrobiony.
+  \item \textbf{Zasady projektowe rdzenia}, które te repozytoria realizują: wszystko działa
+        wewnątrz granicy klienta, domyślnie bez ruchu wychodzącego (sandbox); tylko
+        technologie, które odbiorca już utrzymuje -- .NET, SQL Server, Entra ID, GitHub albo
+        Azure DevOps, Kubernetes (sandbox, portal); system legacy jest nietykalny -- capture nie
+        wymaga zmiany kodu ani rekompilacji (capture); brak własnej usługi tożsamości, używany
+        jest IdP klienta (portal); każdy krok działa z~CLI w~pipeline, a~portal jest oknem, nie
+        interfejsem (portal).
+  \item \textbf{Znany trudny problem C1} według rdzenia: przypisanie instrukcji SQL do żądania
+        HTTP bez zmian w~kodzie jest heurystyką z~jawnie raportowanym marginesem niepewności.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
+
+\subsection{secondkey-capture (C1 od fazy 02)}\label{sec:faza02-capture}
+
+\textbf{Cel.} Nagrywanie tego, jak system legacy naprawdę zachowuje się na swoich granicach --
+HTTP, SQL z~parametrami, kolejki -- bez zmiany jego kodu, z~danymi osobowymi (PII)
+tokenizowanymi wewnątrz sieci klienta. README wymienia źródła: HTTP, sesje SQL Server
+Extended Events i~kolejki.
+
+\textbf{Dlaczego osobne repozytorium.} Capture fazy 01 obsługuje tylko HTTP i~mieszka
+w~repozytorium rdzenia. Od fazy 02 capture mieszka tutaj, bo działa po stronie klienta, na
+Windows/IIS, i~ma własny cykl wydań.
+
+\textbf{Format wyjścia.} Wynikiem jest format \repopath{*.skcap} zdefiniowany przez schemat
+w~repozytorium rdzenia (rozdział~\ref{sec:formaty}); to repozytorium nigdy nie zmienia tego
+formatu samodzielnie.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{1.6cm}@{}}
+\toprule
+Praca (faza 02 -- piloty) & Zrobione, gdy & Status \\
+\midrule
+\endfirsthead
+\toprule
+Praca (faza 02 -- piloty) & Zrobione, gdy & Status \\
+\midrule
+\endhead
+Proxy nagrywające YARP, przychodzące i~wychodzące (\repopath{defaultProxy}) & Wymiany (exchange) przychodzące i~wychodzące trafiają do jednego pliku \repopath{.skcap}, skorelowane identyfikatorem żądania & planned \\
+Sesja SQL Server Extended Events (\repopath{rpc\_completed}, \path{sql_batch_completed}) & Instrukcje z~parametrami są nagrywane bez dotykania aplikacji & planned \\
+Heurystyka korelacji HTTP ↔ SQL (okno czasowe, sesja połączenia) & Każda przypisana instrukcja niesie raportowaną pewność; raportowany jest udział instrukcji nieprzypisanych & planned \\
+Kopia kolejek na poziomie brokera & Wiadomości są nagrywane bez zmian w~aplikacji & planned \\
+Tokenizacja PII przez sidecar Presidio & Nagrania opuszczające host capture zawierają tokeny, a~nie dane osobowe & planned \\
+\bottomrule
+\end{xltabular}
+
+Faza 04: usługi Java (modernize-java) -- planned.
+
+\textbf{Odrzucony wariant.} Wczesny plan budowy capture na Keploy porzucono: eBPF działa tylko
+na Linuksie, a~legacy .NET Framework działa na Windows/IIS.
+
+\textbf{Pliki w~repozytorium.} \path{.gitignore} (wspólny wzorzec z~sandboxem i~portalem)
+ignoruje wyniki builda, pliki IDE, wyniki testów i~testów mutacyjnych, lokalne sekrety
+(\path{.env}, \path{secrets.env}; śledzone są tylko pliki przykładowe) oraz wyniki przebiegów
+Second Key: nagrania \repopath{*.skcap} i~\repopath{*.skrun} -- z~komentarzem, że nagrania
+mogą zawierać dane klienta i~prawdziwych nigdy się nie commituje -- z~wyjątkiem próbek
+(\path{samples/}, \path{schemas/samples/}) i~fixture testów, a~także \path{.secondkey/}
+i~\path{evidence-out/}. Stan w~README: faza 02; capture HTTP fazy 01 mieszka w~rdzeniu.
+
+\zrodla{\path{letsgolegacy.secondkey-capture/README.md},
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-capture/.gitignore},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+
+\subsection{secondkey-sandbox (C12)}\label{sec:faza02-sandbox}
+
+\textbf{Cel.} „Nothing leaves our network.” Second Key zawsze działa wewnątrz granicy klienta;
+to repozytorium pakuje go dla każdego rodzaju takiej granicy: Helm z~pulami węzłów Windows
+i~Linux, pojedynczy host Hyper-V, Bicep i~Azure Managed Application dla subskrypcji Azure
+klienta oraz paczka dla środowisk odciętych od sieci (air-gapped).
+
+\textbf{Ograniczenie, które kształtuje całość.} Migracje z~.NET Framework wymagają Windows,
+więc sandbox niesie oba środowiska: stronę legacy na Windows/IIS, a~zmigrowanego kandydata
+i~resztę łańcucha na Linuksie.
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Środowisko docelowe & Pakowanie \\
+\midrule
+Subskrypcja Azure klienta & Azure Managed Application z~Marketplace (zarządzana grupa zasobów, do trybu zablokowanego, w~którym wydawca nie ma dostępu); Bicep \\
+Chmura prywatna / on-prem & Chart Helm z~pulami węzłów Windows i~Linux (AKS albo Kubernetes on-prem) \\
+Pojedynczy host & Host Windows Server z~Hyper-V: maszyna wirtualna Windows dla strony legacy, maszyna wirtualna Linux dla reszty \\
+Air-gapped & Paczka z~obrazami dla własnego rejestru klienta \\
+\bottomrule
+\end{tabularx}
+
+Według planu tylko demo albo wersja próbna na publicznym kodzie może być hostowana przez
+autorów Second Key; każde inne użycie działa w~granicy klienta.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{0.9cm} >{\raggedright\arraybackslash}p{1.6cm}@{}}
+\toprule
+Praca & Zrobione, gdy & Faza & Status \\
+\midrule
+\endfirsthead
+\toprule
+Praca & Zrobione, gdy & Faza & Status \\
+\midrule
+\endhead
+Decyzja o~topologii demo (D7): host Windows z~Hyper-V albo mały klaster z~obiema pulami & ADR zostaje przyjęty & 01 & proposed \\
+Chart Helm: pule węzłów Windows i~Linux, obciążenia legacy i~kandydata, worker replay, domyślnie bez ruchu wychodzącego (NetworkPolicy) & \texttt{helm lint} i~\texttt{helm template} przechodzą w~CI; test dymny oparty na kind uruchamia stronę Linux & 02 & planned \\
+Wariant jednego hosta (Hyper-V) & Skryptowy build obu maszyn wirtualnych jest udokumentowany i~zlintowany & 02 & planned \\
+Bicep dla Azure klienta & \texttt{az bicep build} przechodzi w~CI & 02 & planned \\
+Paczka air-gapped & Skrypt tworzy paczkę obrazów i~manifest skrótów (digestów) & 02 & planned \\
+Pakiet Azure Managed Application & \path{createUiDefinition} i~\repopath{mainTemplate} przechodzą walidację & 03 & planned \\
+\bottomrule
+\end{xltabular}
+
+Plan ma jeszcze jedną pozycję fazy 02 (planned), nietechniczną, dotyczącą licencji Windows
+Server i~SQL Server w~sandboxie; ten dokument jej nie opisuje.
+
+\textbf{Zależność od fazy 01: decyzja D7.} Jedyna pozycja sandboxu przypisana do fazy 01 to
+decyzja o~topologii demo, ze statusem „proposed” i~warunkiem „ADR zostaje przyjęty”. Bench
+zapisuje proponowaną decyzję D7 w~\path{docs/TOPOLOGY.md} (status: proposed): jeden host
+Windows uruchamia stronę legacy (nopCommerce 3.90 na IIS z~SQL Server), a~Linux -- resztę
+łańcucha; tylko capture i~replay muszą sięgać do działającego sklepu przez HTTP, wszystko
+dalej to „plik na wejściu, plik na wyjściu” (rozdział~\ref{sec:bench}).
+
+Stan w~README: faza 02.
+
+\zrodla{\path{letsgolegacy.secondkey-sandbox/README.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+
+\subsection{secondkey-portal (C11)}\label{sec:faza02-portal}
+
+\textbf{Cel.} Okno, przez które zagląda się głównie do odczytu, na pakiety dowodowe dla osób zatwierdzających zmiany -- ryzyko, zatwierdzanie zmian, audyt wewnętrzny --
+logujących się przez własnego dostawcę tożsamości (IdP) klienta. Uzasadnienie z~planu:
+osoby od ryzyka i~audytu nie czytają SARIF ani YAML. Portal jest oknem na dowody, a~nie
+interfejsem: każdy krok nadal działa z~CLI w~pipeline.
+
+\textbf{Faza.} README podaje status „phase 03”, a~wszystkie pozycje planu mają fazę 03.
+
+\textbf{Reguły z~planu.}
+\begin{itemize}
+  \item \textbf{Brak własnej usługi tożsamości.} Produkcja loguje przez IdP klienta po OIDC
+        (Entra ID, ADFS). \repopath{authservice} jest używany tylko dla wersji próbnej
+        hostowanej samodzielnie.
+  \item Role: \emph{engineer}, \emph{reviewer}, \emph{risk} (tylko odczyt).
+  \item Każda decyzja recenzenta trafia do dziennika audytu, do którego można tylko
+        dopisywać; te decyzje są też etykietami, które kalibrują triage doradczy C8.
+\end{itemize}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{0.9cm} >{\raggedright\arraybackslash}p{1.6cm}@{}}
+\toprule
+Praca & Zrobione, gdy & Faza & Status \\
+\midrule
+\endfirsthead
+\toprule
+Praca & Zrobione, gdy & Faza & Status \\
+\midrule
+\endhead
+Powłoka ASP.NET Core + Blazor z~OIDC do konfigurowalnego IdP & Logowanie działa z~testowym IdP w~CI & 03 & planned \\
+Metadane przebiegów w~Postgres (przebiegi, podsumowania werdyktów, skróty pakietów) & Import pakietu z~CLI rdzenia pokazuje przebieg & 03 & planned \\
+Widoki dowodów: podsumowanie, per klauzula, różnice per scenariusz & Widoki renderują pakiet-fixture & 03 & planned \\
+Decyzje recenzentów z~dziennikiem audytu & Każda decyzja zapisuje kto, kiedy, co i~dlaczego; dziennik jest tylko do dopisywania & 03 & planned \\
+Eksport etykiet do kalibracji C8 & Decyzje eksportują się jako oznaczone przykłady & 03 & planned \\
+Tenancy wersji próbnej przez \repopath{authservice} & Logowanie w~wersji próbnej działa; konfiguracja produkcyjna od niego nie zależy & 03 & planned \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Zależności.} Portal czyta artefakty rdzenia: \repopath{verdict.json} i~pakiet
+dowodowy z~CLI (w~fazie 01 niepodpisany pakiet C10, ticket S14 rdzenia -- zrobiony), a~od
+fazy 03 \repopath{evidence.dsse} (podpisywanie C10 jest w~planie rdzenia pozycją fazy 03).
+Etykiety z~decyzji recenzentów zasilają C8 -- triage doradczy, który według planu rdzenia
+(fazy 02--03) jest portem kalibracji z~judge-worker (kappa Cohena na etykietach recenzentów,
+bez liczby przy małej próbie) i~nigdy nie zmienia werdyktu.
+
+\zrodla{\path{letsgolegacy.secondkey-portal/README.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/.gitignore},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+
+\subsection{Czego źródła nie określają}\label{sec:faza02-luki}
+
+\begin{itemize}
+  \item Pozycje planów capture, sandboxu i~portalu nie mają identyfikatorów ticketów (poza D7)
+        ani dat i~nie określają kolejności realizacji.
+  \item Repozytoria nie mają kodu, CI, testów ani ADR, więc nie ma interfejsów (poleceń, opcji,
+        plików konfiguracyjnych) do opisania.
+  \item Plan capture nie wskazuje brokera kolejek, formatu tokenów PII ani sposobu wdrożenia
+        sidecara Presidio; plan sandboxu -- obrazów, rejestru ani wersji Kubernetes; plan
+        portalu -- schematu bazy Postgres ani formatu eksportu etykiet.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
