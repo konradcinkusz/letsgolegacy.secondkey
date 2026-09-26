@@ -23,6 +23,9 @@ public static class ArtifactJson
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
             WriteIndented = indented,
+            // Not Environment.NewLine, the default: the same verdict must be the same bytes on
+            // Windows, where the legacy side runs, and on Linux, where CI does.
+            NewLine = "\n",
             // Artifacts are files, never embedded in HTML unescaped; keeping "é" readable
             // matters more than escaping it. The evidence report HTML-encodes every value.
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
