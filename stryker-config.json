@@ -1,0 +1,11 @@
+{
+  "stryker-config": {
+    "reporters": ["progress", "json", "html"],
+    "mutation-level": "Standard",
+    "thresholds": {
+      "high": 85,
+      "low": 70,
+      "break": 60
+    }
+  }
+}

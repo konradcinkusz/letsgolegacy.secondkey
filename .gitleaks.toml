@@ -1,0 +1,23 @@
+# Secret scanning runs as a pre-commit hook AND as a CI job (P5, REPO-BASELINE.md §2):
+# the hook catches the mistake before it becomes history, the job catches contributors
+# who never installed the hook.
+title = "letsgolegacy.secondkey"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "sqlserver-connection-string-with-password"
+description = "SQL Server connection string carrying an inline password"
+# RE2 has no lookahead; placeholders are excluded by the allowlist below instead.
+regex = '''(?i)(server|data source)\s*=\s*[^\s;]+\s*;.{0,200}?(password|pwd)\s*=\s*[^\s;"']{4,}'''
+tags = ["database", "connection-string"]
+
+[allowlist]
+description = "Templates that must show the shape of a secret without carrying one"
+paths = [
+  '''secrets\.env\.example''',
+]
+regexes = [
+  '''(?i)(password|pwd)\s*=\s*<[^>]+>''',
+]

@@ -1,0 +1,6 @@
+# Every path, and security-relevant ones named explicitly so the intent survives edits.
+*                     @konradcinkusz
+/.github/             @konradcinkusz
+/.gitleaks.toml       @konradcinkusz
+/schemas/             @konradcinkusz
+/src/SecondKey.Capture/ @konradcinkusz

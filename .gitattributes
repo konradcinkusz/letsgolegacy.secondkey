@@ -1,0 +1,11 @@
+* text=auto eol=lf
+*.cs     text diff=csharp
+*.csproj text
+*.slnx   text
+*.sh     text eol=lf
+*.ps1    text eol=crlf
+*.png    binary
+*.pdf    binary
+# Recorded samples are data: never re-normalise their line endings.
+*.skcap  -text
+*.skrun  -text

@@ -1,0 +1,17 @@
+name: Ticket
+description: A unit of work with one deliverable and a checkable "done when"
+labels: [ticket]
+body:
+  - type: input
+    id: id
+    attributes:
+      label: Ticket id
+      description: As in docs/WORKPLAN.md (e.g. S12)
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+    validations:
+      required: true

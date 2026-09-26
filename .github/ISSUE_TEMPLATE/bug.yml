@@ -1,0 +1,24 @@
+name: Bug
+description: Something Second Key does wrong
+labels: [bug]
+body:
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: The command, the artifacts (synthetic only — never real recordings), and what happened.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Does it change a verdict? A wrong verdict is the most severe class of bug here.
+    validations:
+      required: true
