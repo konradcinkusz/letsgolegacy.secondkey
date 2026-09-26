@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Description>sk — the Second Key command line: capture, mine, replay, gate, mutate, evidence.</Description>
+    <Description>sk — the Second Key command line: capture, mine, replay, compare, gate, mutate, evidence.</Description>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>sk</ToolCommandName>
     <PackageId>SecondKey.Cli</PackageId>
@@ -13,6 +13,8 @@
     <ProjectReference Include="..\SecondKey.Artifacts\SecondKey.Artifacts.csproj" />
     <ProjectReference Include="..\SecondKey.Capture\SecondKey.Capture.csproj" />
     <ProjectReference Include="..\SecondKey.Replay\SecondKey.Replay.csproj" />
+    <ProjectReference Include="..\SecondKey.Compare\SecondKey.Compare.csproj" />
+    <ProjectReference Include="..\SecondKey.Evidence\SecondKey.Evidence.csproj" />
   </ItemGroup>
 
   <ItemGroup>

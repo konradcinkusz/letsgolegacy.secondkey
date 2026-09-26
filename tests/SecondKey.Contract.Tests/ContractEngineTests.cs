@@ -54,6 +54,16 @@ public class ContractEngineTests
         Assert.Equal(ClauseOutcome.NotApplicable, report.Outcomes[("ex-000001", Side.Legacy)][2].Outcome);
     }
 
+    [Fact]
+    public void The_report_keeps_the_observation_each_outcome_was_evaluated_on()
+    {
+        var report = Engine.EvaluateRun(SampleRun());
+
+        Assert.Equal(report.Outcomes.Keys.Order(), report.Observations.Keys.Order());
+        Assert.Equal(500, report.Observations[("ex-000005", Side.Legacy)].Document["response"]!["status"]!.GetValue<int>());
+        Assert.Equal(59.97m, report.Observations[("ex-000003", Side.Candidate)].Document["extract"]!["cartTotal"]!.GetValue<decimal>());
+    }
+
     /// <summary>
     /// Deliberately broken candidates, each with the clause that must catch it — the
     /// BrokenAgents discipline from agent-eval-bench. A variant that survives is a missing

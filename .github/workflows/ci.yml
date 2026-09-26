@@ -43,20 +43,26 @@ jobs:
           path: TestResults/
 
   mutation:
-    name: mutation testing (Stryker.NET threshold)
+    # One job per mutation-tested project, in parallel: the verdict path grew to four
+    # projects, and one after another they would outlast the rest of CI several times over.
+    name: mutation testing (${{ matrix.project }})
     runs-on: ubuntu-latest
     needs: build-test
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [Artifacts, Contract, Compare, Evidence]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
       - name: Mutation testing
-        run: ./scripts/mutation.sh
-      - name: Upload mutation reports
+        run: ./scripts/mutation.sh ${{ matrix.project }}
+      - name: Upload mutation report
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: mutation-reports
+          name: mutation-report-${{ matrix.project }}
           path: StrykerOutput/
           if-no-files-found: ignore

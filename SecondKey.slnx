@@ -4,6 +4,8 @@
     <Project Path="src/SecondKey.Capture/SecondKey.Capture.csproj" />
     <Project Path="src/SecondKey.Contract/SecondKey.Contract.csproj" />
     <Project Path="src/SecondKey.Replay/SecondKey.Replay.csproj" />
+    <Project Path="src/SecondKey.Compare/SecondKey.Compare.csproj" />
+    <Project Path="src/SecondKey.Evidence/SecondKey.Evidence.csproj" />
     <Project Path="src/SecondKey.Cli/SecondKey.Cli.csproj" />
   </Folder>
   <Folder Name="/samples/">
@@ -14,6 +16,8 @@
     <Project Path="tests/SecondKey.Capture.Tests/SecondKey.Capture.Tests.csproj" />
     <Project Path="tests/SecondKey.Contract.Tests/SecondKey.Contract.Tests.csproj" />
     <Project Path="tests/SecondKey.Replay.Tests/SecondKey.Replay.Tests.csproj" />
+    <Project Path="tests/SecondKey.Compare.Tests/SecondKey.Compare.Tests.csproj" />
+    <Project Path="tests/SecondKey.Evidence.Tests/SecondKey.Evidence.Tests.csproj" />
     <Project Path="tests/SecondKey.Cli.Tests/SecondKey.Cli.Tests.csproj" />
   </Folder>
 </Solution>

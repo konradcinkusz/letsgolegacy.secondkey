@@ -1,0 +1,74 @@
+{
+  "$schema": "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "Portcullis",
+          "version": "0.1.0",
+          "informationUri": "https://github.com/konradcinkusz/letsgolegacy.portcullis",
+          "rules": [
+            {
+              "id": "PORTCULLIS_MIG_CONFIGURATION_MANAGER",
+              "shortDescription": { "text": "Static ConfigurationManager access survives the migration" },
+              "helpUri": "https://github.com/konradcinkusz/letsgolegacy.portcullis/blob/main/docs/rules/MIGRATION.md",
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "PORTCULLIS_MIG_HTTPCONTEXT_CURRENT",
+              "shortDescription": { "text": "System.Web.HttpContext.Current survives the migration" },
+              "helpUri": "https://github.com/konradcinkusz/letsgolegacy.portcullis/blob/main/docs/rules/MIGRATION.md",
+              "defaultConfiguration": { "level": "error" }
+            },
+            {
+              "id": "PORTCULLIS_MIG_SYNC_OVER_ASYNC",
+              "shortDescription": { "text": "Blocking on a task: .Result, .Wait() or GetAwaiter().GetResult()" },
+              "helpUri": "https://github.com/konradcinkusz/letsgolegacy.portcullis/blob/main/docs/rules/MIGRATION.md",
+              "defaultConfiguration": { "level": "warning" }
+            },
+            {
+              "id": "PORTCULLIS_MIG_SYSTEM_WEB",
+              "shortDescription": { "text": "A System.Web type survives the migration" },
+              "helpUri": "https://github.com/konradcinkusz/letsgolegacy.portcullis/blob/main/docs/rules/MIGRATION.md",
+              "defaultConfiguration": { "level": "warning" }
+            }
+          ]
+        }
+      },
+      "originalUriBaseIds": {
+        "%SRCROOT%": { "uri": "file:///src/sample-shop/" }
+      },
+      "results": [
+        {
+          "ruleId": "PORTCULLIS_MIG_SYNC_OVER_ASYNC",
+          "ruleIndex": 2,
+          "level": "warning",
+          "message": { "text": "'.Result' blocks a thread until the task completes; await it instead." },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "src/SampleShop/Checkout/OrderService.cs", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 42 } } } ],
+          "baselineState": "new"
+        },
+        {
+          "ruleId": "PORTCULLIS_MIG_SYSTEM_WEB",
+          "ruleIndex": 3,
+          "level": "warning",
+          "message": { "text": "'System.Web.HttpUtility' is a System.Web type; use System.Net.WebUtility." },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "src/SampleShop/Catalog/ProductSlug.cs", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 7 } } } ],
+          "baselineState": "new"
+        },
+        {
+          "ruleId": "PORTCULLIS_MIG_HTTPCONTEXT_CURRENT",
+          "ruleIndex": 1,
+          "level": "error",
+          "message": { "text": "'HttpContext.Current' has no equivalent in ASP.NET Core; inject IHttpContextAccessor." },
+          "locations": [ { "physicalLocation": { "artifactLocation": { "uri": "src/SampleShop/Legacy/SessionShim.cs", "uriBaseId": "%SRCROOT%" }, "region": { "startLine": 19 } } } ],
+          "baselineState": "new",
+          "suppressions": [ { "kind": "inSource", "justification": "Shim kept until the session store moves; tracked in the migration plan." } ]
+        }
+      ],
+      "properties": {
+        "sample": "Synthetic: written by hand in Portcullis's shape for tests and the end-to-end job. It is not the output of a real scan."
+      }
+    }
+  ]
+}

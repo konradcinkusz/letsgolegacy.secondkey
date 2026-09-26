@@ -1,0 +1,55 @@
+name: End-to-end
+
+# S15: the phase 01 chain on the sample shop, in one job — capture, replay, compare, gate,
+# evidence — ending with the evidence pack as a downloadable artifact.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  e2e:
+    name: capture, replay, compare, evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+      - name: The chain on the sample shop
+        run: ./scripts/e2e.sh
+        env:
+          # CI has a browser, so a pack without its PDF is a failure here (analysis A2).
+          SK_PDF: required
+      - name: Upload the evidence pack
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: evidence-pack
+          path: .secondkey/e2e/evidence/
+          if-no-files-found: ignore
+      - name: Upload the capture, the run, the verdict and the logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-artifacts
+          path: |
+            .secondkey/e2e/traffic.skcap
+            .secondkey/e2e/run.skrun
+            .secondkey/e2e/verdict.json
+            .secondkey/e2e/logs/
+          if-no-files-found: ignore

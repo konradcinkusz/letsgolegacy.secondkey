@@ -128,6 +128,7 @@ public static class SecondKeyCli
         root.Add(CaptureCommand.Build(context));
         root.Add(StubCommand.Build(context, "mine", "Propose contract clauses from recorded traffic (C2).", "C2, phase 02"));
         root.Add(ReplayCommand.Build(context));
+        root.Add(CompareCommand.Build(context));
         root.Add(GateCommand.Build(context));
         root.Add(StubCommand.Build(context, "mutate", "Inject defects the contract must catch, and report the kill rate per clause (C9).", "C9, phase 02"));
         root.Add(EvidenceCommand.Build(context));

@@ -2,6 +2,8 @@
   "stryker-config": {
     "reporters": ["progress", "json", "html"],
     "mutation-level": "Standard",
+    "ignore-methods": ["ConfigureAwait"],
+    "test-case-filter": "Category!=Browser",
     "thresholds": {
       "high": 85,
       "low": 70,

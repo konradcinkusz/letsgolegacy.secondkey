@@ -24,6 +24,8 @@ FILTER="${1:-}"
 PAIRS=(
   "tests/SecondKey.Artifacts.Tests:SecondKey.Artifacts.csproj"
   "tests/SecondKey.Contract.Tests:SecondKey.Contract.csproj"
+  "tests/SecondKey.Compare.Tests:SecondKey.Compare.csproj"
+  "tests/SecondKey.Evidence.Tests:SecondKey.Evidence.csproj"
 )
 
 dotnet tool restore >/dev/null

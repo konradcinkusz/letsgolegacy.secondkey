@@ -1,0 +1,108 @@
+# yaml-language-server: $schema=../schemas/contract.schema.json
+# The contract of the sample shop, as the end-to-end job (scripts/e2e.sh) checks it against a
+# live legacy side and a live candidate.
+#
+# Deliberately absent: any rule about the order of the product list. The candidate sorts the
+# same names in a different order (NLS -> ICU), nothing here says the order does not matter,
+# so the difference must surface as a regression nobody explained — which is the point.
+apiVersion: secondkey/v1
+kind: Contract
+metadata:
+  name: sample-shop-live
+  title: Sample shop — what the migration must keep
+  system: SampleShop
+  revision: 1
+  owners: [second-line-risk]
+
+compare:
+  headers: [content-type, location]
+  html: extracts
+
+extract:
+  - name: cartTotal
+    when: { method: GET, path: "^/cart$" }
+    from: html
+    selector: "span.order-total"
+    as: decimal
+  - name: cartLineTotals
+    when: { method: GET, path: "^/cart$" }
+    from: html
+    selector: "table.lines td.line-total"
+    as: decimal
+    all: true
+
+normalize:
+  ignore:
+    - response.body.json.generatedAt
+  tolerances:
+    - path: response.body.json.total
+      absolute: 0.01
+    - path: response.body.json.items[*].lineTotal
+      absolute: 0.01
+  masks:
+    timestamps: true
+    guids: true
+
+clauses:
+  - id: TOTAL-NEVER-NEGATIVE
+    kind: never
+    title: A cart or order total is never negative
+    why: A negative total means a discount stacked past the price — the shop pays the customer to take goods.
+    assert:
+      - { select: response.body.json.total, op: lt, value: 0 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CART-PAGE-TOTAL-NEVER-NEGATIVE
+    kind: never
+    title: The cart page never shows a negative total
+    why: What the customer sees is what the consumer-protection complaint quotes.
+    when: { method: GET, path: "^/cart$" }
+    assert:
+      - { select: extract.cartTotal, op: lt, value: 0 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CART-PAGE-SHOWS-TOTAL-AND-LINES
+    kind: must
+    title: The cart page shows its lines and a total
+    why: A cart page without a total or without its lines cannot be checked by the customer before paying.
+    when: { method: GET, path: "^/cart$" }
+    assert:
+      - { select: extract.cartTotal, op: exists }
+      - { select: extract.cartLineTotals, op: countAtLeast, value: 1 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CHECKOUT-NEVER-5XX
+    kind: never
+    title: Checkout never answers with a server error
+    why: A 5xx at checkout loses the sale and says nothing the customer can act on.
+    when: { method: POST, path: "^/checkout$" }
+    assert:
+      - { select: response.status, op: gte, value: 500 }
+    provenance: { origin: incident, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CREATED-ORDER-HAS-LOCATION
+    kind: never
+    title: A created order always says where it lives
+    why: Clients follow the Location header to the order; without it the order exists but cannot be reached.
+    when: { method: POST, path: "^/checkout$" }
+    assert:
+      - { select: response.status, op: equals, value: 201 }
+      - { select: "response.headers.location[0]", op: absent }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: NO-CARD-NUMBER-IN-RESPONSES
+    kind: never
+    title: No response ever carries a card number field
+    why: A card number in a response is a PCI DSS breach, whatever else the page does.
+    assert:
+      - { select: response.body.json.**.cardNumber, op: exists }
+    provenance: { origin: review, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: PRODUCTS-PRICED
+    kind: must
+    title: Every listed product has a positive price
+    why: A zero or missing price lets a product be ordered for free.
+    when: { method: GET, path: "^/products$" }
+    assert:
+      - { select: "response.body.json.items[*].price", op: gt, value: 0 }
+    provenance: { origin: mined, status: proposed, support: { observations: 1, violations: 0 } }

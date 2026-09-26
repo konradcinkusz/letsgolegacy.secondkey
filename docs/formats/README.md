@@ -10,7 +10,8 @@ against them live in [`/schemas/samples`](../../schemas/samples) and are checked
 | `*.skcap` | [`skcap.schema.json`](../../schemas/skcap.schema.json) | JSON Lines: `capture.header`, then `http.exchange` events | `sk capture` (C1) | `sk replay` (C6), `sk mine` (C2) |
 | `contract.yaml` | [`contract.schema.json`](../../schemas/contract.schema.json) | YAML document — see [contract.md](contract.md) | a person, helped by `sk mine` | `sk compare` (C7), `sk mutate` (C9) |
 | `*.skrun` | [`skrun.schema.json`](../../schemas/skrun.schema.json) | JSON Lines: `run.header`, `state.reset` and `exchange.result` events, `run.end` | `sk replay` (C6) | `sk compare` (C7) |
-| `verdict.json` | [`verdict.schema.json`](../../schemas/verdict.schema.json) | JSON document | `sk compare` (C7) | `sk evidence` (C10), portal (C11) |
+| `verdict.json` | [`verdict.schema.json`](../../schemas/verdict.schema.json) | JSON document — see [verdict.md](verdict.md) | `sk compare` (C7) | `sk evidence` (C10), portal (C11) |
+| evidence pack | [in-toto Statement v1](https://github.com/in-toto/attestation/blob/main/spec/v1/statement.md) for `statement.intoto.json` | a directory — see [evidence.md](evidence.md) | `sk evidence` (C10) | an approver, an auditor, portal (C11) |
 
 Rules that hold for all of them:
 
