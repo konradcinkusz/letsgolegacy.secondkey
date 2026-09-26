@@ -56,12 +56,14 @@ public class PdfRendererTests
     [Fact]
     public void On_windows_the_path_uses_semicolons_executables_end_in_exe_and_program_files_are_searched()
     {
-        var chrome = Path.Join(@"C:\Program Files", @"Google\Chrome\Application\chrome.exe");
-        var edge = Path.Join(@"C:\Program Files (x86)", @"Microsoft\Edge\Application\msedge.exe");
-        var local = Path.Join(@"C:\Users\me\AppData\Local", @"Google\Chrome\Application\chrome.exe");
-        var environment = Environment(("PATH", @"C:\tools;C:\bin"), ("ProgramFiles", @"C:\Program Files"), ("ProgramFiles(x86)", @"C:\Program Files (x86)"), ("LOCALAPPDATA", @"C:\Users\me\AppData\Local"));
+        const string chrome = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+        const string edge = @"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe";
+        const string local = @"C:\Users\me\AppData\Local\Google\Chrome\Application\chrome.exe";
+        var environment = Environment(("PATH", @"C:\tools;C:\bin\;D:/portable/"), ("ProgramFiles", @"C:\Program Files"), ("ProgramFiles(x86)", @"C:\Program Files (x86)"), ("LOCALAPPDATA", @"C:\Users\me\AppData\Local"));
 
-        Assert.Equal(Path.Join(@"C:\bin", "msedge.exe"), PdfRenderer.FindBrowser(environment, path => path == Path.Join(@"C:\bin", "msedge.exe"), windows: true));
+        Assert.Equal(@"C:\tools\chrome.exe", PdfRenderer.FindBrowser(environment, path => path is @"C:\tools\chrome.exe" or @"C:\bin\msedge.exe", windows: true));
+        Assert.Equal(@"C:\bin\msedge.exe", PdfRenderer.FindBrowser(environment, path => path == @"C:\bin\msedge.exe", windows: true));
+        Assert.Equal("D:/portable/msedge.exe", PdfRenderer.FindBrowser(environment, path => path == "D:/portable/msedge.exe", windows: true));
         Assert.Equal(chrome, PdfRenderer.FindBrowser(environment, path => path == chrome || path == edge, windows: true));
         Assert.Equal(edge, PdfRenderer.FindBrowser(environment, path => path == edge || path == local, windows: true));
         Assert.Equal(local, PdfRenderer.FindBrowser(environment, path => path == local, windows: true));

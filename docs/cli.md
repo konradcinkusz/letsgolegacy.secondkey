@@ -90,3 +90,15 @@ evidence: { verdict: .secondkey/verdict.json, contract: contract.yaml, run: .sec
 
 Secrets never live in this file: a connection string is named by the environment variable
 that holds it (`connectionStringEnv`), and `secrets.env.example` lists every such variable.
+
+Relative paths resolve against the directory that holds the file. On Windows, write a path
+with forward slashes (`C:/sk/traffic.skcap`) or in single quotes (`'C:\sk\traffic.skcap'`):
+inside double quotes YAML reads a backslash as the start of an escape, so `"C:\sk\a.skcap"`
+is not the path it looks like.
+
+## Line endings and digests
+
+Every JSON document `sk` writes — `verdict.json`, the pack's `manifest.json` and
+`statement.intoto.json` — ends its lines with `\n` on every platform, as the `*.skcap` and
+`*.skrun` lines already did. The same verdict is the same bytes, and so the same SHA-256,
+whether it was computed on the Windows host next to the legacy system or on a Linux runner.

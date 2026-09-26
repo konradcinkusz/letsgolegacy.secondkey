@@ -72,7 +72,8 @@ public static class EvidencePack
     public const string StatementType = "https://in-toto.io/Statement/v1";
     public const string PredicateType = "https://github.com/konradcinkusz/letsgolegacy.secondkey/evidence/v1";
 
-    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+    /// <summary>"\n" on every platform: a pack assembled on Windows must carry the digests it would on Linux.</summary>
+    private static readonly JsonSerializerOptions Indented = new() { WriteIndented = true, NewLine = "\n", Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     public static async Task<EvidenceResult> WriteAsync(EvidenceOptions options, DateTimeOffset generatedAt, CancellationToken cancellationToken)
     {

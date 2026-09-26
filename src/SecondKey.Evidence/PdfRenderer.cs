@@ -88,9 +88,20 @@ public static class PdfRenderer
         var suffix = windows ? ".exe" : string.Empty;
         var onPath = (environment("PATH") ?? string.Empty)
             .Split(windows ? ';' : ':', StringSplitOptions.RemoveEmptyEntries)
-            .SelectMany(directory => Names.Select(name => Path.Join(directory, name + suffix)));
+            .SelectMany(directory => Names.Select(name => Join(directory, name + suffix, windows)));
 
         return onPath.Concat(WellKnown(environment, windows)).FirstOrDefault(exists);
+    }
+
+    /// <summary>
+    /// <paramref name="directory"/> and <paramref name="file"/> joined the way the searched
+    /// system joins them — not the running one's <see cref="Path.Join(string, string)"/>, so the
+    /// search for either system is exact wherever it runs.
+    /// </summary>
+    private static string Join(string directory, string file, bool windows)
+    {
+        var separator = windows ? '\\' : '/';
+        return directory.EndsWith(separator) || directory.EndsWith('/') ? directory + file : directory + separator + file;
     }
 
     /// <summary>Renders <paramref name="htmlPath"/> to <paramref name="pdfPath"/> as <paramref name="mode"/> asks.</summary>
@@ -234,8 +245,8 @@ public static class PdfRenderer
         {
             foreach (var root in new[] { environment("ProgramFiles"), environment("ProgramFiles(x86)"), environment("LOCALAPPDATA") }.OfType<string>())
             {
-                yield return Path.Join(root, @"Google\Chrome\Application\chrome.exe");
-                yield return Path.Join(root, @"Microsoft\Edge\Application\msedge.exe");
+                yield return Join(root, @"Google\Chrome\Application\chrome.exe", windows: true);
+                yield return Join(root, @"Microsoft\Edge\Application\msedge.exe", windows: true);
             }
 
             yield break;
