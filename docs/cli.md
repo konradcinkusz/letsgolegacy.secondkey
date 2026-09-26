@@ -86,7 +86,7 @@ set during the scenario. Redirects are not followed; a 302 is an answer to compa
 | `--legacy <url>` | `replay.legacy.baseUrl` | none — required | the legacy system |
 | `--candidate <url>` | `replay.candidate.baseUrl` | none — required | the candidate |
 | `--out <file>` | `replay.out` | `.secondkey/run.skrun` | the run |
-| `--scenario-mode <mode>` | `replay.scenarioMode` | `session` | `session`: one scenario per recorded session; `exchange`: one per exchange |
+| `--scenario-mode <mode>` | `replay.scenarioMode` | `session` | `session`: one scenario per recorded session; `exchange`: one per exchange; any other value is refused |
 | `--timeout <seconds>` | `replay.timeoutSeconds` | 30 | how long to wait for each answer |
 | `--legacy-reset-http <path>` | `replay.legacy.reset` | no reset | reset the legacy side before each scenario with `POST <path>`; replaces the file's `reset` |
 | `--candidate-reset-http <path>` | `replay.candidate.reset` | no reset | the same for the candidate |
@@ -108,9 +108,13 @@ Each side takes one `reset` in `secondkey.yaml`, run before every scenario:
 
 | Kind | Keys | Succeeds when |
 |---|---|---|
-| `http` | `path`; `method` (default `POST`) | the side answers 2xx; `path` is resolved against the side's `baseUrl` |
+| `http` | `path`; `method` (default `POST`) | the side answers 2xx; `path` is appended to the side's `baseUrl` the way every replayed request path is, so a side at `http://host/shop/` is reset at `/shop/__sk/reset` |
 | `sqlServerSnapshot` | `connectionStringEnv`, `database`, `snapshot` | the database is restored from the snapshot |
 | `command` | `run`; `workingDirectory` (optional) | the command exits 0; it runs under `/bin/sh -c`, or `cmd.exe /c` on Windows |
+
+A `reset` names exactly one kind: none, or two, is invalid configuration rather than a
+guess at which one was meant. `workingDirectory`, like every relative path in the file,
+resolves against the file's directory; without it the command runs in the current one.
 
 `sqlServerSnapshot` restores a SQL Server database from a database snapshot. Know what it
 does and what it does not:
@@ -193,6 +197,11 @@ A pipeline branches on these; they do not change without a major version.
 | 4 | RuntimeError | The command could not complete: a system unreachable, a file unwritable |
 | 64 | Usage | The command line itself is wrong |
 | 70 | NotImplemented | The command exists in the plan but not in this build |
+
+A value that is wrong on the command line is a usage error (64); the same value wrong in
+`secondkey.yaml` — a URL that is not absolute http(s), a `scenarioMode` or `pdf` outside
+its choices, a `reset` with other than one kind — is invalid input (3). The fix is in a
+different place, so the code says which.
 
 A command stopped with Ctrl+C or SIGTERM gets a minute to stop cleanly. One that has not
 stopped by then is ended with the signal's own code, 130 or 143, and whatever it was

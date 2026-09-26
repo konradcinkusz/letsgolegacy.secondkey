@@ -34,8 +34,8 @@ internal static class ReplayCommand
             var config = context.LoadConfig(result);
             var section = config.Replay;
             var capturePath = result.GetValue(capture) is { } c ? Path.GetFullPath(c) : section?.Capture is { } sc ? config.Resolve(sc) : null;
-            var legacyUrl = CliContext.Url(result.GetValue(legacy), "--legacy") ?? CliContext.Url(section?.Legacy?.BaseUrl, "replay.legacy.baseUrl");
-            var candidateUrl = CliContext.Url(result.GetValue(candidate), "--candidate") ?? CliContext.Url(section?.Candidate?.BaseUrl, "replay.candidate.baseUrl");
+            var legacyUrl = CliContext.Url(result.GetValue(legacy), "--legacy") ?? CliContext.ConfiguredUrl(section?.Legacy?.BaseUrl, "replay.legacy.baseUrl");
+            var candidateUrl = CliContext.Url(result.GetValue(candidate), "--candidate") ?? CliContext.ConfiguredUrl(section?.Candidate?.BaseUrl, "replay.candidate.baseUrl");
             if (capturePath is null || legacyUrl is null || candidateUrl is null)
             {
                 await context.Error.WriteLineAsync("sk replay: needs a capture and both base URLs — --capture, --legacy, --candidate, or the replay section of secondkey.yaml".AsMemory(), cancellationToken).ConfigureAwait(false);
@@ -47,8 +47,8 @@ internal static class ReplayCommand
                 Capture = CaptureFile.Read(capturePath),
                 CapturePath = capturePath,
                 Output = result.GetValue(output) is { } o ? Path.GetFullPath(o) : config.Resolve(section?.Out ?? ".secondkey/run.skrun"),
-                Legacy = Side(legacyUrl, section?.Legacy, result.GetValue(legacyReset)),
-                Candidate = Side(candidateUrl, section?.Candidate, result.GetValue(candidateReset)),
+                Legacy = Side(config, legacyUrl, section?.Legacy, result.GetValue(legacyReset)),
+                Candidate = Side(config, candidateUrl, section?.Candidate, result.GetValue(candidateReset)),
                 ScenarioMode = (result.GetValue(mode) ?? section?.ScenarioMode) == "exchange" ? ScenarioMode.Exchange : ScenarioMode.Session,
                 Timeout = TimeSpan.FromSeconds(result.GetValue(timeout) ?? section?.TimeoutSeconds ?? 30),
                 Correlation = (section?.Correlation ?? [])
@@ -71,7 +71,7 @@ internal static class ReplayCommand
         return command;
     }
 
-    private static SideTarget Side(Uri baseUrl, SideConfig? config, string? resetPath)
+    private static SideTarget Side(SecondKeyConfig file, Uri baseUrl, SideConfig? config, string? resetPath)
     {
         IStateReset reset = NoReset.Instance;
         if (resetPath is not null)
@@ -80,11 +80,12 @@ internal static class ReplayCommand
         }
         else if (config?.Reset is { } r)
         {
+            // SecondKeyConfig has checked that the reset names exactly one kind.
             reset = r switch
             {
                 { Http: { } http } => new HttpReset(new HttpClient(), baseUrl, http.Method, http.Path),
                 { SqlServerSnapshot: { } sql } => new SqlServerSnapshotReset(Secret(sql.ConnectionStringEnv), sql.Database, sql.Snapshot),
-                { Command: { } cmd } => new CommandReset(cmd.Run, cmd.WorkingDirectory),
+                { Command: { } cmd } => new CommandReset(cmd.Run, cmd.WorkingDirectory is { } directory ? file.Resolve(directory) : null),
                 _ => NoReset.Instance,
             };
         }

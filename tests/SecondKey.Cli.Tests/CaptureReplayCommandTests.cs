@@ -117,6 +117,67 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_bad_url_is_a_usage_error_on_the_command_line_and_invalid_configuration_in_the_file()
+    {
+        var (option, _, optionError) = await RunAsync("replay", "--capture", Sample("sample.skcap"), "--legacy", "not-a-url", "--candidate", _candidate.Address.ToString());
+
+        Assert.Equal(ExitCodes.Usage, option);
+        Assert.Contains("--legacy: 'not-a-url' is not an absolute http(s) URL", optionError, StringComparison.Ordinal);
+
+        var (file, _, fileError) = await ReplayWithAsync($$"""
+            legacy: { baseUrl: "ftp://legacy.test/" }
+            candidate: { baseUrl: "{{_candidate.Address}}" }
+            """);
+
+        Assert.Equal(ExitCodes.InvalidInput, file);
+        Assert.Contains("replay.legacy.baseUrl: 'ftp://legacy.test/' is not an absolute http(s) URL", fileError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_scenario_mode_outside_the_two_is_invalid_configuration()
+    {
+        var (exit, _, error) = await ReplayWithAsync($$"""
+            scenarioMode: exchanges
+            legacy: { baseUrl: "{{_legacy.Address}}" }
+            candidate: { baseUrl: "{{_candidate.Address}}" }
+            """);
+
+        Assert.Equal(ExitCodes.InvalidInput, exit);
+        Assert.Contains("replay.scenarioMode: 'exchanges' is not one of session, exchange", error, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{ http: { path: /__sk/reset }, command: { run: \"exit 0\" } }", 2)]
+    [InlineData("{ }", 0)]
+    public async Task A_reset_names_exactly_one_kind(string reset, int kinds)
+    {
+        var (exit, _, error) = await ReplayWithAsync($$"""
+            legacy: { baseUrl: "{{_legacy.Address}}" }
+            candidate: { baseUrl: "{{_candidate.Address}}", reset: {{reset}} }
+            """);
+
+        Assert.Equal(ExitCodes.InvalidInput, exit);
+        Assert.Contains($"replay.candidate.reset: give exactly one of http, sqlServerSnapshot, command (found {kinds})", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_command_resets_working_directory_resolves_against_the_files_directory()
+    {
+        // The command succeeds only in the directory beside the file, never in the test's own.
+        Directory.CreateDirectory(Path.Combine(_directory, "state"));
+        await File.WriteAllTextAsync(Path.Combine(_directory, "state", "marker"), "here");
+        var run = OperatingSystem.IsWindows() ? "if exist marker (exit 0) else (exit 1)" : "test -f marker";
+
+        var (exit, stdout, error) = await ReplayWithAsync($$"""
+            legacy: { baseUrl: "{{_legacy.Address}}" }
+            candidate: { baseUrl: "{{_candidate.Address}}", reset: { command: { run: "{{run}}", workingDirectory: state } } }
+            """);
+
+        Assert.True(exit == ExitCodes.Success, $"exit {exit}\n{stdout}\n{error}");
+        Assert.Contains("0 failed reset(s)", stdout, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_reset_that_fails_makes_the_replay_a_runtime_error()
     {
         var (exit, _, error) = await RunAsync("replay", "--capture", Sample("sample.skcap"), "--legacy", _legacy.Address.ToString(), "--candidate", _candidate.Address.ToString(), "--out", Path.Combine(_directory, "r.skrun"), "--candidate-reset-http", "/does-not-matter");
@@ -154,6 +215,15 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
 
         Assert.Equal(ExitCodes.Usage, exit);
         Assert.Contains("needs a capture and both base URLs", error, StringComparison.Ordinal);
+    }
+
+    /// <summary>Runs <c>sk replay</c> with a secondkey.yaml whose replay section adds these lines.</summary>
+    private async Task<(int Exit, string Output, string Error)> ReplayWithAsync(string replayLines)
+    {
+        var config = Path.Combine(_directory, "secondkey.yaml");
+        var indented = string.Join("\n", replayLines.Split('\n').Select(line => "  " + line));
+        await File.WriteAllTextAsync(config, $"version: 1\nreplay:\n  capture: '{Sample("sample.skcap")}'\n  out: out/run.skrun\n{indented}\n");
+        return await RunAsync("replay", "--config", config);
     }
 
     private static async Task SendWhenListeningAsync(HttpClient client, string path)

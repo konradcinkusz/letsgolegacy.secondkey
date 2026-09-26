@@ -76,11 +76,29 @@ public class ResetTests
         Assert.Contains("failed:", down.Detail, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("http://legacy.test/", "/__sk/reset", "http://legacy.test/__sk/reset")]
+    [InlineData("http://legacy.test/shop/", "/__sk/reset", "http://legacy.test/shop/__sk/reset")]
+    [InlineData("http://legacy.test/shop", "__sk/reset", "http://legacy.test/shop/__sk/reset")]
+    [InlineData("http://legacy.test:8080/shop/", "/__sk/reset?all=true", "http://legacy.test:8080/shop/__sk/reset?all=true")]
+    public async Task An_http_reset_is_sent_under_the_base_path_like_every_replayed_request(string baseUrl, string path, string expected)
+    {
+        var handler = new RecordingHandler();
+        using var client = new HttpClient(handler);
+
+        var result = await new HttpReset(client, new Uri(baseUrl), "POST", path).ResetAsync(CancellationToken.None);
+
+        Assert.True(result.Succeeded);
+        Assert.Equal(expected, handler.Requested!.AbsoluteUri);
+        Assert.Equal(HttpMethod.Post, handler.Method);
+    }
+
     [Fact]
     public void Bad_arguments_are_refused()
     {
         Assert.Throws<ArgumentNullException>(() => new HttpReset(null!, new Uri("http://x"), "POST", "/"));
         Assert.Equal("baseUrl", Assert.Throws<ArgumentNullException>(() => new HttpReset(new HttpClient(), null!, "POST", "/")).ParamName);
+        Assert.Equal("path", Assert.Throws<ArgumentNullException>(() => new HttpReset(new HttpClient(), new Uri("http://x"), "POST", null!)).ParamName);
         Assert.ThrowsAny<ArgumentException>(() => new CommandReset(" ", null));
         Assert.ThrowsAny<ArgumentException>(() => new SqlServerSnapshotReset("", "db", "snap"));
     }
@@ -92,5 +110,20 @@ public class ResetTests
     {
         Assert.Equal(quoted, SqlServerSnapshotReset.Quote(name));
         Assert.Equal("N'it''s'", SqlServerSnapshotReset.Literal("it's"));
+    }
+}
+
+/// <summary>Answers 200 to anything and remembers what was asked, so no socket is involved.</summary>
+internal sealed class RecordingHandler : HttpMessageHandler
+{
+    public Uri? Requested { get; private set; }
+
+    public HttpMethod? Method { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        Requested = request.RequestUri;
+        Method = request.Method;
+        return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK));
     }
 }

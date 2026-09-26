@@ -45,18 +45,22 @@ internal sealed class CliContext
 
     public SecondKeyConfig LoadConfig(ParseResult result) => SecondKeyConfig.Load(result.GetValue(Config));
 
-    /// <summary>An absolute http(s) URL from an option or the configuration, or null when neither gives one.</summary>
-    public static Uri? Url(string? value, string source)
-    {
-        if (value is null)
-        {
-            return null;
-        }
+    /// <summary>
+    /// An absolute http(s) URL from a command-line option, or null when the option is not
+    /// given. Anything else is a usage error (64): the command line itself is wrong.
+    /// </summary>
+    public static Uri? Url(string? value, string option) =>
+        value is null ? null : AbsoluteHttp(value) ?? throw new UsageException($"{option}: '{value}' is not an absolute http(s) URL");
 
-        return System.Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https"
-            ? uri
-            : throw new UsageException($"{source}: '{value}' is not an absolute http(s) URL");
-    }
+    /// <summary>
+    /// An absolute http(s) URL from secondkey.yaml, or null when the key is not set. Anything
+    /// else is invalid configuration (3), the way docs/cli.md's exit codes define it.
+    /// </summary>
+    public static Uri? ConfiguredUrl(string? value, string key) =>
+        value is null ? null : AbsoluteHttp(value) ?? throw new ConfigurationException($"{key}: '{value}' is not an absolute http(s) URL");
+
+    private static Uri? AbsoluteHttp(string value) =>
+        System.Uri.TryCreate(value, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" ? uri : null;
 }
 
 /// <summary>

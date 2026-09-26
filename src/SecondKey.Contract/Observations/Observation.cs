@@ -4,9 +4,11 @@ namespace SecondKey.Contract.Observations;
 
 /// <summary>
 /// Everything a clause may look at about one request on one side, as a JSON document with
-/// the roots <c>request</c>, <c>response</c>, <c>error</c>, <c>extract</c>, <c>db</c> and
-/// <c>outbound</c>. Extraction failures are kept beside the document: a clause that reads a
-/// value that failed to extract is an error, never a silent absence.
+/// the roots a selector can name (<c>request</c>, <c>response</c>, <c>extract</c>, <c>db</c>,
+/// <c>outbound</c> — see SelectorPath), plus <c>error</c> when the side gave no answer,
+/// which the comparison reads and no selector does. Extraction failures are kept beside the
+/// document: a clause that reads a value that failed to extract is an error, never a
+/// silent absence.
 /// </summary>
 public sealed class Observation
 {

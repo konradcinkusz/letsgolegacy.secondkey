@@ -14,7 +14,7 @@ component can be replaced as long as it reads and writes the same artifacts.
 
 | Artifact | Format | Produced by | Consumed by |
 |---|---|---|---|
-| `*.skcap` | JSONL events, one per line, correlated by request id | C1 capture | C2 miner, C6 replay |
+| `*.skcap` | JSONL events, one per line, correlated by exchange id | C1 capture | C2 miner, C6 replay |
 | `contract.yaml` | YAML validated by JSON Schema | C2 miner + a human | C3 engine, C7 comparator, C9 mutations |
 | `standards/` | Markdown → skills + NuGet | C4 (`letsgolegacy.secondkey-standards`) | migration agent, C5 gate |
 | `*.sarif` | SARIF 2.1 | C5 gate (`letsgolegacy.portcullis`) | C10 evidence |

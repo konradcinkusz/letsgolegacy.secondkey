@@ -35,7 +35,8 @@ if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   ok "docker (running)"
 else
   warn "docker not running (optional — needed only for the SQL Server snapshot tests, S11;
-         without it those tests report themselves skipped locally; CI always runs them)"
+         without it those tests report themselves skipped locally; CI's Linux build-and-test
+         job always runs them, while its Windows and mutation jobs skip them on purpose)"
 fi
 if command -v gitleaks >/dev/null 2>&1; then
   ok "gitleaks $(gitleaks version 2>/dev/null || echo '')"
@@ -44,11 +45,13 @@ else
          the CI job scans regardless) — https://github.com/gitleaks/gitleaks/releases"
 fi
 chrome=""
-for c in "${SK_CHROME_PATH:-}" chromium chromium-browser google-chrome google-chrome-stable; do
+# The order PdfRenderer searches in: Chrome before a Chromium of unknown origin, which on
+# GitHub's Ubuntu runners hangs in headless mode where Chrome prints at once.
+for c in "${SK_CHROME_PATH:-}" google-chrome google-chrome-stable chrome microsoft-edge microsoft-edge-stable msedge chromium chromium-browser; do
   [[ -n "$c" ]] && command -v "$c" >/dev/null 2>&1 && { chrome="$c"; break; }
 done
 if [[ -n "$chrome" ]]; then ok "headless browser: $chrome"
-else warn "no Chromium/Chrome found (optional — needed only to render the evidence pack as PDF;
+else warn "no Chrome, Edge or Chromium found (optional — needed only to render the evidence pack as PDF;
          the HTML report is produced regardless; set SK_CHROME_PATH to point at one)"; fi
 
 if $CHECK_ONLY; then

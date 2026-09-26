@@ -54,6 +54,12 @@ public class ConfigurationTests
     [InlineData("version: 1\nreplay:\n  legacy:\n    baseUrl: x\n    resett: {}\n", "resett")]
     [InlineData("version: 1\nreplay: [\n", "not valid YAML")]
     [InlineData("version: 1\nreplay:\n  legacy:\n    reset: { http: { method: GET } }\n", "path")]
+    [InlineData("version: 1\ncapture:\n  target: localhost:5080\n", "capture.target: 'localhost:5080' is not an absolute http(s) URL")]
+    [InlineData("version: 1\nreplay:\n  candidate:\n    baseUrl: /shop\n", "replay.candidate.baseUrl: '/shop' is not an absolute http(s) URL")]
+    [InlineData("version: 1\nreplay:\n  scenarioMode: exchanges\n", "replay.scenarioMode: 'exchanges' is not one of session, exchange")]
+    [InlineData("version: 1\nevidence:\n  pdf: sometimes\n", "evidence.pdf: 'sometimes' is not one of auto, required, off")]
+    [InlineData("version: 1\nreplay:\n  legacy:\n    reset: { http: { path: /r }, command: { run: x } }\n", "replay.legacy.reset: give exactly one of http, sqlServerSnapshot, command (found 2)")]
+    [InlineData("version: 1\nreplay:\n  candidate:\n    reset: {}\n", "replay.candidate.reset: give exactly one of http, sqlServerSnapshot, command (found 0)")]
     public void A_wrong_configuration_says_what_is_wrong(string yaml, string expected)
     {
         var ex = Assert.Throws<ConfigurationException>(() => SecondKeyConfig.Parse(yaml, "secondkey.yaml"));

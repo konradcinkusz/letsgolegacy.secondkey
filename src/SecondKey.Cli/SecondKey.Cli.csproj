@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <Description>sk — the Second Key command line: capture, mine, replay, compare, gate, mutate, evidence.</Description>
+    <Description>sk — the Second Key command line: capture, mine, replay, compare, gate, mutate, evidence, validate.</Description>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>sk</ToolCommandName>
     <PackageId>SecondKey.Cli</PackageId>

@@ -25,7 +25,7 @@ internal static class CaptureCommand
         {
             var config = context.LoadConfig(result);
             var section = config.Capture;
-            var targetUri = CliContext.Url(result.GetValue(target), "--target") ?? CliContext.Url(section?.Target, "capture.target");
+            var targetUri = CliContext.Url(result.GetValue(target), "--target") ?? CliContext.ConfiguredUrl(section?.Target, "capture.target");
             if (targetUri is null)
             {
                 await context.Error.WriteLineAsync("sk capture: no target — pass --target or set capture.target in secondkey.yaml".AsMemory(), cancellationToken).ConfigureAwait(false);
@@ -34,7 +34,7 @@ internal static class CaptureCommand
 
             var options = new CaptureOptions
             {
-                Listen = CliContext.Url(result.GetValue(listen), "--listen") ?? CliContext.Url(section?.Listen ?? "http://127.0.0.1:8080", "capture.listen")!,
+                Listen = CliContext.Url(result.GetValue(listen), "--listen") ?? CliContext.ConfiguredUrl(section?.Listen ?? "http://127.0.0.1:8080", "capture.listen")!,
                 Target = targetUri,
                 Output = result.GetValue(output) is { } o ? Path.GetFullPath(o) : config.Resolve(section?.Out ?? ".secondkey/traffic.skcap"),
                 SessionKeys = Merge(result.GetValue(sessionKeys), section?.SessionKeys),
