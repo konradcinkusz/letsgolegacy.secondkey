@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant K as Klient
+  participant P as sk capture (YARP)
+  participant L as System legacy
+  participant F as traffic.skcap
+  K->>P: request, np. GET /cart
+  P->>L: ten sam request<br/>(bez kompresji odpowiedzi)
+  L-->>P: response
+  P-->>K: ta sama odpowiedź
+  P->>F: wymiana: nagłówki zredagowane,<br/>sesja z session key
+  Note over P,F: legacy nie odpowiada: klient dostaje 502/504,<br/>wymiana pominięta (skipped), nie trafia do pliku

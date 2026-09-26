@@ -1,0 +1,79 @@
+% ============================================================================
+% Dodatki do zestawu house (additions, NOT part of the house set).
+%
+% Ładowane przez letsgolegacy-framework.tex PO \input{house-preamble}, zgodnie
+% z kontraktem preambuły: pakiety, których house set nie zawiera, dokument
+% ładuje sam i oznacza je jako dodatek.
+% ============================================================================
+
+% Bloki kodu, poleceń i konfiguracji. listings, nie minted: minted wymaga
+% shell-escape i Pygments w obrazie CI, a dokument nie potrzebuje kolorowania.
+\usepackage{listings}
+
+% Długie tabele z kolumnami X (longtable + tabularx w jednym środowisku).
+\usepackage{xltabular}
+
+% Pod kodowaniem T1 krój maszynowy składa "--" jako półpauzę, więc opcja
+% --exit-after w \repopath{} wychodziłaby jako "–exit-after". microtype wyłącza tę
+% ligaturę w krojach maszynowych; poza tym tylko poprawia skład akapitów.
+\usepackage{microtype}
+\DisableLigatures[-]{encoding = *, family = tt*}
+
+% Znaki Unicode, których inputenc nie zna bez deklaracji.
+\DeclareUnicodeCharacter{2192}{\ensuremath{\rightarrow}}
+\DeclareUnicodeCharacter{2190}{\ensuremath{\leftarrow}}
+\DeclareUnicodeCharacter{2194}{\ensuremath{\leftrightarrow}}
+\DeclareUnicodeCharacter{2264}{\ensuremath{\leq}}
+\DeclareUnicodeCharacter{2265}{\ensuremath{\geq}}
+\DeclareUnicodeCharacter{2260}{\ensuremath{\neq}}
+\DeclareUnicodeCharacter{2248}{\ensuremath{\approx}}
+\DeclareUnicodeCharacter{00D7}{\ensuremath{\times}}
+\DeclareUnicodeCharacter{2212}{\ensuremath{-}}
+
+% Styl bloków kodu: tło i ramka w kolorach house, łamanie długich linii,
+% polskie znaki w komentarzach (literate), cudzysłowy proste (upquote).
+\lstdefinestyle{kod}{
+  basicstyle=\ttfamily\footnotesize,
+  columns=fullflexible,
+  keepspaces=true,
+  breaklines=true,
+  frame=single,
+  rulecolor=\color{lightgray},
+  backgroundcolor=\color{lightgray!40},
+  xleftmargin=0.4em,
+  xrightmargin=0.4em,
+  aboveskip=0.6em,
+  belowskip=0.6em,
+  showstringspaces=false,
+  upquote=true,
+  literate=
+    {ą}{{\k{a}}}1 {ć}{{\'c}}1 {ę}{{\k{e}}}1 {ł}{{\l{}}}1 {ń}{{\'n}}1
+    {ó}{{\'o}}1 {ś}{{\'s}}1 {ź}{{\'z}}1 {ż}{{\.z}}1
+    {Ą}{{\k{A}}}1 {Ć}{{\'C}}1 {Ę}{{\k{E}}}1 {Ł}{{\L{}}}1 {Ń}{{\'N}}1
+    {Ó}{{\'O}}1 {Ś}{{\'S}}1 {Ź}{{\'Z}}1 {Ż}{{\.Z}}1
+    {—}{{---}}1 {–}{{--}}1 {„}{{,,}}1 {”}{{''}}1 {→}{{$\rightarrow$}}1 {…}{{\ldots}}1
+}
+\lstset{style=kod}
+
+% Ścieżka źródłowa na końcu podsekcji: skąd pochodzi to, co napisano wyżej.
+% Dokument niczego nie dodaje do źródeł, więc każda podsekcja je nazywa.
+\newcommand{\zrodla}[1]{\par\smallskip{\small\raggedright\color{darkgray}\textit{Źródła:} #1\par}\medskip}
+
+% \path (pakiet url, ładowany przez hyperref) służy do ścieżek zbyt długich na
+% niełamliwe pole \repopath -- w tabelach i w \zrodla. To nie jest prywatny
+% synonim \repopath: \repopath zostaje dla krótkich identyfikatorów w tekście.
+\urlstyle{tt}
+
+% Tabele: odrobinę więcej powietrza między wierszami.
+\renewcommand{\arraystretch}{1.15}
+
+% Długie nazwy repozytoriów i ścieżki: \path może łamać się także na myślnikach
+% (letsgolegacy.secondkey-nopcommerce-bench), a akapit z niełamliwym \repopath
+% dostaje trochę luzu, zamiast wychodzić na margines.
+\expandafter\def\expandafter\UrlBreaks\expandafter{\UrlBreaks\do\-}
+\setlength{\emergencystretch}{3em}
+
+% Checklisty (kształt przewodników estate: sekcja kończy się listą „- [ ]”):
+% pusta ramka zamiast punktora, bez dodatkowych pakietów.
+\newcommand{\polewyboru}{\raisebox{0.05ex}{\fbox{\rule{0pt}{0.42em}\rule{0.42em}{0pt}}}}
+\newenvironment{checklista}{\begin{itemize}[label=\polewyboru, leftmargin=1.7em]}{\end{itemize}}
