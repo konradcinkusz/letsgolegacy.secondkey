@@ -16,6 +16,11 @@ cd "$REPO_ROOT"
 FILTER="${1:-}"
 
 # test project directory : project under test
+#
+# The verdict path — formats, contract engine, comparator — is mutation-tested. Capture and
+# replay are I/O edges whose tests start web servers and a SQL Server container; mutating
+# them would rerun those per mutant, far outside the CI budget (TESTING-STRATEGY.md §2),
+# so they are covered by integration tests instead.
 PAIRS=(
   "tests/SecondKey.Artifacts.Tests:SecondKey.Artifacts.csproj"
   "tests/SecondKey.Contract.Tests:SecondKey.Contract.csproj"
