@@ -374,7 +374,7 @@ public class PdfRendererTests
                 }
 
                 // A killed child can linger as a zombie until its parent is reaped; that is stopped too.
-                if (File.Exists($"/proc/{id}/stat") && File.ReadAllText($"/proc/{id}/stat").Split(' ')[2] == "Z")
+                if (File.Exists($"/proc/{id}/stat") && IsZombieOrGone($"/proc/{id}/stat"))
                 {
                     return;
                 }
@@ -396,5 +396,22 @@ public class PdfRendererTests
         }
 
         Assert.Fail($"process {id} was still running");
+    }
+
+    /// <summary>
+    /// Whether a process's /proc stat says it is a zombie. The zombie can be reaped between
+    /// finding the file and reading it — the read then fails with ENOENT, or ESRCH ("No such
+    /// process") part-way — and a process that is gone is stopped too.
+    /// </summary>
+    private static bool IsZombieOrGone(string stat)
+    {
+        try
+        {
+            return File.ReadAllText(stat).Split(' ')[2] == "Z";
+        }
+        catch (IOException)
+        {
+            return true;
+        }
     }
 }
