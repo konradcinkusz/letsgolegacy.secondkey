@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<meta name="generator" content="secondkey">
+<title>Evidence — Sample shop — catalogue, cart and checkout (revision 1)</title>
+<style>:root { --ink:#1b1f24; --muted:#5b6470; --line:#d9dee4; --panel:#f5f7f9;
+  --fail:#b42318; --fail-bg:#fef3f2; --fail-line:#fecdca;
+  --review:#a15c07; --review-bg:#fffaeb; --review-line:#fedf89;
+  --pass:#067647; --pass-bg:#ecfdf3; --pass-line:#abefc6;
+  --info:#175cd3; --info-bg:#eff8ff; --info-line:#b2ddff; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; background: #fff; color: var(--ink); font: 14px/1.5 -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 32px 24px 48px; }
+header { border-bottom: 3px solid var(--ink); padding-bottom: 16px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 2px 0 6px; }
+h2 { font-size: 18px; margin: 34px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--line); break-after: avoid; }
+h3 { font-size: 15px; margin: 18px 0 6px; }
+p { margin: 6px 0; }
+ul { margin: 6px 0; padding-left: 20px; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace; font-size: 12px; overflow-wrap: anywhere; }
+.eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; font-weight: 700; color: var(--muted); }
+.meta, .muted-text { color: var(--muted); }
+.lead { font-size: 15px; margin-top: 10px; }
+.verdict { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+.badge { display: inline-block; padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; background: var(--panel); color: var(--muted); }
+.badge.big { font-size: 15px; padding: 6px 14px; border-radius: 8px; }
+.fail { color: var(--fail); background: var(--fail-bg); border-color: var(--fail-line); }
+.review { color: var(--review); background: var(--review-bg); border-color: var(--review-line); }
+.pass { color: var(--pass); background: var(--pass-bg); border-color: var(--pass-line); }
+.info { color: var(--info); background: var(--info-bg); border-color: var(--info-line); }
+.fail-text { color: var(--fail); font-weight: 600; }
+.count { display: inline-block; min-width: 24px; padding: 0 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 13px; text-align: center; color: var(--muted); }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.tile { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #fff; }
+.tile .n { font-size: 26px; font-weight: 700; line-height: 1.2; }
+.tile .label { font-weight: 600; }
+.tile .hint { color: var(--muted); font-size: 12px; }
+.tile.fail .n, .tile.fail .label { color: var(--fail); }
+.tile.review .n, .tile.review .label { color: var(--review); }
+table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+th { background: var(--panel); font-weight: 600; }
+td.num, th.num { text-align: right; white-space: nowrap; }
+table.compact td, table.compact th { padding: 4px 8px; }
+tr { break-inside: avoid; }
+.exchange { border: 1px solid var(--line); border-left: 4px solid var(--line); border-radius: 8px; padding: 10px 14px; margin: 12px 0; }
+.exchange:has(.badge.fail) { border-left-color: var(--fail); }
+.exchange:has(.badge.review) { border-left-color: var(--review); }
+.exchange-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.request { font-size: 13px; font-weight: 600; }
+.reasons { margin: 8px 0; }
+.tally { white-space: nowrap; }
+footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+@page { size: A4; margin: 14mm 12mm; }
+@media print { main { max-width: none; padding: 0; } h2 { margin-top: 24px; } .exchange { break-inside: avoid; } }</style>
+</head>
+<body>
+<main>
+<header>
+<p class="eyebrow">Second Key · evidence pack</p>
+<h1>Sample shop — catalogue, cart and checkout</h1>
+<p class="meta">System: SampleShop (legacy) · contract <code>sample-shop</code> revision 1 · run <code>run-20260926-sample</code> · verdict made 2026-09-26 10:05:00 UTC</p>
+<div class="verdict">
+<span class="badge big fail">Behaviour: FAIL</span>
+<span class="badge big pass">Gate: PASS</span>
+</div>
+<p class="lead">1 of 5 compared exchange(s) is a regression: the candidate must not be approved as it is.</p>
+</header>
+<section id="summary">
+<h2>Summary</h2>
+<div class="tiles">
+<div class="tile"><div class="n">5</div><div class="label">Exchanges compared</div><div class="hint">in 2 scenario(s)</div></div>
+<div class="tile"><div class="n">2</div><div class="label">Equal</div><div class="hint">identical</div></div>
+<div class="tile"><div class="n">1</div><div class="label">Equal under contract</div><div class="hint">differences the contract explains</div></div>
+<div class="tile fail"><div class="n">1</div><div class="label">Regressions</div><div class="hint">block approval</div></div>
+<div class="tile review"><div class="n">1</div><div class="label">Fix candidates</div><div class="hint">a person decides</div></div>
+<div class="tile"><div class="n">5</div><div class="label">Accepted clauses</div><div class="hint">5 exercised, 0 not</div></div>
+<div class="tile"><div class="n">60%</div><div class="label">Absence share</div><div class="hint">accepted clauses that say what must never happen</div></div>
+</div>
+</section>
+<section id="gate">
+<h2>Gate</h2>
+<p>1 SARIF log(s) from Portcullis 0.1.0: 2 finding(s), <strong>0 blocking</strong>. An error blocks unless it is suppressed or already known from the baseline; warnings and notes are reported, not blocking.</p>
+<table>
+<thead><tr><th>Rule</th><th>Tool</th><th class="num">Errors</th><th class="num">Warnings</th><th class="num">Notes</th><th class="num">Suppressed</th><th class="num">Blocking</th></tr></thead>
+<tbody>
+<tr><td><code>PORTCULLIS_MIG_CONFIGURATION_MANAGER</code><div class="muted-text">Static ConfigurationManager access survives the migration</div></td><td>Portcullis</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td><code>PORTCULLIS_MIG_HTTPCONTEXT_CURRENT</code><div class="muted-text">System.Web.HttpContext.Current survives the migration</div></td><td>Portcullis</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">1</td><td class="num">0</td></tr>
+<tr><td><code>PORTCULLIS_MIG_SYNC_OVER_ASYNC</code><div class="muted-text">Blocking on a task: .Result, .Wait() or GetAwaiter().GetResult()</div></td><td>Portcullis</td><td class="num">0</td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+<tr><td><code>PORTCULLIS_MIG_SYSTEM_WEB</code><div class="muted-text">A System.Web type survives the migration</div></td><td>Portcullis</td><td class="num">0</td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr>
+</tbody>
+</table>
+</section>
+<section id="regressions">
+<h2>Regressions <span class="count">1</span></h2>
+<p class="muted-text">The candidate breaks a clause the legacy system keeps, gave no answer, or answers differently where neither a clause nor a normalization rule says the difference is acceptable. Each one blocks approval until the candidate is fixed or the contract is changed in a reviewed commit.</p>
+<article class="exchange" id="ex-000001">
+<div class="exchange-head"><span class="badge fail">regression</span> <code class="request">GET /products?sort=name</code> <span class="muted-text">ex-000001 · scenario s-7c1e0a</span></div>
+<ul class="reasons">
+<li><strong>Uncovered difference</strong>: the candidate answers differently, and neither a clause nor a normalization rule says the difference is acceptable.</li>
+</ul>
+<table class="diffs">
+<thead><tr><th>Path</th><th>Legacy</th><th>Candidate</th><th>Explained by</th></tr></thead>
+<tbody>
+<tr><td><code>response.body.json.items[0].name</code></td><td><code>&quot;Zebra mug&quot;</code></td><td><code>&quot;apple pie&quot;</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[0].price</code></td><td><code>7.25</code></td><td><code>12.5</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[0].sku</code></td><td><code>&quot;ZEB-03&quot;</code></td><td><code>&quot;APL-01&quot;</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[1].name</code></td><td><code>&quot;apple pie&quot;</code></td><td><code>&quot;&#233;clair box&quot;</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[1].price</code></td><td><code>12.5</code></td><td><code>19.99</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[1].sku</code></td><td><code>&quot;APL-01&quot;</code></td><td><code>&quot;ECL-02&quot;</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[2].name</code></td><td><code>&quot;&#233;clair box&quot;</code></td><td><code>&quot;Zebra mug&quot;</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[2].price</code></td><td><code>19.99</code></td><td><code>7.25</code></td><td><span class="badge fail">nothing</span></td></tr>
+<tr><td><code>response.body.json.items[2].sku</code></td><td><code>&quot;ECL-02&quot;</code></td><td><code>&quot;ZEB-03&quot;</code></td><td><span class="badge fail">nothing</span></td></tr>
+</tbody>
+</table>
+</article>
+</section>
+<section id="fix-candidates">
+<h2>Fix candidates <span class="count">1</span></h2>
+<p class="muted-text">The candidate keeps a clause the legacy system broke. The change may be exactly what was wanted, or a behaviour someone relies on; a person decides each one.</p>
+<article class="exchange" id="ex-000005">
+<div class="exchange-head"><span class="badge review">fix-candidate</span> <code class="request">POST /checkout</code> <span class="muted-text">ex-000005 · scenario s-19b2f4</span></div>
+<ul class="reasons">
+<li><strong>Clause kept by the candidate</strong>, broken by legacy: <code>CHECKOUT-NEVER-5XX</code> — Checkout never answers with a server error.</li>
+</ul>
+<table class="diffs">
+<thead><tr><th>Path</th><th>Legacy</th><th>Candidate</th><th>Explained by</th></tr></thead>
+<tbody>
+<tr><td><code>response.body.json</code></td><td><span class="muted-text">(absent)</span></td><td><code>{&quot;error&quot;:&quot;cart-empty&quot;}</code></td><td><span class="muted-text">—</span></td></tr>
+<tr><td><code>response.body.text</code></td><td><code>&quot;Object reference not set to an instance of an object.&quot;</code></td><td><span class="muted-text">(absent)</span></td><td><span class="muted-text">—</span></td></tr>
+<tr><td><code>response.headers.content-type[0]</code></td><td><code>&quot;text/plain; charset=utf-8&quot;</code></td><td><code>&quot;application/json; charset=utf-8&quot;</code></td><td><span class="muted-text">—</span></td></tr>
+<tr><td><code>response.status</code></td><td><code>500</code></td><td><code>400</code></td><td><span class="muted-text">—</span></td></tr>
+</tbody>
+</table>
+<table class="compact">
+<thead><tr><th>Clause</th><th>Legacy</th><th>Candidate</th><th>What was found</th></tr></thead>
+<tbody>
+<tr><td><code>CHECKOUT-NEVER-5XX</code></td><td><span class="badge fail">fail</span></td><td><span class="badge pass">pass</span></td><td>legacy: response.status = 500</td></tr>
+<tr><td><code>ORDER-HAS-LOCATION</code></td><td><span class="badge fail">fail</span></td><td><span class="badge fail">fail</span></td><td>legacy: response.status = 500; candidate: response.status = 400</td></tr>
+</tbody>
+</table>
+</article>
+</section>
+<section id="clauses">
+<h2>Clauses <span class="count">6</span></h2>
+<p class="muted-text">What the contract says the system must do and must never do, and how each side did. Only accepted clauses decide; a proposed clause is evaluated and decides nothing until a person accepts it.</p>
+<table>
+<thead><tr><th>Clause</th><th>Status</th><th class="num">Exercised</th><th>Legacy</th><th>Candidate</th></tr></thead>
+<tbody>
+<tr><td><code>TOTAL-NEVER-NEGATIVE</code> <span class="badge muted">never</span><div><strong>A cart or order total is never negative</strong></div><div>For every request: it never happens that response.body.json.total is less than 0.</div><div class="muted-text">Why: A negative total means a discount stacked past the price — the shop pays the customer to take goods.</div></td><td><span class="badge pass">held</span></td><td class="num">5</td><td><span class="tally">5 pass · 0 fail · 0 error</span></td><td><span class="tally">5 pass · 0 fail · 0 error</span></td></tr>
+<tr><td><code>CART-TOTAL-MATCHES-LINES</code> <span class="badge muted">must</span><div><strong>The cart page total equals the sum of its lines</strong></div><div>For GET /cart: extract.cartTotal is present, and extract.cartLineTotals has at least 1 value(s).</div><div class="muted-text">Why: A total that disagrees with the lines the customer sees is a pricing defect and a consumer-law complaint.</div></td><td><span class="badge pass">held</span></td><td class="num">1</td><td><span class="tally">1 pass · 0 fail · 0 error</span></td><td><span class="tally">1 pass · 0 fail · 0 error</span></td></tr>
+<tr><td><code>CHECKOUT-NEVER-5XX</code> <span class="badge muted">never</span><div><strong>Checkout never answers with a server error</strong></div><div>For POST /checkout: it never happens that response.status is at least 500.</div><div class="muted-text">Why: A 5xx at checkout loses the sale and says nothing the customer can act on.</div></td><td><span class="badge review">fixed</span></td><td class="num">2</td><td><span class="tally">1 pass · <span class="fail-text">1 fail</span> · 0 error</span></td><td><span class="tally">2 pass · 0 fail · 0 error</span></td></tr>
+<tr><td><code>ORDER-HAS-LOCATION</code> <span class="badge muted">must</span><div><strong>A created order says where it lives</strong></div><div>For POST /checkout: response.status equals 201, and response.headers.location[0] matches &quot;^/orders/[0-9a-f-]{36}$&quot;.</div><div class="muted-text">Why: Clients follow the Location header to the order; without it the order is created but unreachable.</div></td><td><span class="badge muted">violated-both</span></td><td class="num">2</td><td><span class="tally">1 pass · <span class="fail-text">1 fail</span> · 0 error</span></td><td><span class="tally">1 pass · <span class="fail-text">1 fail</span> · 0 error</span></td></tr>
+<tr><td><code>NO-CARD-NUMBER-IN-RESPONSES</code> <span class="badge muted">never</span><div><strong>No response ever carries a card number field</strong></div><div>For every request: it never happens that response.body.json.**.cardNumber is present.</div><div class="muted-text">Why: A card number in a response is a PCI DSS breach, whatever else the page does.</div></td><td><span class="badge pass">held</span></td><td class="num">5</td><td><span class="tally">5 pass · 0 fail · 0 error</span></td><td><span class="tally">5 pass · 0 fail · 0 error</span></td></tr>
+<tr><td><code>PRODUCTS-PRICED</code> <span class="badge muted">must</span> <span class="badge muted">proposed</span><div><strong>Every listed product has a positive price</strong></div><div>For GET /products: every response.body.json.items[*].price is greater than 0.</div><div class="muted-text">Why: A zero or missing price lets a product be ordered for free.</div></td><td><span class="badge pass">held</span></td><td class="num">1</td><td><span class="tally">1 pass · 0 fail · 0 error</span></td><td><span class="tally">1 pass · 0 fail · 0 error</span></td></tr>
+</tbody>
+</table>
+</section>
+<section id="equal-under-contract">
+<h2>Equal under contract <span class="count">1</span></h2>
+<p class="muted-text">The answers differ only in ways the contract's normalization rules say do not matter. Each rule is part of the reviewed contract.</p>
+<table class="compact">
+<thead><tr><th>Exchange</th><th>Request</th><th class="num">Differences</th><th>Explained by</th></tr></thead>
+<tbody>
+<tr><td>ex-000004</td><td><code>POST /checkout</code></td><td class="num">3</td><td><span class="badge info">masks.guids</span> <span class="badge info">masks.timestamps</span></td></tr>
+</tbody>
+</table>
+</section>
+<section id="equal">
+<h2>Equal <span class="count">2</span></h2>
+<table class="compact">
+<thead><tr><th>Exchange</th><th>Scenario</th><th>Request</th></tr></thead>
+<tbody>
+<tr><td>ex-000002</td><td>s-7c1e0a</td><td><code>POST /cart/items</code></td></tr>
+<tr><td>ex-000003</td><td>s-7c1e0a</td><td><code>GET /cart</code></td></tr>
+</tbody>
+</table>
+</section>
+<section id="normalization">
+<h2>What the contract says does not matter</h2>
+<ul>
+<li>Response headers compared: <code>content-type</code>, <code>location</code>; every other header is not compared.</li>
+<li>HTML pages are compared only through the values the contract extracts from them; markup is not compared.</li>
+<li>Ignored: <code>response.body.json.generatedAt</code></li>
+<li>Tolerance: <code>response.body.json.total</code> within ±0.01</li>
+<li>Tolerance: <code>response.body.json.items[*].lineTotal</code> within ±0.01</li>
+<li>Masked: ISO-8601 date-times</li>
+<li>Masked: GUIDs</li>
+</ul>
+</section>
+<section id="limitations">
+<h2>What this evidence does not show</h2>
+<ul>
+<li>Only the recorded traffic was compared: 5 exchange(s) in 2 scenario(s). Behaviour the recording did not exercise is not covered by this verdict.</li>
+<li>1 proposed clause(s) were evaluated and decided nothing.</li>
+<li>1 accepted clause(s) are broken on both sides — defects the migration preserved, which do not fail this verdict: ORDER-HAS-LOCATION.</li>
+<li>This pack is not signed. statement.intoto.json names the SHA-256 of every file in it; signing that statement with the owner&#39;s key arrives in phase 03.</li>
+</ul>
+</section>
+<section id="integrity">
+<h2>Integrity</h2>
+<p class="muted-text">The verdict names the SHA-256 of the contract and the run it was computed from. Recomputing it — <code>sk compare --contract contract.yaml --run &lt;run&gt;</code> — gives the same verdict, apart from the time it was made.</p>
+<table class="compact">
+<thead><tr><th>What</th><th>SHA-256</th></tr></thead>
+<tbody>
+<tr><td>Contract <code>contract.yaml</code> (revision 1)</td><td><code>fedf9fe8bdc18c19846fd5ffe14a2852fcbe26135a674c4ca61c07b62c710b5d</code></td></tr>
+<tr><td>Run <code>sample.skrun</code></td><td><code>bcd1fff5cc5f831bab465b7c0fbea68c08d3c538c3c2e0bbd1d2adaf0bc81699</code></td></tr>
+<tr><td><code>verdict.json</code></td><td><code>cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc</code></td></tr>
+<tr><td><code>sarif/portcullis.sarif</code></td><td><code>dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd</code></td></tr>
+</tbody>
+</table>
+</section>
+<footer>
+<p>Generated by secondkey 0.1.0 (abc1234) at 2026-09-26 10:05:00 UTC. The verdict is computed by code alone: no language model takes part in it, and the same contract and run always give the same verdict.</p>
+</footer>
+</main>
+</body>
+</html>

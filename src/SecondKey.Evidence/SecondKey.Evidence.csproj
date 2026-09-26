@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>C10: the evidence pack — a standalone HTML report, a PDF, a manifest and an unsigned in-toto statement, from verdict.json, the contract and the gate's SARIF.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecondKey.Artifacts\SecondKey.Artifacts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SecondKey.Evidence.Tests" />
+  </ItemGroup>
+
+</Project>

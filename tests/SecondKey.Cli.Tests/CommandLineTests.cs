@@ -20,9 +20,7 @@ public class CommandLineTests
 
     [Theory]
     [InlineData("mine")]
-    [InlineData("gate")]
     [InlineData("mutate")]
-    [InlineData("evidence")]
     public async Task A_stub_says_where_it_is_planned_and_exits_70(string step)
     {
         var (exit, _, error) = await RunAsync(step);

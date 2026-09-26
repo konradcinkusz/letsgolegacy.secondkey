@@ -218,6 +218,9 @@ public sealed record EvidenceConfig
 
     public string? Contract { get; init; }
 
+    /// <summary>The run to include in the pack, so the verdict can be recomputed from it.</summary>
+    public string? Run { get; init; }
+
     public IReadOnlyList<string>? Sarif { get; init; }
 
     public string? Out { get; init; }

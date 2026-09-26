@@ -13,9 +13,9 @@ dotnet run --project src/SecondKey.Cli -- --help
 | `sk mine` | C2 — propose contract clauses from recordings | planned, phase 02 (exits 70) |
 | `sk replay` | C6 — replay a capture against both sides under identical conditions | available (S10–S11) |
 | `sk compare` | C7 — compare the two sides against the contract into `verdict.json` | available (S12–S13) |
-| `sk gate` | C5 — summarize the gate's SARIF per rule | S14 |
+| `sk gate` | C5 — summarize the gate's SARIF per rule | available (S14) |
 | `sk mutate` | C9 — inject defects the contract must catch | planned, phase 02 (exits 70) |
-| `sk evidence` | C10 — assemble the evidence pack | S14 |
+| `sk evidence` | C10 — assemble the evidence pack | available (S14) |
 | `sk validate <file>...` | check artifacts against their formats | available |
 
 `--config <path>` points every command at a `secondkey.yaml` (default: `./secondkey.yaml`
@@ -33,6 +33,19 @@ Places every replayed exchange in one of four classes — `equal`, `equal-under-
 has to look at, and exits **0** on `pass`, **1** on `fail` (any regression) and **2** on
 `review` (no regression, a fix candidate to decide). A run with no results is invalid
 input (3): nothing was compared, so nothing can pass.
+
+## `sk gate` and `sk evidence`
+
+```sh
+sk gate --sarif portcullis.sarif
+sk evidence --verdict verdict.json --contract contract.yaml --run run.skrun --sarif portcullis.sarif --out evidence
+```
+
+`sk gate` summarizes the gate's SARIF per rule and exits **1** when a finding blocks — an
+error that is neither suppressed nor known from the baseline — and 0 otherwise.
+`sk evidence` writes the pack and exits 0 whatever the verdict, so a pipeline can publish
+the pack that explains a failure; it refuses a contract or a run the verdict does not name.
+Both are described in [the evidence pack](formats/evidence.md).
 
 ## Exit codes
 
@@ -71,7 +84,8 @@ replay:
   correlation:                           # values the server generates that later requests must echo
     - { name: csrf, regex: 'name="__RequestVerificationToken" type="hidden" value="([^"]+)"', formField: __RequestVerificationToken }
 compare: { contract: contract.yaml, run: .secondkey/run.skrun, out: .secondkey/verdict.json }
-evidence: { verdict: .secondkey/verdict.json, contract: contract.yaml, sarif: [gate.sarif], out: .secondkey/evidence, pdf: auto }
+gate: { sarif: [gate.sarif] }
+evidence: { verdict: .secondkey/verdict.json, contract: contract.yaml, run: .secondkey/run.skrun, sarif: [gate.sarif], out: .secondkey/evidence, pdf: auto }
 ```
 
 Secrets never live in this file: a connection string is named by the environment variable
