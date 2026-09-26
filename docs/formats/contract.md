@@ -78,7 +78,7 @@ Path syntax: `.name`, `[3]`, `[*]` (every element), `.**` (any depth), and
 | `matches` / `notMatches` | `value` (regex) | the string matches (culture-invariant) |
 | `contains` / `notContains` | `value` or `ref` | substring, or array membership |
 | `in` / `notIn` | `value` (list) | the value is one of the list |
-| `countEquals` `countAtLeast` `countAtMost` | `value` (integer) | on the number of selected values |
+| `countEquals` `countAtLeast` `countAtMost` | `value` (integer) | on the number of selected values — or, when a path without `[*]`/`**` lands on one array (an `all: true` extractor), on that array's elements |
 
 `ref` compares against another selected value instead of a literal
 (`{ select: extract.cartTotal, op: equals, ref: response.body.json.total }`).
