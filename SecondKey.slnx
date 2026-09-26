@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/SecondKey.Artifacts/SecondKey.Artifacts.csproj" />
+    <Project Path="src/SecondKey.Cli/SecondKey.Cli.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/SecondKey.Artifacts.Tests/SecondKey.Artifacts.Tests.csproj" />
+    <Project Path="tests/SecondKey.Cli.Tests/SecondKey.Cli.Tests.csproj" />
   </Folder>
 </Solution>
