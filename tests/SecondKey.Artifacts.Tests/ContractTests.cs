@@ -62,7 +62,71 @@ public class ContractTests
         { "an attribute on a non-html extractor", "    from: html\n    selector: \".order-total\"", "    from: json\n    selector: total\n    attribute: href", "/extract/0", "" },
         { "a json extractor path that does not parse", "    from: html\n    selector: \".order-total\"", "    from: json\n    selector: \"items[\"", "/extract/0/selector", "unterminated" },
         { "a duplicate YAML key", "  revision: 1\n", "  revision: 1\n  revision: 2\n", "", "Duplicate key revision" },
+        { "a comparison on a whole list", "{ select: extract.cartLineTotals, op: countAtLeast, value: 1 }", "{ select: extract.cartLineTotals, op: gt, value: 0 }", "/clauses/1/assert/1/select", "'extract.cartLineTotals' is the whole list that extractor 'cartLineTotals' collects (all: true), but 'gt' tests one value" },
+        { "a path that does not parse, under a single-value operator", "{ select: response.body.json.total, op: lt, value: 0 }", "{ select: \"response.body.json.total[\", op: lt, value: 0 }", "/clauses/0/assert/0/select", "unterminated" },
+        { "a reference to a whole list", "{ select: response.body.json.total, op: lt, value: 0 }", "{ select: response.body.json.total, op: lt, ref: extract.cartLineTotals }", "/clauses/0/assert/0/ref", "Test each value with 'extract.cartLineTotals[*]'" },
     };
+
+    [Fact]
+    public void A_contract_without_extractors_validates()
+    {
+        const string yaml = """
+            apiVersion: secondkey/v1
+            kind: Contract
+            metadata:
+              name: no-extractors
+              revision: 1
+            clauses:
+              - id: CHECKOUT-NEVER-5XX
+                kind: never
+                title: Checkout never answers with a server error
+                why: A 5xx at checkout loses the sale and says nothing the customer can act on.
+                when: { method: POST, path: "^/checkout$" }
+                assert:
+                  - { select: response.status, op: gte, value: 500 }
+                provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+            """;
+
+        var report = ContractFile.ValidateText(yaml, "no extractors");
+
+        Assert.True(report.IsValid, report.ToString());
+    }
+
+    [Theory]
+    [InlineData("lt", "value: 0")]
+    [InlineData("lte", "value: 0")]
+    [InlineData("gt", "value: 0")]
+    [InlineData("gte", "value: 0")]
+    [InlineData("between", "min: 0, max: 1")]
+    [InlineData("approx", "value: 0, absolute: 1")]
+    [InlineData("matches", "value: \"^-\"")]
+    [InlineData("notMatches", "value: \"^-\"")]
+    public void Every_single_value_operator_is_refused_on_a_whole_list(string op, string operand)
+    {
+        var yaml = SampleYaml.Replace("{ select: extract.cartLineTotals, op: countAtLeast, value: 1 }", $"{{ select: extract.cartLineTotals, op: {op}, {operand} }}", StringComparison.Ordinal);
+
+        var report = ContractFile.ValidateText(yaml, op);
+
+        var error = Assert.Single(report.Errors);
+        Assert.Equal("/clauses/1/assert/1/select", error.Location);
+        Assert.Contains($"but '{op}' tests one value", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{ select: \"extract.cartLineTotals[*]\", op: gt, value: 0 }")]
+    [InlineData("{ select: \"extract.cartLineTotals[*]\", op: between, min: 0, max: 1000 }")]
+    [InlineData("{ select: \"extract.cartLineTotals[0]\", op: gte, value: 0 }")]
+    [InlineData("{ select: extract.cartLineTotals, op: contains, value: 19.99 }")]
+    [InlineData("{ select: extract.cartLineTotals, op: countAtMost, value: 50 }")]
+    [InlineData("{ select: extract.cartTotal, op: gt, value: 0 }")]
+    public void A_list_is_counted_searched_or_tested_value_by_value(string assertion)
+    {
+        var yaml = SampleYaml.Replace("{ select: extract.cartLineTotals, op: countAtLeast, value: 1 }", assertion, StringComparison.Ordinal);
+
+        var report = ContractFile.ValidateText(yaml, assertion);
+
+        Assert.True(report.IsValid, report.ToString());
+    }
 
     [Theory]
     [MemberData(nameof(BrokenContracts))]
@@ -138,7 +202,7 @@ public class ContractTests
         var yaml = SampleYaml
             .Replace("kind: never", "kind: must", StringComparison.Ordinal)
             .Replace("kind: must\n    title: A cart or order total is never negative", "kind: never\n    title: A cart or order total is never negative", StringComparison.Ordinal)
-            .Replace("provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }\n\n  - id: CART-TOTAL", "provenance: { origin: designed, status: proposed }\n\n  - id: CART-TOTAL", StringComparison.Ordinal);
+            .Replace("provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }\n\n  - id: CART-SHOWS", "provenance: { origin: designed, status: proposed }\n\n  - id: CART-SHOWS", StringComparison.Ordinal);
 
         var report = ContractFile.ValidateText(yaml, "only a proposed absence");
 

@@ -18,7 +18,7 @@ public class ContractEngineTests
         var report = Engine.EvaluateRun(SampleRun());
 
         Assert.Equal(ClauseStatus.Held, Summary(report, "TOTAL-NEVER-NEGATIVE").Status);
-        Assert.Equal(ClauseStatus.Held, Summary(report, "CART-TOTAL-MATCHES-LINES").Status);
+        Assert.Equal(ClauseStatus.Held, Summary(report, "CART-SHOWS-TOTAL-AND-LINES").Status);
         Assert.Equal(ClauseStatus.Fixed, Summary(report, "CHECKOUT-NEVER-5XX").Status);
         Assert.Equal(ClauseStatus.ViolatedBoth, Summary(report, "ORDER-HAS-LOCATION").Status);
         Assert.Equal(ClauseStatus.Held, Summary(report, "NO-CARD-NUMBER-IN-RESPONSES").Status);
@@ -35,7 +35,7 @@ public class ContractEngineTests
         Assert.Equal(new Tally { Pass = 1, Fail = 1, Error = 0 }, checkout.Legacy);
         Assert.Equal(new Tally { Pass = 2, Fail = 0, Error = 0 }, checkout.Candidate);
         Assert.Equal(5, Summary(report, "TOTAL-NEVER-NEGATIVE").Exercised);
-        Assert.Equal(1, Summary(report, "CART-TOTAL-MATCHES-LINES").Exercised);
+        Assert.Equal(1, Summary(report, "CART-SHOWS-TOTAL-AND-LINES").Exercised);
         Assert.False(Summary(report, "PRODUCTS-PRICED").Accepted);
         Assert.True(Summary(report, "CHECKOUT-NEVER-5XX").Accepted);
         Assert.Equal("never", checkout.Kind);
@@ -94,7 +94,7 @@ public class ContractEngineTests
         {
             "the cart page loses its total", "ex-000003",
             r => r with { Response = HtmlResponse(200, "<table class=\"lines\"><tr><td class=\"line-total\">59.97</td></tr></table>") },
-            "CART-TOTAL-MATCHES-LINES"
+            "CART-SHOWS-TOTAL-AND-LINES"
         },
         {
             "the candidate does not answer at all", "ex-000004",
@@ -116,11 +116,11 @@ public class ContractEngineTests
     public void A_clause_whose_scope_never_matches_is_unexercised_not_passed()
     {
         var contract = SampleContract().Document;
-        var clauses = contract.Clauses.Select(c => c.Id == "CART-TOTAL-MATCHES-LINES" ? c with { When = c.When! with { Path = "^/basket$" } } : c).ToList();
+        var clauses = contract.Clauses.Select(c => c.Id == "CART-SHOWS-TOTAL-AND-LINES" ? c with { When = c.When! with { Path = "^/basket$" } } : c).ToList();
 
         var report = ContractEngine.Compile(contract with { Clauses = clauses }).EvaluateRun(SampleRun());
 
-        var summary = Summary(report, "CART-TOTAL-MATCHES-LINES");
+        var summary = Summary(report, "CART-SHOWS-TOTAL-AND-LINES");
         Assert.Equal(ClauseStatus.Unexercised, summary.Status);
         Assert.Equal(0, summary.Exercised);
         Assert.Equal(new Tally { Pass = 0, Fail = 0, Error = 0 }, summary.Legacy);

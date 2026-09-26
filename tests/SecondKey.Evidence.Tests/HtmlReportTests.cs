@@ -186,7 +186,7 @@ public class HtmlReportTests
         {
             Clauses = sample.Clauses.Select(c => c.Id switch
             {
-                "CART-TOTAL-MATCHES-LINES" => c with { Status = ClauseStatus.Unexercised, Exercised = 0 },
+                "CART-SHOWS-TOTAL-AND-LINES" => c with { Status = ClauseStatus.Unexercised, Exercised = 0 },
                 "TOTAL-NEVER-NEGATIVE" => c with { Status = ClauseStatus.Regressed, Candidate = new Tally { Pass = 4, Fail = 0, Error = 1 } },
                 _ => c,
             }).ToList(),
@@ -194,7 +194,7 @@ public class HtmlReportTests
 
         var html = Render(verdict);
 
-        Assert.Contains("1 accepted clause(s) were not exercised by any request and are not reported as passed: CART-TOTAL-MATCHES-LINES.", html, StringComparison.Ordinal);
+        Assert.Contains("1 accepted clause(s) were not exercised by any request and are not reported as passed: CART-SHOWS-TOTAL-AND-LINES.", html, StringComparison.Ordinal);
         Assert.Contains("<span class=\"badge fail\">regressed</span>", html, StringComparison.Ordinal);
         Assert.Contains("<span class=\"badge review\">unexercised</span>", html, StringComparison.Ordinal);
         Assert.Contains("<span class=\"fail-text\">1 error</span>", html, StringComparison.Ordinal);

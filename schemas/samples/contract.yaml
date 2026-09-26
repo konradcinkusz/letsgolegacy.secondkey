@@ -48,10 +48,10 @@ clauses:
       - { select: response.body.json.total, op: lt, value: 0 }
     provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
 
-  - id: CART-TOTAL-MATCHES-LINES
+  - id: CART-SHOWS-TOTAL-AND-LINES
     kind: must
-    title: The cart page total equals the sum of its lines
-    why: A total that disagrees with the lines the customer sees is a pricing defect and a consumer-law complaint.
+    title: The cart page shows a total and at least one line
+    why: A cart page without its total or its lines leaves the customer nothing to check the price against.
     when: { method: GET, path: "^/cart$" }
     assert:
       - { select: extract.cartTotal, op: exists }
