@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>C7: compares what the legacy system and the candidate answered, against the contract, into a four-class verdict. Deterministic; no model in it.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SecondKey.Contract\SecondKey.Contract.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SecondKey.Compare.Tests" />
+  </ItemGroup>
+
+</Project>
