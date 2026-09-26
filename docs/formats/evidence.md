@@ -43,11 +43,12 @@ sk compare --contract contract.yaml --run run.skrun --out recomputed.json   # th
 
 `--pdf auto` (the default) prints the report when a Chromium-based browser is on the
 machine and says so when none is; `--pdf required` makes a missing PDF a failure (exit 4);
-`--pdf off` skips it. The browser is found through `SK_CHROME_PATH`, then the PATH
-(`chromium`, `google-chrome`, `microsoft-edge`, …), then where Chrome, Edge and
-Playwright install it. The browser's sandbox is switched off, because it is unavailable to
-root in containers and on some CI images; what it renders is the pack's own static page,
-which can neither run a script nor make a request.
+`--pdf off` skips it. The browser is found through `SK_CHROME_PATH`, then the PATH —
+Google Chrome and Edge before Chromium, whose builds vary more — then where Chrome, Edge
+and Playwright install it. A browser that has not printed within a minute is stopped, and
+the error says the last thing it wrote. The browser's sandbox is switched off, because it
+is unavailable to root in containers and on some CI images; what it renders is the pack's
+own static page, which can neither run a script nor make a request.
 
 ## The gate
 

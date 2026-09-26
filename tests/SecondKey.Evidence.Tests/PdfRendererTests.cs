@@ -36,6 +36,13 @@ public class PdfRendererTests
     }
 
     [Fact]
+    public void Google_chrome_is_preferred_to_chromium_in_the_same_directory()
+    {
+        Assert.Equal("/usr/bin/google-chrome", PdfRenderer.FindBrowser(Environment(("PATH", "/usr/bin")), path => path is "/usr/bin/chromium" or "/usr/bin/google-chrome", windows: false));
+        Assert.Equal("/usr/bin/msedge", PdfRenderer.FindBrowser(Environment(("PATH", "/usr/bin")), path => path is "/usr/bin/chromium-browser" or "/usr/bin/msedge", windows: false));
+    }
+
+    [Fact]
     public void The_path_is_searched_directory_by_directory_and_an_empty_setting_is_no_setting()
     {
         var found = PdfRenderer.FindBrowser(
@@ -139,12 +146,18 @@ public class PdfRendererTests
         Assert.Equal(new PdfOutcome(true, browser, null), outcome);
         var arguments = File.ReadAllLines(directory.File("arguments.txt"));
         Assert.Equal(
-            ["--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check", "--disable-extensions", "--disable-background-networking"],
-            arguments[..7]);
-        Assert.StartsWith("--user-data-dir=", arguments[7], StringComparison.Ordinal);
-        Assert.False(Directory.Exists(arguments[7]["--user-data-dir=".Length..]), "the browser profile is removed");
-        Assert.Equal(["--no-pdf-header-footer", "--print-to-pdf-no-header", $"--print-to-pdf={directory.File("a.pdf")}", new Uri(html).AbsoluteUri], arguments[8..]);
+            [
+                "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+                "--disable-extensions", "--disable-background-networking", "--disable-component-update",
+                "--disable-default-apps", "--disable-sync", "--disable-breakpad", "--disable-dev-shm-usage",
+                "--password-store=basic", "--use-mock-keychain", "--mute-audio", "--hide-scrollbars",
+            ],
+            arguments[..16]);
+        Assert.StartsWith("--user-data-dir=", arguments[16], StringComparison.Ordinal);
+        Assert.False(Directory.Exists(arguments[16]["--user-data-dir=".Length..]), "the browser profile is removed");
+        Assert.Equal(["--no-pdf-header-footer", "--print-to-pdf-no-header", $"--print-to-pdf={directory.File("a.pdf")}", new Uri(html).AbsoluteUri], arguments[17..]);
         Assert.EndsWith("a%20b.html", arguments[^1], StringComparison.Ordinal);
+        Assert.Equal("disabled:", File.ReadAllText(directory.File("dbus.txt")));
     }
 
     [Fact]
@@ -232,6 +245,30 @@ public class PdfRendererTests
     }
 
     [Fact]
+    public async Task A_browser_that_hangs_is_reported_with_the_last_thing_it_said()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var directory = new TempDirectory();
+        var html = directory.File("a.html");
+        await File.WriteAllTextAsync(html, "<p>x</p>");
+        var hangs = Script(directory, "hangs", "echo 'starting' >&2\necho 'waiting for the keyring' >&2\nexec sleep 30");
+
+        var outcome = await PdfRenderer.RenderAsync(html, directory.File("a.pdf"), PdfMode.Auto, CancellationToken.None, hangs, TimeSpan.FromMilliseconds(500));
+
+        Assert.Equal($"{hangs} did not finish within 0.5 s: waiting for the keyring", outcome.Reason);
+    }
+
+    [Fact]
+    public void A_browser_gets_a_minute_by_default()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(60), PdfRenderer.DefaultTimeout);
+    }
+
+    [Fact]
     public async Task A_browser_that_cannot_be_started_is_reported()
     {
         using var directory = new TempDirectory();
@@ -298,6 +335,7 @@ public class PdfRendererTests
         directory,
         "fake-browser",
         $$"""
+        printf '%s' "$DBUS_SESSION_BUS_ADDRESS" > '{{directory.File("dbus.txt")}}'
         : > '{{directory.File("arguments.txt")}}'
         for a in "$@"; do
           printf '%s\n' "$a" >> '{{directory.File("arguments.txt")}}'

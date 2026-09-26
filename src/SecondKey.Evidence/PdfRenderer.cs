@@ -44,14 +44,31 @@ public sealed class PdfRenderingException : Exception
 /// content security policy that forbids any request, which is why the browser's sandbox,
 /// unavailable to root in containers and on some CI images, is switched off.
 /// </summary>
+/// <remarks>
+/// Google Chrome is preferred to a Chromium of unknown origin: on GitHub's Ubuntu runners the
+/// <c>chromium</c> on the PATH hangs in headless mode where Chrome prints at once. The flags are
+/// the ones browser automation uses in CI to keep headless Chrome from waiting on a keyring,
+/// a crash reporter, an updater or a small <c>/dev/shm</c>.
+/// </remarks>
 public static class PdfRenderer
 {
     public const string BrowserVariable = "SK_CHROME_PATH";
 
+    /// <summary>A browser that has not printed by then is stopped; a report prints in seconds.</summary>
+    public static TimeSpan DefaultTimeout { get; } = TimeSpan.FromSeconds(60);
+
     private static readonly string[] Names =
     [
-        "chromium", "chromium-browser", "google-chrome", "google-chrome-stable", "chrome",
-        "microsoft-edge", "microsoft-edge-stable", "msedge",
+        "google-chrome", "google-chrome-stable", "chrome", "microsoft-edge", "microsoft-edge-stable", "msedge",
+        "chromium", "chromium-browser",
+    ];
+
+    private static readonly string[] Flags =
+    [
+        "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
+        "--disable-extensions", "--disable-background-networking", "--disable-component-update",
+        "--disable-default-apps", "--disable-sync", "--disable-breakpad", "--disable-dev-shm-usage",
+        "--password-store=basic", "--use-mock-keychain", "--mute-audio", "--hide-scrollbars",
     ];
 
     /// <summary>The browser to use, or null when there is none.</summary>
@@ -63,7 +80,6 @@ public static class PdfRenderer
     /// <summary>The search itself, with the operating system as a parameter so each one's places can be tested anywhere.</summary>
     internal static string? FindBrowser(Func<string, string?> environment, Func<string, bool> exists, bool windows)
     {
-
         if (environment(BrowserVariable) is { Length: > 0 } configured)
         {
             return exists(configured) ? configured : throw new PdfRenderingException($"{BrowserVariable} is set to '{configured}', which does not exist");
@@ -95,7 +111,7 @@ public static class PdfRenderer
         try
         {
             browser = find() ?? throw new PdfRenderingException($"no Chromium-based browser found; install Chrome, Edge or Chromium, or set {BrowserVariable}");
-            await PrintAsync(browser, htmlPath, pdfPath, timeout ?? TimeSpan.FromMinutes(2), cancellationToken).ConfigureAwait(false);
+            await PrintAsync(browser, htmlPath, pdfPath, timeout ?? DefaultTimeout, cancellationToken).ConfigureAwait(false);
             return new PdfOutcome(true, browser, null);
         }
         catch (PdfRenderingException ex) when (mode == PdfMode.Auto)
@@ -116,13 +132,16 @@ public static class PdfRenderer
                 RedirectStandardOutput = true,
                 UseShellExecute = false,
             };
-            foreach (var argument in new[]
-            {
-                "--headless=new", "--disable-gpu", "--no-sandbox", "--no-first-run", "--no-default-browser-check",
-                "--disable-extensions", "--disable-background-networking", $"--user-data-dir={profile.FullName}",
+
+            // A session bus that answers nothing makes every D-Bus call wait out its timeout;
+            // printing needs no bus, so each call fails at once instead.
+            start.Environment["DBUS_SESSION_BUS_ADDRESS"] = "disabled:";
+            foreach (var argument in Flags.Concat(
+            [
+                $"--user-data-dir={profile.FullName}",
                 "--no-pdf-header-footer", "--print-to-pdf-no-header", $"--print-to-pdf={Path.GetFullPath(pdfPath)}",
                 new Uri(Path.GetFullPath(htmlPath)).AbsoluteUri,
-            })
+            ]))
             {
                 start.ArgumentList.Add(argument);
             }
@@ -144,15 +163,15 @@ public static class PdfRenderer
                     throw;
                 }
 
-                throw new PdfRenderingException(string.Create(CultureInfo.InvariantCulture, $"{browser} did not finish within {timeout.TotalSeconds} s"));
+                // What the browser said last is usually what it was waiting for.
+                var said = await Said(errors, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                throw new PdfRenderingException(string.Create(CultureInfo.InvariantCulture, $"{browser} did not finish within {timeout.TotalSeconds} s{said}"));
             }
 
             if (process.ExitCode != 0 || !IsPdf(pdfPath))
             {
-                var detail = (await errors.ConfigureAwait(false)).Trim();
-                throw new PdfRenderingException(string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"{browser} exited with {process.ExitCode} and wrote no PDF{(detail.Length > 0 ? ": " + Last(detail) : string.Empty)}"));
+                var said = await Said(errors, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                throw new PdfRenderingException(string.Create(CultureInfo.InvariantCulture, $"{browser} exited with {process.ExitCode} and wrote no PDF{said}"));
             }
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or IOException)
@@ -196,10 +215,17 @@ public static class PdfRenderer
         return stream.Read(header) == 5 && header.SequenceEqual("%PDF-"u8);
     }
 
-    private static string Last(string text)
+    /// <summary>
+    /// ": " and the last line the browser wrote to its error output, or nothing when it wrote
+    /// none. The wait is bounded: a helper the browser left behind can hold the pipe open.
+    /// </summary>
+    private static async Task<string> Said(Task<string> errors, TimeSpan wait)
     {
-        var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return lines[^1];
+        var finished = await Task.WhenAny(errors, Task.Delay(wait)).ConfigureAwait(false);
+        var lines = finished == errors
+            ? (await errors.ConfigureAwait(false)).Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : [];
+        return lines.Length > 0 ? ": " + lines[^1] : string.Empty;
     }
 
     private static IEnumerable<string> WellKnown(Func<string, string?> environment, bool windows)
