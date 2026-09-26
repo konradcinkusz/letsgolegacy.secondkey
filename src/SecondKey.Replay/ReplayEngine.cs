@@ -75,8 +75,8 @@ public static class ReplayEngine
             Capture = new CaptureReference
             {
                 CaptureId = options.Capture.Header.CaptureId,
-                Sha256 = options.CapturePath is { } path ? Sha256Digest.OfFile(path) : new string('0', 64),
-                Path = options.CapturePath is { } p ? Path.GetFileName(p) : null,
+                Sha256 = options.CapturePath is null ? new string('0', 64) : Sha256Digest.OfFile(options.CapturePath),
+                Path = options.CapturePath is null ? null : Path.GetFileName(options.CapturePath),
             },
             Sides = new RunSides
             {
@@ -171,7 +171,8 @@ public static class ReplayEngine
         };
         using var client = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
         var correlated = new Dictionary<string, string>(StringComparer.Ordinal);
-        var before = reset.Succeeded && target.Probe is { } probe ? await probe.SnapshotAsync(cancellationToken).ConfigureAwait(false) : null;
+        var probe = target.Probe;
+        var before = reset.Succeeded && probe is not null ? await probe.SnapshotAsync(cancellationToken).ConfigureAwait(false) : null;
 
         foreach (var exchange in exchanges)
         {
@@ -211,9 +212,9 @@ public static class ReplayEngine
             }
 
             DbDelta? delta = null;
-            if (target.Probe is { } watched && before is not null)
+            if (probe is not null && before is not null)
             {
-                var after = await watched.SnapshotAsync(cancellationToken).ConfigureAwait(false);
+                var after = await probe.SnapshotAsync(cancellationToken).ConfigureAwait(false);
                 delta = SqlServerTableProbe.Diff(before, after);
                 before = after;
             }
@@ -292,14 +293,16 @@ public static class ReplayEngine
                 continue;
             }
 
-            if (rule.Header is { } header && headers.ContainsKey(header.ToLowerInvariant()))
+            var header = rule.Header?.ToLowerInvariant();
+            if (header is not null && headers.ContainsKey(header))
             {
-                headers[header.ToLowerInvariant()] = [value];
+                headers[header] = [value];
             }
 
-            if (rule.FormField is { } field && body is { Encoding: BodyEncoding.Text, Text: { } text } && IsForm(body.ContentType))
+            var form = FormText(body);
+            if (rule.FormField is not null && form is not null)
             {
-                body = body with { Text = ReplaceFormField(text, field, value) };
+                body = body! with { Text = ReplaceFormField(form, rule.FormField, value) };
             }
         }
 
@@ -308,7 +311,8 @@ public static class ReplayEngine
 
     private static void Learn(HttpResponseRecord response, IReadOnlyList<CorrelationRule> rules, Dictionary<string, string> values)
     {
-        if (response.Body?.Text is not { } text)
+        var text = response.Body?.Text;
+        if (text is null)
         {
             return;
         }
@@ -339,8 +343,11 @@ public static class ReplayEngine
         return string.Join('&', parts);
     }
 
-    private static bool IsForm(string? contentType) =>
-        BodyCodec.MediaType(contentType) == "application/x-www-form-urlencoded";
+    /// <summary>The body's text when it is a URL-encoded form, otherwise null.</summary>
+    private static string? FormText(BodyRecord? body) =>
+        body is not null && body.Encoding == BodyEncoding.Text && BodyCodec.MediaType(body.ContentType) == "application/x-www-form-urlencoded"
+            ? body.Text
+            : null;
 
     private static SortedDictionary<string, string[]> Headers(HttpResponseMessage answer)
     {

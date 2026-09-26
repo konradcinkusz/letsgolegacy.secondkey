@@ -33,6 +33,27 @@ public class ResetTests
     }
 
     [Fact]
+    public async Task A_command_reset_runs_in_its_working_directory()
+    {
+        var directory = Directory.CreateTempSubdirectory("sk-reset-").FullName;
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(directory, "restore.marker"), "x");
+
+            var inDirectory = await new CommandReset("test -f restore.marker", directory).ResetAsync(CancellationToken.None);
+            var elsewhere = await new CommandReset("test -f restore.marker", workingDirectory: null).ResetAsync(CancellationToken.None);
+
+            Assert.True(inDirectory.Succeeded, inDirectory.Detail);
+            Assert.Null(inDirectory.Detail);
+            Assert.False(elsewhere.Succeeded);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task An_http_reset_succeeds_on_2xx_and_explains_anything_else()
     {
         await using var shop = new SampleShopHost("legacy");
@@ -43,6 +64,7 @@ public class ResetTests
         var down = await new HttpReset(client, new Uri("http://127.0.0.1:9"), "POST", "/__sk/reset").ResetAsync(CancellationToken.None);
 
         Assert.True(ok.Succeeded);
+        Assert.Null(ok.Detail);
         Assert.False(missing.Succeeded);
         Assert.EndsWith("/nope answered 404", missing.Detail, StringComparison.Ordinal);
         Assert.False(down.Succeeded);
@@ -53,7 +75,7 @@ public class ResetTests
     public void Bad_arguments_are_refused()
     {
         Assert.Throws<ArgumentNullException>(() => new HttpReset(null!, new Uri("http://x"), "POST", "/"));
-        Assert.Throws<ArgumentNullException>(() => new HttpReset(new HttpClient(), null!, "POST", "/"));
+        Assert.Equal("baseUrl", Assert.Throws<ArgumentNullException>(() => new HttpReset(new HttpClient(), null!, "POST", "/")).ParamName);
         Assert.ThrowsAny<ArgumentException>(() => new CommandReset(" ", null));
         Assert.ThrowsAny<ArgumentException>(() => new SqlServerSnapshotReset("", "db", "snap"));
     }
