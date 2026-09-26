@@ -52,10 +52,10 @@ Critical path: S0 → S1 → S3–S6 → S7–S14 → S15 → (bench P3) → (be
 | S9 | C1 HTTP capture: YARP recording proxy writing `*.skcap`, inbound only | A request through the proxy to a sample app produces a valid `.skcap` line | done (#4) |
 | S10 | C6 replay: `*.skcap` replayed against two base addresses, `*.skrun` written | Both sides are recorded for the sample | done (#4) |
 | S11 | C6 state reset: SQL Server snapshot restored before each scenario | A test proves two consecutive scenarios start from the same state | done (#4) |
-| S12 | C7 canonical JSON and normalization (ignored paths, tolerances, sets, timestamps, GUIDs) | Normalization tests pass | in review (#8) |
-| S13 | C7 diff and four-class verdict into `verdict.json` | Fixtures produce both a regression and a fix candidate | in review (#8) |
-| S14 | C10 unsigned evidence pack: standalone HTML from `verdict.json`, SARIF and the contract; PDF through a headless browser | The pack renders from fixtures | in review (#8) |
-| S15 | End-to-end job: capture → replay → compare → evidence on the sample app, in CI | One CI job produces the pack | in review (#8) |
+| S12 | C7 canonical JSON and normalization (ignored paths, tolerances, sets, timestamps, GUIDs) | Normalization tests pass | done (#8) |
+| S13 | C7 diff and four-class verdict into `verdict.json` | Fixtures produce both a regression and a fix candidate | done (#8) |
+| S14 | C10 unsigned evidence pack: standalone HTML from `verdict.json`, SARIF and the contract; PDF through a headless browser | The pack renders from fixtures | done (#8) |
+| S15 | End-to-end job: capture → replay → compare → evidence on the sample app, in CI | One CI job produces the pack | done (#8) |
 | S16 | C6 outbound stubs with WireMock.Net from recorded traffic | Phase 01 only if the specimen calls out (payments, shipping); otherwise phase 02 | phase 02 — neither the sample shop nor nopCommerce's demo configuration calls out |
 
 ## Phase 02 and later (starts after the phase 01 gate)
