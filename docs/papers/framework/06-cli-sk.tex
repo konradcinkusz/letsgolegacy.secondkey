@@ -191,7 +191,8 @@ legacy \\
 kandydat \\
 \texttt{-{}-out <file>}\newline \path{replay.out} & \path{.secondkey/run.skrun} & przebieg \\
 \texttt{-{}-scenario-mode <mode>}\newline \path{replay.scenarioMode} & \texttt{session} &
-\texttt{session}: jeden scenariusz na nagraną sesję; \texttt{exchange}: jeden na wymianę \\
+\texttt{session}: jeden scenariusz na nagraną sesję; \texttt{exchange}: jeden na wymianę;
+każda inna wartość jest odrzucana \\
 \texttt{-{}-timeout <seconds>}\newline \path{replay.timeoutSeconds} & 30 & jak długo czekać na
 każdą odpowiedź \\
 \texttt{-{}-legacy-reset-http <path>}\newline \path{replay.legacy.reset} & bez resetu & reset
@@ -220,8 +221,9 @@ sk replay: 38 scenario(s), 580 result(s), 0 without an answer, 0 failed reset(s)
 i~kończy się kodem 0 albo \textbf{4}, gdy którykolwiek reset się nie powiódł. Scenariusz,
 którego reset się nie udał, nie jest w~ogóle wysyłany do tej strony --- każda jego wymiana
 jest zapisywana jako \repopath{reset-failed} --- więc przebieg jest zapisany, ale nie jest
-uczciwym porównaniem. Brak capture albo któregoś adresu kończy się kodem 64, niepoprawny
-capture albo nieustawiona zmienna środowiskowa z~connection stringiem --- kodem 3. Przebieg
+uczciwym porównaniem. Brak capture albo któregoś adresu kończy się kodem 64; adres, który
+nie jest bezwzględnym URL http(s), daje kod 64 w~opcji i~kod 3 w~\repopath{secondkey.yaml};
+niepoprawny capture albo nieustawiona zmienna środowiskowa z~connection stringiem --- kod 3. Przebieg
 przerwany przed końcem nie ma \repopath{run.end} i~komparator go nie przyjmie.
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
@@ -240,7 +242,8 @@ scenariuszem:
 Rodzaj & Klucze & Sukces, gdy \\
 \midrule
 \texttt{http} & \texttt{path}; \texttt{method} (domyślnie \texttt{POST}) & strona odpowiada
-kodem 2xx; \texttt{path} jest rozwiązywana względem \texttt{baseUrl} strony \\
+kodem 2xx; \texttt{path} jest doklejana do \texttt{baseUrl} strony tak jak ścieżka każdego
+odtwarzanego żądania \\
 \texttt{sqlServerSnapshot} & \texttt{connectionStringEnv}, \texttt{database},
 \texttt{snapshot} & baza zostaje przywrócona ze snapshotu \\
 \texttt{command} & \texttt{run}; \texttt{workingDirectory} (opcjonalny) & polecenie kończy się
@@ -249,11 +252,14 @@ kodem 0; działa pod \texttt{/bin/sh -c}, a~na Windows pod \texttt{cmd.exe /c} \
 \end{tabularx}
 }
 
-Przy \repopath{http} ścieżka jest łączona z~\repopath{baseUrl} jak odnośnik względny, więc
-ścieżka zaczynająca się od \repopath{/} zastępuje ścieżkę adresu bazowego. Przy
-\repopath{command} szczegół porażki zawiera kod wyjścia i~wyjście błędów polecenia, a~bez
-\repopath{workingDirectory} polecenie działa w~bieżącym katalogu procesu. Schemat
-konfiguracji nie wymusza, że podano tylko jeden rodzaj; kod wybiera pierwszy obecny w~kolejności \repopath{http}, \repopath{sqlServerSnapshot}, \repopath{command}.
+Przy \repopath{http} ścieżka jest doklejana do ścieżki adresu bazowego, tak jak ścieżka
+każdego odtwarzanego żądania: strona pod \path{http://host/shop/} jest resetowana pod
+\path{/shop/__sk/reset}, a~nie w~katalogu głównym hosta. Przy \repopath{command} szczegół
+porażki zawiera kod wyjścia i~wyjście błędów polecenia; względny
+\repopath{workingDirectory} rozwiązuje się względem katalogu pliku, jak każdą ścieżkę
+w~\repopath{secondkey.yaml}, a~bez niego polecenie działa w~bieżącym katalogu procesu.
+\repopath{reset} wskazuje dokładnie jeden rodzaj: żaden albo dwa to niepoprawna
+konfiguracja (kod 3), sprawdzana już przy wczytaniu pliku.
 
 \paragraph{Ograniczenia resetu snapshotem.} \repopath{sqlServerSnapshot} przywraca bazę SQL
 Server z~database snapshotu; według komentarza w~kodzie snapshoty baz danych są w~każdej
@@ -428,7 +434,7 @@ Wyjście wymienia katalog, pliki pakietu oraz linię \texttt{behaviour: <outcome
 \paragraph{PDF.} \repopath{-{}-pdf auto} (domyślnie) drukuje raport, gdy na maszynie jest
 przeglądarka oparta na Chromium, a~gdy jej nie ma, mówi o~tym i~zapisuje pakiet bez PDF;
 \repopath{-{}-pdf required} czyni brak PDF porażką (kod 4); \repopath{-{}-pdf off} pomija PDF.
-Wartość spoza tych trzech --- w~opcji albo w~\repopath{evidence.pdf} --- kończy się kodem 64.
+Wartość spoza tych trzech kończy się kodem 64 w~opcji i~kodem 3 w~\repopath{evidence.pdf}.
 Przeglądarka jest szukana kolejno:
 
 \begin{enumerate}
@@ -505,10 +511,12 @@ do zapisania \\
 Polecenie zatrzymane Ctrl+C albo SIGTERM ma minutę na czyste zakończenie; jeśli się nie
 zatrzyma, jest kończone kodem sygnału, 130 albo 143. W~kodzie poszczególne rodzaje porażek
 mapują się tak: błąd walidacji artefaktu i~błąd konfiguracji (brak jawnie wskazanego pliku,
-niepoprawny YAML, nieznany klucz, nieobsługiwana wersja, nieustawiona zmienna z~sekretem) →
-3; błąd wiersza poleceń, brak wymaganego wejścia, adres, który nie jest bezwzględnym URL
-http(s) --- także w~\repopath{secondkey.yaml} --- i~wartość \repopath{evidence.pdf} spoza
-dozwolonych → 64; anulowanie → 4 z~komunikatem „cancelled”; każdy inny wyjątek, np. brak
+niepoprawny YAML, nieznany klucz, nieobsługiwana wersja, wartość spoza dozwolonych ---
+adres, który nie jest bezwzględnym URL http(s), \repopath{scenarioMode}, \repopath{pdf},
+\repopath{reset} bez dokładnie jednego rodzaju --- nieustawiona zmienna z~sekretem) → 3;
+błąd wiersza poleceń, brak wymaganego wejścia i~adres w~opcji, który nie jest bezwzględnym
+URL http(s) → 64. Ta sama zła wartość daje więc 64 w~wierszu poleceń i~3 w~pliku, bo
+poprawia się ją w~innym miejscu; anulowanie → 4 z~komunikatem „cancelled”; każdy inny wyjątek, np. brak
 pliku wejściowego, → 4 z~komunikatem \texttt{error: …}.
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
@@ -586,9 +594,11 @@ wartość), \texttt{formField}, \texttt{header} \\
 \repopath{resett} albo \repopath{scenarioModes}), a~brak wymaganego klucza w~sekcji resetu
 też. Pusty plik to pusta konfiguracja. YAML jest typowany tak samo jak w~kontrakcie (YAML 1.2
 core schema). \repopath{sk validate secondkey.yaml} sprawdza plik bez uruchamiania czegokolwiek.
-Wartość \repopath{scenarioMode} nie jest w~pliku sprawdzana: każda inna niż
-\repopath{exchange} oznacza \repopath{session}; opcja \repopath{-{}-scenario-mode} przyjmuje
-tylko te dwie wartości.
+Wartości, których typ klucza nie ogranicza --- adresy (bezwzględne http(s)),
+\repopath{scenarioMode} (\repopath{session} albo \repopath{exchange}), \repopath{evidence.pdf}
+(\repopath{auto}, \repopath{required}, \repopath{off}) i~\repopath{reset} (dokładnie jeden
+rodzaj) --- są sprawdzane przy wczytaniu pliku, więc \repopath{sk validate secondkey.yaml}
+i~każde polecenie odrzucają ten sam plik tak samo, kodem 3.
 
 \paragraph{Sekrety.} \finding{Sekrety nigdy nie mieszkają w~tym pliku.} Connection string
 jest wskazywany nazwą zmiennej środowiskowej, która go przechowuje
@@ -596,9 +606,8 @@ jest wskazywany nazwą zmiennej środowiskowej, która go przechowuje
 Zmienna nieustawiona albo pusta zatrzymuje polecenie z~jej nazwą („environment variable
 SK\_LEGACY\_DB is not set (see secrets.env.example)”) i~kodem 3.
 
-\paragraph{Ścieżki.} Ścieżki względne rozwiązuje się względem katalogu, w~którym leży plik.
-W~kodzie wyjątkiem jest \repopath{reset.command.workingDirectory}, przekazywany procesowi bez
-rozwiązywania. Na Windows ścieżkę pisze się z~ukośnikami (\path{C:/sk/traffic.skcap}) albo w~apostrofach (\path{'C:\sk\traffic.skcap'}): w~cudzysłowie YAML czyta ukośnik wsteczny jako
+\paragraph{Ścieżki.} Ścieżki względne rozwiązuje się względem katalogu, w~którym leży plik,
+także \repopath{reset.command.workingDirectory}. Na Windows ścieżkę pisze się z~ukośnikami (\path{C:/sk/traffic.skcap}) albo w~apostrofach (\path{'C:\sk\traffic.skcap'}): w~cudzysłowie YAML czyta ukośnik wsteczny jako
 początek sekwencji ucieczki, więc \path{"C:\sk\a.skcap"} nie jest ścieżką, na którą wygląda.
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
