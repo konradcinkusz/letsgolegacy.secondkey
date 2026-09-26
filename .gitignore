@@ -39,3 +39,19 @@ secrets.env
 !tests/**/fixtures/**
 .secondkey/
 evidence-out/
+
+# Documentation build output — nothing generated is committed, and each pattern names the
+# build it belongs to (architecture-standards, docs/research/00-RESEARCH-DOCUMENTATION.md,
+# "What a .gitignore for LaTeX actually has to cover"). latexmk's three files are here
+# because the CI build drives latexmk.
+node_modules/
+docs/papers/*.pdf
+docs/papers/*.aux
+docs/papers/*.log
+docs/papers/*.out
+docs/papers/*.toc
+docs/papers/*.fdb_latexmk
+docs/papers/*.fls
+docs/papers/*.synctex.gz
+docs/papers/version.tex
+docs/diagrams/rendered/

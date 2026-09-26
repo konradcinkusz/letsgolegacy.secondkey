@@ -1,0 +1,26 @@
+flowchart TB
+  subgraph F1["Faza 01"]
+    direction TB
+    STD["<b>secondkey-standards</b><br/>C4: standardy migracji jako<br/>skill, .editorconfig, NuGet"]
+    AGENT["agent migracyjny<br/>modernize-dotnet"]
+    PC["<b>portcullis</b><br/>C5: bramka na PR<br/>(analyzery Roslyn, SARIF)"]
+    CORE["<b>secondkey</b> (rdzeń)<br/>CLI sk: capture HTTP,<br/>kontrakt, replay,<br/>compare, evidence"]
+    BENCH["<b>secondkey-nopcommerce-bench</b><br/>publiczny okaz:<br/>nopCommerce 3.90"]
+    LRS["<b>legacy-risk-scan</b><br/>raport EOL i CVE<br/>liczony w przeglądarce"]
+  end
+  subgraph F2["Faza 02 i później"]
+    direction TB
+    CAP["<b>secondkey-capture</b><br/>C1: SQL, kolejki, PII"]
+    SBX["<b>secondkey-sandbox</b><br/>C12: pakowanie<br/>w granicy klienta"]
+    POR["<b>secondkey-portal</b><br/>C11: portal dowodów"]
+  end
+  STD -- "skill w<br/>.github/skills" --> AGENT
+  STD -- "severity<br/>diagnostyk" --> PC
+  AGENT -- "kandydat (PR)" --> BENCH
+  PC -- "*.sarif" --> CORE
+  BENCH -- "sk i Portcullis z<br/>przypiętych commitów" --> CORE
+  BENCH --> PC
+  CAP -. "*.skcap<br/>(format rdzenia)" .-> CORE
+  CORE -. "pakiet<br/>dowodowy" .-> POR
+  SBX -. "pakuje<br/>łańcuch" .-> CORE
+  CAP ~~~ SBX

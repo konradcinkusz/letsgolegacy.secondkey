@@ -1,0 +1,86 @@
+% ============================================================================
+% letsgolegacy-framework.tex -- dokumentacja techniczna frameworku letsgolegacy.
+%
+% CZYM JEST TEN DOKUMENT. Technicznym opisem całego frameworku letsgolegacy --
+% wszystkich publicznych repozytoriów letsgolegacy.* -- i procedurą pracy z nim,
+% po polsku. To NIE jest research paper w rozumieniu architecture-standards
+% (docs/research/00-RESEARCH-DOCUMENTATION.md): nie stawia pytań badawczych i nie
+% wprowadza własnych liczb ani faktów. Jest prezentacją dokumentów, które są
+% źródłem prawdy: plików Markdown, schematów, skryptów, workflowów i kodu w
+% repozytoriach letsgolegacy.* na commitach wymienionych w sekcji "Zakres, wersja
+% i źródła". Gdy ten dokument i źródło się różnią, rację ma źródło, a ten dokument
+% trzeba poprawić. Każda podsekcja kończy się listą źródeł (\zrodla).
+%
+% \paperstatus JEST PRZEDEFINIOWANY. W szablonie oznacza DRAFT albo VERIFIED
+% badania; tutaj niesie fazę frameworku, którą dokument opisuje, i wersję samego
+% dokumentu: commit, z którego zbudowano PDF. Workflow zapisuje ją w version.tex
+% przed kompilacją; lokalnie tego pliku nie ma i nagłówek mówi "build lokalny".
+%
+% PRZYJĘTY DRYF. Dokument jest ręcznie redagowaną prezentacją źródeł; nic
+% mechanicznie nie pilnuje, że zmiana w źródle dotrze tutaj.
+%
+% BUDOWANIE. .github/workflows/build-docs-pdf.yml. Lokalnie:
+%   npm ci && node scripts/render-diagrams.mjs
+%   cd docs/papers && latexmk -pdf letsgolegacy-framework.tex
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\def\houselang{polish}
+\IfFileExists{version.tex}{\input{version.tex}}{\def\docversion{build lokalny}}
+\newcommand{\paperstatus}{Faza 01 --- \docversion}
+\newcommand{\headerleft}{letsgolegacy --- dokumentacja techniczna frameworku}
+\newcommand{\pdftitleline}{letsgolegacy: dokumentacja techniczna frameworku}
+\newcommand{\pdfauthorline}{letsgolegacy}
+\input{house-preamble}
+
+% Dodatki spoza zestawu house (pakiety, styl bloków kodu, \zrodla, checklisty):
+\input{framework/00-dodatki}
+
+\begin{document}
+
+\housetitle{letsgolegacy}
+  {Dokumentacja techniczna frameworku}
+  {Architektura, komponenty, formaty i procedura pracy krok po kroku}
+  {\url{https://github.com/konradcinkusz/letsgolegacy.secondkey}}
+  {prezentuje repozytoria letsgolegacy.* na commitach z sekcji~\ref{sec:wprowadzenie-wersja}}
+
+% Spis do poziomu podsekcji: przy tej objętości głębszy spis traci czytelność.
+\setcounter{tocdepth}{2}
+\tableofcontents
+\clearpage
+
+\input{framework/01-wprowadzenie}
+\clearpage
+\input{framework/02-architektura}
+\clearpage
+\input{framework/03-procedura}
+\clearpage
+\input{framework/04-rdzen-second-key}
+\clearpage
+\input{framework/05-formaty-artefaktow}
+\clearpage
+\input{framework/06-cli-sk}
+\clearpage
+\input{framework/07-portcullis}
+\clearpage
+\input{framework/08-standardy-migracji}
+\clearpage
+\input{framework/09-legacy-risk-scan}
+\clearpage
+\input{framework/10-repozytoria-fazy-02}
+\clearpage
+\input{framework/11-bench-nopcommerce}
+\clearpage
+\input{framework/12-bezpieczenstwo}
+\clearpage
+\input{framework/13-status-i-plan}
+\clearpage
+\input{framework/14-slownik}
+
+\appendix
+\clearpage
+\input{framework/A-klauzule-kontraktu-bench}
+\clearpage
+\input{framework/B-workflowy-ci}
+
+\end{document}

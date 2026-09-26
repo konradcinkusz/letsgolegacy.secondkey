@@ -1,0 +1,738 @@
+\section{CLI \texttt{sk}}\label{sec:cli}
+
+Każdy krok łańcucha działa z~wiersza poleceń, w~pipeline (zasada projektowa 7). Rozdział
+opisuje każde polecenie \repopath{sk} z~każdą opcją, odpowiadającym jej kluczem
+\repopath{secondkey.yaml}, wartością domyślną i~zachowaniem, kody wyjścia, pełny plik
+konfiguracji, demonstrację end-to-end na sample shop i~sposób czytania wyniku. Formaty plików,
+które polecenia czytają i~piszą, opisuje sekcja~\ref{sec:formaty}; implementację ---
+sekcja~\ref{sec:rdzen}.
+
+\subsection{Wywołanie i~reguły wspólne}\label{sec:cli-wywolanie}
+
+\repopath{sk} jest pakowany jako narzędzie .NET (\repopath{PackageId} \repopath{SecondKey.Cli},
+polecenie \repopath{sk}), ale nie został jeszcze opublikowany:
+
+\begin{lstlisting}
+dotnet tool install --global SecondKey.Cli   # once published; until then:
+dotnet run --project src/SecondKey.Cli -- --help
+\end{lstlisting}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4cm}@{}}
+\toprule
+Polecenie & Krok & Stan w~tej wersji \\
+\midrule
+\texttt{sk capture} & C1 --- nagrywa ruch przez proxy przed systemem legacy & dostępne (S9) \\
+\texttt{sk mine} & C2 --- proponuje klauzule kontraktu z~nagrań & planowane, faza 02
+(kod 70) \\
+\texttt{sk replay} & C6 --- odtwarza capture na obu stronach w~identycznych warunkach &
+dostępne (S10–S11) \\
+\texttt{sk compare} & C7 --- porównuje obie strony względem kontraktu do
+\texttt{verdict.json} & dostępne (S12–S13) \\
+\texttt{sk gate} & C5 --- podsumowuje SARIF bramki per reguła & dostępne (S14) \\
+\texttt{sk mutate} & C9 --- wstrzykuje defekty, które kontrakt musi wykryć & planowane,
+faza 02 (kod 70) \\
+\texttt{sk evidence} & C10 --- składa pakiet dowodowy & dostępne (S14) \\
+\texttt{sk validate <file>...} & sprawdza artefakty względem ich formatów & dostępne \\
+\bottomrule
+\end{tabularx}
+}
+
+\paragraph{Konfiguracja i~pierwszeństwo.} Opcja globalna \repopath{-{}-config <path>} wskazuje
+każdemu poleceniu plik \repopath{secondkey.yaml}; domyślnie jest to \path{./secondkey.yaml},
+jeśli istnieje. Plik podany jawnie, którego nie ma, jest błędem konfiguracji (kod 3). Opcje z~wiersza poleceń mają pierwszeństwo przed plikiem; wyjątkiem są dwie opcje listowe
+\repopath{sk capture}, \repopath{-{}-session-key} i~\repopath{-{}-redact-header}, które
+dopisują się do list z~pliku. Ścieżka podana w~opcji jest rozwiązywana względem bieżącego
+katalogu, a~ścieżka z~pliku --- względem katalogu, w~którym leży plik. Polecenia poza
+\repopath{sk validate} czytają konfigurację na początku, więc zepsuty plik jest zgłaszany
+niezależnie od uruchomionego polecenia. Błąd składni wiersza poleceń kończy się komunikatem
+„Run 'sk -{}-help' for usage.” i~kodem 64.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/StubCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs}}
+
+\subsection{\texttt{sk capture}}\label{sec:cli-capture}
+
+\begin{lstlisting}
+sk capture --target http://127.0.0.1:5080 --listen http://127.0.0.1:8080 --session-key ASP.NET_SessionId
+\end{lstlisting}
+
+Uruchamia proxy nagrywające. Klienci łączą się z~adresem \repopath{-{}-listen} zamiast z~systemem legacy; każde żądanie trafia do \repopath{-{}-target} bez zmian --- poza tym, że
+proxy prosi o~nieskompresowaną odpowiedź, żeby nagranie dało się czytać --- a~klient dostaje
+odpowiedź systemu legacy bez zmian. \finding{Systemu legacy nie dotyka się: zmienia się tylko
+adres, pod który łączą się jego klienci.}
+
+Rysunek~\ref{fig:capture} pokazuje drogę jednej wymiany przez proxy.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{\dgm{a3-sekwencja-capture}}
+  \caption{Capture: klient, proxy \texttt{sk capture}, system legacy i plik nagrania.}
+  \label{fig:capture}
+\end{figure}
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.9cm} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Opcja / klucz w~\texttt{secondkey.yaml} & Domyślnie & Znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Opcja / klucz w~\texttt{secondkey.yaml} & Domyślnie & Znaczenie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{-{}-target <url>}\newline \path{capture.target} & brak --- wymagane & system legacy za
+proxy \\
+\texttt{-{}-listen <url>}\newline \path{capture.listen} & \path{http://127.0.0.1:8080} & gdzie
+nasłuchuje proxy \\
+\texttt{-{}-out <file>}\newline \path{capture.out} & \path{.secondkey/traffic.skcap} & nagranie \\
+\texttt{-{}-session-key <name>}\newline \path{capture.sessionKeys} & brak & ciasteczko albo
+nagłówek, którego wartość identyfikuje sesję użytkownika; powtarzalna \\
+\texttt{-{}-redact-header <name>}\newline \path{capture.redactHeaders} & --- & nagłówek, którego
+wartość nigdy nie trafia do nagrania, oprócz \texttt{authorization},
+\texttt{proxy-authorization}, \texttt{cookie}, \texttt{set-cookie} i~\texttt{x-api-key},
+redagowanych zawsze; powtarzalna \\
+\texttt{-{}-max-body-bytes <n>}\newline \path{capture.maxBodyBytes} & 1 MiB & treść dłuższa jest
+obcinana i~oznaczana jako obcięta \\
+\texttt{-{}-exit-after <n>}\newline (tylko opcja) & brak & zatrzymanie po nagraniu \texttt{n} wymian \\
+\end{xltabular}
+}
+
+\paragraph{Sesje i~scenariusze.} Klucz sesji decyduje o~scenariuszach: \repopath{sk replay}
+odtwarza wymiany jednej sesji jako jeden scenariusz, po kolei. Wymiana należy do sesji, którą
+nazywa jej żądanie --- ciasteczkiem albo nagłówkiem o~tej nazwie --- a~przy pierwszej wizycie
+do tej, którą jej odpowiedź ustawia jako ciasteczko. Wymiana bez żadnego z~nich jest sesją
+samą dla siebie, więc bez klucza każda wymiana jest odtwarzana osobno. W~nagraniu sesja jest
+zapisana jako skrót, nigdy jako wartość ciasteczka.
+
+\paragraph{Redakcja i~limit treści.} Wartości redagowanych nagłówków --- w~żądaniu i~w
+odpowiedzi --- są zastępowane przez \repopath{<redacted>} przed zapisem na dysk, a~nagłówek
+nagrania wymienia listę redagowanych nagłówków i~limit treści. Klient zawsze dostaje całą
+odpowiedź; limit dotyczy tylko kopii w~nagraniu.
+
+\paragraph{Gdy system legacy nie odpowiada.} Żądanie, na które system legacy nie odpowiedział
+--- odrzucone, zerwane, przekroczony czas --- dostaje własną odpowiedź proxy 502 albo 504 i~\textbf{nie} jest nagrywane, bo błąd proxy nie jest zachowaniem systemu legacy. Takiej wymiany
+brakuje potem w~jej scenariuszu, więc skryptowane nagranie przed użyciem pliku sprawdza, czy
+liczba pominiętych wynosi 0. Nawiązanie połączenia z~systemem legacy ma limit 15 sekund.
+
+\paragraph{Komunikaty i~kody wyjścia.} Po starcie polecenie wypisuje
+\texttt{sk capture: recording <adres> -> <target> into <plik>. Stop with Ctrl+C.}, a~po
+zatrzymaniu podsumowanie:
+
+\begin{lstlisting}
+sk capture: recorded 290 exchange(s), skipped 0 the legacy system did not answer.
+\end{lstlisting}
+
+Kod 0 po czystym zatrzymaniu; 64, gdy nie podano celu („no target --- pass -{}-target or set
+capture.target in secondkey.yaml”) albo adres nie jest bezwzględnym URL http(s); 3 przy
+błędzie konfiguracji.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CaptureCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/RecordingProxy.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/CaptureOptions.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/SessionTracker.cs}}
+
+\subsection{Zatrzymywanie \texttt{sk capture}}\label{sec:cli-stop}
+
+Ctrl+C albo SIGTERM zatrzymuje proxy czysto: nie przyjmuje ono nowych żądań, pozwala
+dokończyć te w~toku --- najwyżej przez 30 sekund, potem je przerywa --- zamyka plik, wypisuje
+podsumowanie i~kończy się kodem 0. Każde polecenie zatrzymane Ctrl+C albo SIGTERM ma minutę na
+czyste zakończenie; domyślne dwie sekundy System.CommandLine byłyby za krótkie dla
+\repopath{sk capture}, które czeka na wymiany w~toku do wolnego systemu legacy. Polecenie,
+które nie zakończy się w~tym czasie, jest kończone kodem samego sygnału, 130 albo 143, a~to,
+co zapisywało, może być niekompletne.
+
+Każda wymiana jest zapisywana i~opróżniana z~bufora, gdy się zakończy, więc zabity capture
+zachowuje to, co nagrał --- ale zabicie w~trakcie zapisu zostawia urwaną ostatnią linię,
+którą \repopath{sk validate} odrzuca. Tam, gdzie pipeline może proces jedynie zabić (na
+przykład runner Windows zatrzymujący zadanie w~tle), należy podać \repopath{-{}-exit-after} z~liczbą wymian, które wysyła skrypt, żeby capture zatrzymał się sam. Test z~sygnałem SIGTERM
+sprawdza, że wymiana w~toku zostaje dokończona i~zapisana; na Windows jest pomijany.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/RecordingProxy.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/CaptureReplayCommandTests.cs}}
+
+\subsection{\texttt{sk replay}}\label{sec:cli-replay}
+
+\begin{lstlisting}
+sk replay --capture .secondkey/traffic.skcap --legacy http://127.0.0.1:5080 --candidate http://127.0.0.1:5081
+\end{lstlisting}
+
+Odtwarza każdy scenariusz capture na stronie legacy, potem na kandydacie, każdą stronę przed
+scenariuszem resetując do stanu początkowego --- identyczne warunki, żeby różniły się systemy,
+a~nie replay. Każdy scenariusz po każdej stronie dostaje świeży słoik ciasteczek: nagrane
+ciasteczka nigdy nie są wysyłane, tylko te, które strona sama ustawiła w~trakcie scenariusza.
+Przekierowania nie są wykonywane; 302 to odpowiedź do porównania.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.9cm} >{\raggedright\arraybackslash}p{2.7cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Opcja / klucz w~\texttt{secondkey.yaml} & Domyślnie & Znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Opcja / klucz w~\texttt{secondkey.yaml} & Domyślnie & Znaczenie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{-{}-capture <file>}\newline \path{replay.capture} & brak --- wymagane & odtwarzany
+\texttt{*.skcap} \\
+\texttt{-{}-legacy <url>}\newline \path{replay.legacy.baseUrl} & brak --- wymagane & system
+legacy \\
+\texttt{-{}-candidate <url>}\newline \path{replay.candidate.baseUrl} & brak --- wymagane &
+kandydat \\
+\texttt{-{}-out <file>}\newline \path{replay.out} & \path{.secondkey/run.skrun} & przebieg \\
+\texttt{-{}-scenario-mode <mode>}\newline \path{replay.scenarioMode} & \texttt{session} &
+\texttt{session}: jeden scenariusz na nagraną sesję; \texttt{exchange}: jeden na wymianę \\
+\texttt{-{}-timeout <seconds>}\newline \path{replay.timeoutSeconds} & 30 & jak długo czekać na
+każdą odpowiedź \\
+\texttt{-{}-legacy-reset-http <path>}\newline \path{replay.legacy.reset} & bez resetu & reset
+strony legacy przed każdym scenariuszem przez \texttt{POST <path>}; zastępuje \texttt{reset}
+z~pliku \\
+\texttt{-{}-candidate-reset-http <path>}\newline \path{replay.candidate.reset} & bez resetu & to
+samo dla kandydata \\
+\end{xltabular}
+}
+
+\paragraph{Czego replay nie wysyła.} Z~nagranego żądania pomijane są nagłówki
+\texttt{host}, \texttt{content-length}, \texttt{transfer-encoding}, \texttt{connection},
+\texttt{keep-alive}, \texttt{upgrade}, \texttt{te}, \texttt{trailer},
+\texttt{proxy-connection}, \texttt{proxy-authorization}, \texttt{cookie},
+\texttt{accept-encoding} i~\texttt{expect}, a~także każda wartość \repopath{<redacted>}.
+Ścieżka adresu bazowego strony poprzedza ścieżkę każdego żądania. Odpowiedzi są
+dekompresowane, a~replay nie używa proxy systemowego.
+
+\paragraph{Brak odpowiedzi i~podsumowanie.} Żądanie bez odpowiedzi jest zapisywane z~powodem --- \repopath{timeout}, \repopath{connection} albo \repopath{protocol} --- zamiast
+odpowiedzi. Polecenie wypisuje podsumowanie:
+
+\begin{lstlisting}
+sk replay: 38 scenario(s), 580 result(s), 0 without an answer, 0 failed reset(s) -> .secondkey/run.skrun
+\end{lstlisting}
+
+i~kończy się kodem 0 albo \textbf{4}, gdy którykolwiek reset się nie powiódł. Scenariusz,
+którego reset się nie udał, nie jest w~ogóle wysyłany do tej strony --- każda jego wymiana
+jest zapisywana jako \repopath{reset-failed} --- więc przebieg jest zapisany, ale nie jest
+uczciwym porównaniem. Brak capture albo któregoś adresu kończy się kodem 64, niepoprawny
+capture albo nieustawiona zmienna środowiskowa z~connection stringiem --- kodem 3. Przebieg
+przerwany przed końcem nie ma \repopath{run.end} i~komparator go nie przyjmie.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Reset stanu}\label{sec:cli-reset}
+
+Każda strona ma w~\repopath{secondkey.yaml} jeden \repopath{reset}, wykonywany przed każdym
+scenariuszem:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3cm} >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Rodzaj & Klucze & Sukces, gdy \\
+\midrule
+\texttt{http} & \texttt{path}; \texttt{method} (domyślnie \texttt{POST}) & strona odpowiada
+kodem 2xx; \texttt{path} jest rozwiązywana względem \texttt{baseUrl} strony \\
+\texttt{sqlServerSnapshot} & \texttt{connectionStringEnv}, \texttt{database},
+\texttt{snapshot} & baza zostaje przywrócona ze snapshotu \\
+\texttt{command} & \texttt{run}; \texttt{workingDirectory} (opcjonalny) & polecenie kończy się
+kodem 0; działa pod \texttt{/bin/sh -c}, a~na Windows pod \texttt{cmd.exe /c} \\
+\bottomrule
+\end{tabularx}
+}
+
+Przy \repopath{http} ścieżka jest łączona z~\repopath{baseUrl} jak odnośnik względny, więc
+ścieżka zaczynająca się od \repopath{/} zastępuje ścieżkę adresu bazowego. Przy
+\repopath{command} szczegół porażki zawiera kod wyjścia i~wyjście błędów polecenia, a~bez
+\repopath{workingDirectory} polecenie działa w~bieżącym katalogu procesu. Schemat
+konfiguracji nie wymusza, że podano tylko jeden rodzaj; kod wybiera pierwszy obecny w~kolejności \repopath{http}, \repopath{sqlServerSnapshot}, \repopath{command}.
+
+\paragraph{Ograniczenia resetu snapshotem.} \repopath{sqlServerSnapshot} przywraca bazę SQL
+Server z~database snapshotu; według komentarza w~kodzie snapshoty baz danych są w~każdej
+edycji SQL Server od 2016 SP1. Trzeba wiedzieć, co robi, a~czego nie:
+
+\begin{itemize}
+  \item \textbf{Stan początkowy to baza w~chwili pierwszego resetu.} Snapshot powstaje
+        wtedy (pliki \texttt{<snapshot>\_<nazwa logiczna>.ss} obok plików danych) i~zostaje
+        po replay; istniejący snapshot o~tej nazwie jest używany taki, jaki jest. Drugi
+        replay startuje więc ze stanu, który zapisał pierwszy. Nowy stan początkowy wymaga
+        usunięcia snapshotu (\repopath{DROP DATABASE [Shop\_sk]}); SQL Server odmawia też
+        usunięcia bazy albo przywrócenia jej z~backupu, dopóki istnieje jej snapshot.
+  \item \textbf{Każde połączenie z~bazą jest zamykane}, także pulowane połączenia aplikacji:
+        przywrócenie przełącza bazę w~tryb single-user z~natychmiastowym wycofaniem
+        transakcji. \repopath{sk} nie czeka, aż aplikacja dojdzie do siebie, i~nie ponawia
+        pierwszego żądania scenariusza --- zapisywane jest to, co aplikacja odpowie. Pierwszą
+        odpowiedź po przywróceniu trzeba raz sprawdzić, zanim się na niej polega; aplikacja,
+        która uruchamia na bazie zadania cykliczne, może zawodzić do restartu.
+  \item \textbf{Resetowana jest tylko baza.} To, co aplikacja trzyma w~pamięci --- cache,
+        sesje, timery --- przetrwa przywrócenie. Zresetowanie tego jest zadaniem
+        wywołującego; gdy nie da się tego zrobić per scenariusz, kontrakt maskuje wartości,
+        na które to wpływa, i~mówi dlaczego.
+  \item Login w~connection stringu musi móc tworzyć bazę i~przywracać tę bazę --- w~sandboksie \repopath{dbcreator}.
+\end{itemize}
+
+Przywrócenie ma limit 120 sekund; nieudane przywrócenie to nieudany reset z~komunikatem SQL
+Server.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/Resets/IStateReset.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/Resets/SqlServerSnapshotReset.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs}}
+
+\subsection{Sonda \texttt{sqlServer} i~korelacja}\label{sec:cli-sonda}
+
+\paragraph{Obserwowanie bazy.} Sonda dla strony jest konfigurowana tylko w~pliku:
+
+\begin{lstlisting}
+replay:
+  legacy:
+    probe: { sqlServer: { connectionStringEnv: SK_LEGACY_DB, tables: [dbo.Order, dbo.ShoppingCartItem] } }
+\end{lstlisting}
+
+Sonda czyta każdy wiersz wymienionych tabel przed każdym żądaniem i~po nim i~zapisuje w~wyniku wiersze, które żądanie wstawiło, usunęło i~zmieniło (zmienione z~kluczem, stanem
+przed i~po); wiersze są identyfikowane kluczem głównym, a~w~tabeli bez klucza --- całą
+zawartością. Tabele bez zmian są pomijane. Sonda za każdym razem czyta całe tabele: jest
+przeznaczona dla małej, zasianej bazy sandboksu, nie dla bazy wielkości produkcyjnej.
+Klauzule czytają jej wynik przez korzeń \repopath{db} (sekcja~\ref{sec:formaty}).
+
+\paragraph{Korelacja.} Wartość, którą generuje serwer, a~późniejsze żądania muszą ją odesłać
+--- typowo token anti-forgery w~ukrytym polu formularza --- jest w~nagraniu nieaktualna. Reguła
+korelacji (\repopath{replay.correlation}, tylko w~pliku) bierze pierwszą grupę
+\repopath{regex} z~każdej odpowiedzi po tej samej stronie i~w~tym samym scenariuszu i~wpisuje
+ją do pola \repopath{formField} późniejszych żądań \path{application/x-www-form-urlencoded}
+albo do nagłówka \repopath{header}, jeśli nagrane żądanie ten nagłówek miało. Obowiązuje
+ostatnia poznana wartość; reguła, która niczego nie poznała, niczego nie zmienia.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/Probes/SqlServerTableProbe.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs}}
+
+\subsection{\texttt{sk compare}}\label{sec:cli-compare}
+
+\begin{lstlisting}
+sk compare --contract contract.yaml --run .secondkey/run.skrun --out .secondkey/verdict.json
+\end{lstlisting}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Opcja & W~\texttt{secondkey.yaml} & Domyślnie \\
+\midrule
+\texttt{-{}-contract <file>} & \texttt{compare.contract} & brak --- wymagane \\
+\texttt{-{}-run <file>} & \texttt{compare.run} & \path{.secondkey/run.skrun} \\
+\texttt{-{}-out <file>} & \texttt{compare.out} & \path{.secondkey/verdict.json} \\
+\bottomrule
+\end{tabularx}
+}
+
+Umieszcza każdą odtworzoną wymianę w~jednej z~czterech klas --- \repopath{equal},
+\repopath{equal-under-contract}, \repopath{regression}, \repopath{fix-candidate} --- i~zapisuje werdykt (klasy, kolejność i~format: sekcja~\ref{sec:formaty}). Kontrakt i~przebieg
+są walidowane w~całości; werdykt dostaje czas z~dokładnością do sekundy i~nazwy plików
+wejściowych bez katalogów, a~przed zapisem jest sprawdzany własnym schematem. Polecenie
+wypisuje liczby i~każdą wymianę, na którą musi spojrzeć osoba:
+
+\begin{itemize}
+  \item \texttt{sk compare: <outcome> — <n> exchange(s): <e> equal, <u> equal under contract,
+        <r> regression(s), <f> fix candidate(s) -> <plik>};
+  \item po jednej linii na regresję i~kandydata na poprawkę: klasa, identyfikator wymiany,
+        metoda ze ścieżką i~zapytaniem, powody;
+  \item \texttt{clauses: <total> (<a> accepted, <x> exercised, <y> unexercised)} z~dopiskiem
+        \texttt{absence share <p>\%}, gdy jest;
+  \item po jednej linii na zaakceptowaną klauzulę o~statusie \repopath{regressed},
+        \repopath{fixed} albo \repopath{unexercised}.
+\end{itemize}
+
+Kody wyjścia: \textbf{0} przy \repopath{pass}, \textbf{1} przy \repopath{fail} (jakakolwiek
+regresja), \textbf{2} przy \repopath{review} (bez regresji, kandydat na poprawkę do decyzji).
+Przebieg bez wyników jest niepoprawnym wejściem (\textbf{3}): nic nie porównano, więc nic nie
+może przejść; kod 3 dają też niepoprawny kontrakt albo przebieg. Brak kontraktu to kod 64.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CompareCommand.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/CompareCommandTests.cs}}
+
+\subsection{\texttt{sk gate}}\label{sec:cli-gate}
+
+\begin{lstlisting}
+sk gate --sarif portcullis.sarif
+\end{lstlisting}
+
+\repopath{-{}-sarif} przyjmuje jeden albo więcej logów SARIF 2.1.0 (np. z~Portcullis); w~pliku --- lista \repopath{gate.sarif}. Polecenie podsumowuje logi per reguła i~kończy się kodem
+\textbf{1}, gdy znalezisko blokuje, a~0 w~przeciwnym razie. \finding{Błąd blokuje, chyba że
+obejmuje go zaakceptowane wyciszenie albo log oznacza go jako znany z~baseline
+(\texttt{baselineState} \texttt{unchanged} albo \texttt{absent}).} Ostrzeżenia i~notatki są
+raportowane i~nigdy nie blokują. Wyciszenie jest zaakceptowane, gdy nie ma statusu albo ma
+status \repopath{accepted}. Poziom wyniku pochodzi z~samego wyniku, potem z~domyślnego poziomu
+reguły, a~w~ostateczności jest ostrzeżeniem; wynik o~rodzaju (\repopath{kind}) innym niż
+\repopath{fail} nie ma poziomu. Reguły są zbierane z~drivera i~rozszerzeń narzędzia; raport w~pakiecie wymienia każdą zadeklarowaną regułę, także te bez znalezisk --- zapisuje, co
+sprawdzono, a~nie tylko, co znaleziono --- a~wyjście polecenia wymienia reguły, które coś
+znalazły. Plik, który nie jest SARIF 2.1.0, jest niepoprawnym wejściem (kod 3), nigdy nie
+jest czytany jako „brak znalezisk”. Bez żadnego logu polecenie kończy się kodem 64.
+
+Wyjście: \texttt{sk gate: pass|fail — <b> blocking of <n> finding(s) in <k> log(s)}, potem
+wiersz na regułę z~liczbą błędów, ostrzeżeń, notatek, wyciszonych i~blokujących, a~na końcu
+linia \texttt{blocks:} z~położeniem, regułą i~komunikatem każdego blokującego znaleziska.
+Syntetyczny log \path{samples/gate/portcullis.sarif} ma dwa ostrzeżenia i~wyciszony błąd, więc
+bramka przechodzi.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/GateCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/Sarif/SarifLog.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/Sarif/GateSummary.cs},
+\path{letsgolegacy.secondkey/samples/gate/portcullis.sarif}}
+
+\subsection{\texttt{sk evidence}}\label{sec:cli-evidence}
+
+\begin{lstlisting}
+sk evidence --verdict verdict.json --contract contract.yaml --run run.skrun \
+            --sarif portcullis.sarif --out evidence --pdf auto
+\end{lstlisting}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Opcja & W~\texttt{secondkey.yaml} & Domyślnie i~znaczenie \\
+\midrule
+\texttt{-{}-verdict <file>} & \texttt{evidence.verdict} & \path{.secondkey/verdict.json} \\
+\texttt{-{}-contract <file>} & \texttt{evidence.contract}, potem \texttt{compare.contract} &
+wymagane: kontrakt, z~którego policzono werdykt \\
+\texttt{-{}-run <file>} & \texttt{evidence.run} & gdy nie podano, przebieg nie trafia do
+pakietu; podany pozwala każdemu przeliczyć werdykt \\
+\texttt{-{}-sarif <file>...} & \texttt{evidence.sarif} & logi bramki; bez nich pakiet mówi, że
+nie dostarczono wyników analizy statycznej \\
+\texttt{-{}-out <dir>} & \texttt{evidence.out} & \path{.secondkey/evidence} \\
+\texttt{-{}-pdf <mode>} & \texttt{evidence.pdf} & \texttt{auto}; także \texttt{required},
+\texttt{off} \\
+\bottomrule
+\end{tabularx}
+}
+
+Polecenie kończy się kodem 0, gdy pakiet został zapisany, \emph{niezależnie od werdyktu}:
+kod wyjścia werdyktu należy do \repopath{sk compare}, a~pipeline powinien opublikować pakiet,
+który wyjaśnia porażkę. Odrzuca kodem 3 kontrakt albo przebieg, który nie jest tym, który
+nazywa werdykt, a~także niepoprawny werdykt albo log SARIF. Katalog wyjściowy z~poprzednim
+pakietem jest nadpisywany dokładnie w~zakresie plików z~jego manifestu; katalog z~czymkolwiek
+innym jest odrzucany (kod 64, „… holds no evidence pack; choose an empty or new directory”).
+Wyjście wymienia katalog, pliki pakietu oraz linię \texttt{behaviour: <outcome> · gate:
+<wynik> · PDF: <stan>}.
+
+\paragraph{PDF.} \repopath{-{}-pdf auto} (domyślnie) drukuje raport, gdy na maszynie jest
+przeglądarka oparta na Chromium, a~gdy jej nie ma, mówi o~tym i~zapisuje pakiet bez PDF;
+\repopath{-{}-pdf required} czyni brak PDF porażką (kod 4); \repopath{-{}-pdf off} pomija PDF.
+Wartość spoza tych trzech --- w~opcji albo w~\repopath{evidence.pdf} --- kończy się kodem 64.
+Przeglądarka jest szukana kolejno:
+
+\begin{enumerate}
+  \item \repopath{SK\_CHROME\_PATH} --- jeśli jest ustawiona, plik musi istnieć, inaczej to
+        błąd, a~nie ciche przejście dalej;
+  \item \texttt{PATH}, katalog po katalogu: \texttt{google-chrome},
+        \texttt{google-chrome-stable}, \texttt{chrome}, \texttt{microsoft-edge},
+        \texttt{microsoft-edge-stable}, \texttt{msedge}, \texttt{chromium},
+        \texttt{chromium-browser} (na Windows z~\texttt{.exe}) --- Google Chrome i~Edge przed
+        Chromium, którego buildy bardziej się różnią;
+  \item miejsca instalacji: na Windows Chrome i~Edge w~\texttt{ProgramFiles},
+        \texttt{ProgramFiles(x86)} i~\texttt{LOCALAPPDATA}; na macOS aplikacje Google Chrome,
+        Microsoft Edge i~Chromium; przeglądarki Playwright z~\repopath{PLAYWRIGHT\_BROWSERS\_PATH} albo \path{/opt/pw-browsers}, od najnowszej.
+\end{enumerate}
+
+Przeglądarka, która nie wydrukowała w~ciągu minuty, jest zatrzymywana, a~błąd podaje ostatnią
+rzecz, którą napisała. Działa headless, z~własnym tymczasowym profilem i~z~wyłączonym
+sandboksem, bo sandbox jest niedostępny dla roota w~kontenerach i~na niektórych obrazach CI;
+renderuje wyłącznie własną statyczną stronę pakietu, która nie może uruchomić skryptu ani
+wykonać żądania. Plik, który nie zaczyna się od \texttt{\%PDF-}, nie liczy się jako PDF.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/EvidenceCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/EvidencePack.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/PdfRenderer.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/GateEvidenceCommandTests.cs}}
+
+\subsection{\texttt{sk validate}, \texttt{sk mine} i~\texttt{sk mutate}}\label{sec:cli-validate}
+
+\repopath{sk validate <file>...} sprawdza jeden albo więcej plików względem ich formatów i~wypisuje każdy błąd z~położeniem. Rodzaj pliku rozpoznaje po nazwie: \repopath{secondkey.yaml}
+jest walidowany jako konfiguracja, \repopath{*.skcap} i~\repopath{*.skrun} --- jako
+capture i~przebieg, \repopath{*.yaml} i~\repopath{*.yml} --- jako kontrakt, a~\repopath{*.json} --- jako werdykt, gdy jego \repopath{kind} to
+\repopath{secondkey.verdict} (albo gdy nie jest poprawnym JSON-em). Każdy inny plik dostaje
+błąd „not a~Second Key artifact: expected *.skcap, *.skrun, a~contract *.yaml or a~verdict
+*.json”, a~nieistniejący --- „no such file”. Dla każdego pliku wypisywane jest
+\repopath{<plik>: valid} albo liczba błędów i~ich lista. Kod 0, gdy wszystkie pliki są
+poprawne, w~przeciwnym razie 3.
+
+\repopath{sk mine} (C2) i~\repopath{sk mutate} (C9) istnieją w~planie, ale nie w~tej wersji.
+Czytają konfigurację, wypisują na przykład „sk mine: not available in this build --- planned
+under C2, phase 02 (docs/WORKPLAN.md).” i~kończą się kodem \textbf{70}.
+
+\zrodla{\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ValidateCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/StubCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/docs/formats/README.md}}
+
+\subsection{Kody wyjścia}\label{sec:cli-kody}
+
+Pipeline rozgałęzia się na tych kodach; nie zmieniają się bez zmiany wersji głównej, a~klasa
+\repopath{ExitCodes} nazywa zmianę któregokolwiek zmianą łamiącą każdy pipeline, który go
+używa. Test sprawdza, że kody są różne i~równe dokładnie 0, 1, 2, 3, 4, 64 i~70.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Kod & Nazwa & Znaczenie \\
+\midrule
+0 & \texttt{Success} & werdykt przeszedł, bramka przeszła, artefakt jest poprawny \\
+1 & \texttt{Failed} & to, co sprawdzano, nie przeszło: regresja w~werdykcie, blokujące
+znalezisko w~bramce \\
+2 & \texttt{Review} & brak regresji, ale kandydat na poprawkę wymaga decyzji osoby \\
+3 & \texttt{InvalidInput} & wejście --- artefakt albo konfiguracja --- jest niepoprawne;
+niczego nie rozstrzygnięto \\
+4 & \texttt{RuntimeError} & polecenie nie mogło się zakończyć: system nieosiągalny, plik nie
+do zapisania \\
+64 & \texttt{Usage} & sam wiersz poleceń jest błędny \\
+70 & \texttt{NotImplemented} & polecenie istnieje w~planie, ale nie w~tej wersji \\
+\bottomrule
+\end{tabularx}
+}
+
+Polecenie zatrzymane Ctrl+C albo SIGTERM ma minutę na czyste zakończenie; jeśli się nie
+zatrzyma, jest kończone kodem sygnału, 130 albo 143. W~kodzie poszczególne rodzaje porażek
+mapują się tak: błąd walidacji artefaktu i~błąd konfiguracji (brak jawnie wskazanego pliku,
+niepoprawny YAML, nieznany klucz, nieobsługiwana wersja, nieustawiona zmienna z~sekretem) →
+3; błąd wiersza poleceń, brak wymaganego wejścia, adres, który nie jest bezwzględnym URL
+http(s) --- także w~\repopath{secondkey.yaml} --- i~wartość \repopath{evidence.pdf} spoza
+dozwolonych → 64; anulowanie → 4 z~komunikatem „cancelled”; każdy inny wyjątek, np. brak
+pliku wejściowego, → 4 z~komunikatem \texttt{error: …}.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/ExitCodes.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/CommandLineTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/GateEvidenceCommandTests.cs}}
+
+\subsection{Plik \texttt{secondkey.yaml}}\label{sec:cli-konfiguracja}
+
+\repopath{secondkey.yaml} daje wartości domyślne każdemu poleceniu, żeby krok pipeline'u był
+wywołaniem \repopath{sk replay}, a~nie linią opcji. Przykład z~\path{docs/cli.md}:
+
+\begin{lstlisting}
+version: 1
+capture:
+  listen: http://127.0.0.1:8080          # where the recording proxy listens
+  target: http://127.0.0.1:5080          # the legacy system behind it
+  out: .secondkey/traffic.skcap
+  sessionKeys: [ASP.NET_SessionId]       # cookies that identify a user session
+  redactHeaders: [authorization, cookie, set-cookie]
+replay:
+  capture: .secondkey/traffic.skcap
+  out: .secondkey/run.skrun
+  scenarioMode: session                  # session | exchange
+  legacy:
+    baseUrl: http://127.0.0.1:5080
+    reset: { sqlServerSnapshot: { connectionStringEnv: SK_LEGACY_DB, database: Shop, snapshot: Shop_sk } }
+  candidate:
+    baseUrl: http://127.0.0.1:5081
+    reset: { http: { path: /__sk/reset } }
+  correlation:                           # values the server generates that later requests must echo
+    - { name: csrf, regex: 'name="__RequestVerificationToken" type="hidden" value="([^"]+)"', formField: __RequestVerificationToken }
+compare: { contract: contract.yaml, run: .secondkey/run.skrun, out: .secondkey/verdict.json }
+gate: { sarif: [gate.sarif] }
+evidence: { verdict: .secondkey/verdict.json, contract: contract.yaml, run: .secondkey/run.skrun, sarif: [gate.sarif], out: .secondkey/evidence, pdf: auto }
+\end{lstlisting}
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Klucz & Znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Klucz & Znaczenie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{version} & wersja pliku; domyślnie 1, inna wartość to błąd („version 2 is not
+supported; this build reads version 1”) \\
+\texttt{capture.listen}, \texttt{target}, \texttt{out}, \texttt{sessionKeys},
+\texttt{redactHeaders}, \texttt{maxBodyBytes} & opcje \texttt{sk capture}
+(sekcja~\ref{sec:cli-capture}) \\
+\texttt{replay.capture}, \texttt{out}, \texttt{scenarioMode}, \texttt{timeoutSeconds} & opcje
+\texttt{sk replay} (sekcja~\ref{sec:cli-replay}) \\
+\texttt{replay.legacy}, \texttt{replay.candidate} & każda strona: \texttt{baseUrl},
+\texttt{reset}, \texttt{probe} \\
+\texttt{…reset.http} & \texttt{method} (domyślnie \texttt{POST}), \texttt{path} (wymagany) \\
+\texttt{…reset.sqlServerSnapshot} & \texttt{connectionStringEnv}, \texttt{database},
+\texttt{snapshot} (wszystkie wymagane) \\
+\texttt{…reset.command} & \texttt{run} (wymagany), \texttt{workingDirectory} \\
+\texttt{…probe.sqlServer} & \texttt{connectionStringEnv}, \texttt{tables} (oba wymagane) \\
+\texttt{replay.correlation[]} & \texttt{name}, \texttt{regex} (wymagane; pierwsza grupa to
+wartość), \texttt{formField}, \texttt{header} \\
+\texttt{compare.contract}, \texttt{run}, \texttt{out} & opcje \texttt{sk compare} \\
+\texttt{gate.sarif} & lista logów SARIF dla \texttt{sk gate} \\
+\texttt{evidence.verdict}, \texttt{contract}, \texttt{run}, \texttt{sarif}, \texttt{out},
+\texttt{pdf} & opcje \texttt{sk evidence} \\
+\end{xltabular}
+}
+
+\paragraph{Ścisłość.} Plik jest ścisły: nieznany klucz jest błędem (np. literówka
+\repopath{resett} albo \repopath{scenarioModes}), a~brak wymaganego klucza w~sekcji resetu
+też. Pusty plik to pusta konfiguracja. YAML jest typowany tak samo jak w~kontrakcie (YAML 1.2
+core schema). \repopath{sk validate secondkey.yaml} sprawdza plik bez uruchamiania czegokolwiek.
+Wartość \repopath{scenarioMode} nie jest w~pliku sprawdzana: każda inna niż
+\repopath{exchange} oznacza \repopath{session}; opcja \repopath{-{}-scenario-mode} przyjmuje
+tylko te dwie wartości.
+
+\paragraph{Sekrety.} \finding{Sekrety nigdy nie mieszkają w~tym pliku.} Connection string
+jest wskazywany nazwą zmiennej środowiskowej, która go przechowuje
+(\repopath{connectionStringEnv}), a~\path{secrets.env.example} wymienia każdą taką zmienną.
+Zmienna nieustawiona albo pusta zatrzymuje polecenie z~jej nazwą („environment variable
+SK\_LEGACY\_DB is not set (see secrets.env.example)”) i~kodem 3.
+
+\paragraph{Ścieżki.} Ścieżki względne rozwiązuje się względem katalogu, w~którym leży plik.
+W~kodzie wyjątkiem jest \repopath{reset.command.workingDirectory}, przekazywany procesowi bez
+rozwiązywania. Na Windows ścieżkę pisze się z~ukośnikami (\path{C:/sk/traffic.skcap}) albo w~apostrofach (\path{'C:\sk\traffic.skcap'}): w~cudzysłowie YAML czyta ukośnik wsteczny jako
+początek sekwencji ucieczki, więc \path{"C:\sk\a.skcap"} nie jest ścieżką, na którą wygląda.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/ConfigurationTests.cs},
+\path{letsgolegacy.secondkey/secrets.env.example}}
+
+\subsection{Demonstracja end-to-end na sample shop}\label{sec:cli-e2e}
+
+Dwa polecenia z~README uruchamiają cały łańcuch lokalnie:
+
+\begin{lstlisting}
+./scripts/setup.sh     # once: checks the tools, installs the secret-scanning commit hook
+./scripts/e2e.sh       # the whole chain on the sample shop
+\end{lstlisting}
+
+\paragraph{Sample shop.} \path{samples/SampleShop} to mała aplikacja ASP.NET Core, która gra
+obie role demonstracji fazy 01. Wariant wybiera \repopath{SAMPLESHOP\_VARIANT}
+(\repopath{legacy} domyślnie albo \repopath{candidate}); sesję niesie ciasteczko
+\repopath{sk\_session}. Punkty końcowe: \texttt{GET /products?sort=name} (JSON),
+\texttt{POST /cart/items}, \texttt{POST /cart/coupon} i~\texttt{POST /checkout} (JSON),
+\texttt{GET /cart} (HTML), \texttt{GET /health} (zwraca nazwę wariantu) oraz
+\texttt{POST /\_\_sk/reset}, który czyści koszyki i~odpowiada 204 tylko przy
+\repopath{SAMPLESHOP\_ALLOW\_RESET=1}, a~w~przeciwnym razie 404. Kandydat różni się od strony
+legacy dokładnie tak, jak prawdziwa migracja, więc każda klasa werdyktu ma co znaleźć:
+
+\begin{itemize}
+  \item lista produktów jest sortowana bieżącą kulturą; strona legacy działa z~\path{DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1} i~kolejność się zmienia, choć kod
+        nie --- pułapka NLS → ICU migracji z~.NET Framework, odtworzona na Linuksie;
+  \item sumy wierszy u~kandydata pochodzą z~arytmetyki \texttt{double} (szum, który pochłania
+        tolerancja);
+  \item kupon większy niż koszyk sprowadza sumę kandydata poniżej zera (regresja);
+  \item zamówienie z~pustym koszykiem wywraca stronę legacy (500), a~kandydat odmawia czysto
+        (400) --- kandydat na poprawkę;
+  \item identyfikatory zamówień i~znaczniki czasu są nowe przy każdym przebiegu (pochłaniają
+        je maski); strona HTML koszyka ma u~obu wariantów inny markup, który kontraktu nie
+        obchodzi.
+\end{itemize}
+
+\paragraph{Przebieg \texttt{scripts/e2e.sh}.} Skrypt buduje solution w~konfiguracji Release,
+uruchamia stronę legacy (niezmienna globalizacja) i~kandydata (ICU), czeka na
+\texttt{/health} obu, uruchamia \repopath{sk capture} przed stroną legacy z~\repopath{-{}-session-key sk\_session} i~\repopath{-{}-exit-after 10}, wysyła przez proxy
+dziesięć żądań, czeka, aż capture zatrzyma się sam, i~waliduje nagranie:
+
+\begin{lstlisting}
+call GET  "/products?sort=name" none                                          # a visitor looks at the catalogue
+call POST /cart/items           buyer   '{"sku":"ECL-02","quantity":3}'       # a buyer orders
+call GET  /cart                 buyer
+call POST /checkout             buyer   '{"email":"buyer@example.test"}'
+call POST /cart/items           ruler   '{"sku":"ANG-04","quantity":9}'       # 9 x 3.10 is 27.900000000000002 in double arithmetic
+call GET  /cart                 ruler
+call POST /cart/items           bargain '{"sku":"APL-01","quantity":1}'       # a coupon larger than the cart
+call POST /cart/coupon          bargain '{"code":"BIGSALE"}'
+call GET  /cart                 bargain
+call POST /checkout             empty   '{}'                                  # checkout with nothing in the cart
+\end{lstlisting}
+
+Trzecia kolumna to słoik ciasteczek, czyli sesja użytkownika; \texttt{none} to gość bez
+sesji. Potem skrypt odtwarza capture na obu stronach z~resetem
+\texttt{-{}-legacy-reset-http /\_\_sk/reset} i~\texttt{-{}-candidate-reset-http
+/\_\_sk/reset}, uruchamia \repopath{sk compare} z~\path{samples/contract.yaml} i~wymaga kodu 1
+(próbka musi oblać), uruchamia \repopath{sk gate} na \path{samples/gate/portcullis.sarif}
+(ostrzeżenia i~wyciszony błąd, nic blokującego --- kod 0) i~\repopath{sk evidence}. Wszystko
+trafia do \repopath{\$E2E\_DIR}, domyślnie \path{.secondkey/e2e}; porty ustawiają
+\repopath{E2E\_LEGACY\_PORT} (5080), \repopath{E2E\_CANDIDATE\_PORT} (5081) i~\repopath{E2E\_PROXY\_PORT} (8080), a~tryb PDF --- \repopath{SK\_PDF} (domyślnie
+\repopath{auto}; CI ustawia \repopath{required}). Kontrakt demonstracji celowo nie ma żadnej
+reguły o~kolejności listy produktów: kandydat sortuje te same nazwy inaczej, nic nie mówi,
+że kolejność nie ma znaczenia, więc różnica musi wyjść jako regresja, której nikt nie
+wyjaśnił.
+
+\paragraph{Co skrypt sprawdza.} Na końcu skrypt w~Pythonie sprawdza, że werdykt zawiera to,
+do czego próbka jest zbudowana:
+
+\begin{checklista}
+  \item każda z~czterech klas występuje co najmniej raz, a~wynik to \repopath{fail};
+  \item jedyna wymiana \texttt{/products} jest regresją z~powodem wyłącznie
+        \repopath{uncovered-difference}, a~różnica w~\path{response.body.json.items[0]} nie
+        ma \repopath{normalizedBy} (zmiana kolejności NLS → ICU);
+  \item co najmniej dwie wymiany mają \repopath{clause-regression} dla
+        \repopath{TOTAL-NEVER-NEGATIVE} albo \repopath{CART-PAGE-TOTAL-NEVER-NEGATIVE}
+        (skumulowany rabat łamie obie klauzule o~sumie);
+  \item kandydat na poprawkę ma powód dokładnie \texttt{clause-fixed: CHECKOUT-NEVER-5XX}
+        (pusty koszyk);
+  \item wymiany równe pod kontraktem mają powody \texttt{normalized: masks.guids} i~\texttt{normalized: masks.timestamps} oraz jakiś
+        \texttt{normalized: tolerances: …} (arytmetyka \texttt{double});
+  \item skrót każdego pliku zgadza się z~manifestem, a~pakiet zawiera \repopath{index.html},
+        \repopath{verdict.json}, \repopath{contract.yaml}, \repopath{run.skrun},
+        \path{statement.intoto.json}, \path{sarif/portcullis.sarif} i~--- przy
+        \repopath{SK\_PDF=required} --- \repopath{report.pdf}.
+\end{checklista}
+
+Job \repopath{e2e} w~CI uruchamia ten sam skrypt i~publikuje pakiet jako artefakt
+\repopath{evidence-pack} (sekcja~\ref{sec:rdzen}). README podsumowuje, co próbka pokazuje:
+to, co ukrywa prawdziwa migracja --- listę produktów posortowaną inaczej, na co nic w~kontrakcie nie pozwala; rabat, który sprowadza sumę poniżej zera; i~zamówienie, które przestało
+się wywracać na pustym koszyku, przedstawione osobie jako poprawka.
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/scripts/e2e.sh},
+\path{letsgolegacy.secondkey/samples/SampleShop/Program.cs},
+\path{letsgolegacy.secondkey/samples/contract.yaml},
+\path{letsgolegacy.secondkey/samples/gate/portcullis.sarif},
+\path{letsgolegacy.secondkey/.github/workflows/e2e.yml}}
+
+\subsection{Jak czytać wynik}\label{sec:cli-wynik}
+
+\begin{enumerate}
+  \item \textbf{Kod wyjścia \texttt{sk compare}} rozstrzyga krok pipeline'u: 0 --- zachowanie
+        dotrzymuje kontraktu, 1 --- jest regresja, 2 --- jest kandydat na poprawkę do
+        decyzji. \repopath{sk gate} daje osobno 0 albo 1 dla kodu, a~\repopath{sk evidence}
+        zawsze 0, gdy pakiet powstał.
+  \item \textbf{Wyjście \texttt{sk compare}} wymienia tylko to, na co musi spojrzeć osoba:
+        regresje, kandydatów na poprawkę i~zaakceptowane klauzule \repopath{regressed},
+        \repopath{fixed} albo \repopath{unexercised}. Skrypt e2e wypisuje dodatkowo każdą
+        wymianę (klasa, identyfikator, żądanie, powody), podsumowanie w~\repopath{\$GITHUB\_STEP\_SUMMARY} i~na końcu \texttt{e2e: ok — <n> exchanges, every
+        class present, pack of <m> files at <katalog>}.
+  \item \textbf{Pakiet dowodowy} otwiera się od \repopath{index.html}: odznaki „Behaviour”
+        i~„Gate”, kafelki podsumowania, potem regresje i~kandydaci na poprawkę z~różnicami i~klauzulami, które złamała któraś strona, tabela klauzul, to, co kontrakt uznaje za
+        nieistotne, i~to, czego dowód nie pokazuje --- ruch, którego nagranie nie
+        zawierało, zaakceptowane klauzule \repopath{unexercised}, klauzule
+        \repopath{proposed}, klauzule \repopath{violated-both} i~brak podpisu.
+  \item \textbf{Każda regresja} kończy się przeglądaną zmianą: poprawką kandydata albo zmianą
+        kontraktu --- regułą normalizacji, jeśli różnica nie ma znaczenia, albo klauzulą, jeśli
+        ma. \textbf{Każdy kandydat na poprawkę} wymaga decyzji osoby, czy zmiana jest
+        pożądana. Klauzula \repopath{violated-both} to defekt, który migracja zachowała; nie
+        oblewa przebiegu.
+  \item \textbf{Integralność} sprawdza się niezależnie od Second Key: skróty z~\repopath{manifest.json}, walidacja \repopath{verdict.json} i~kontraktu oraz ponowne
+        \repopath{sk compare} na \repopath{run.skrun} z~pakietu, które daje ten sam werdykt,
+        poza \repopath{createdAt} (sekcja~\ref{sec:formaty}).
+\end{enumerate}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CompareCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/HtmlReport.cs},
+\path{letsgolegacy.secondkey/scripts/e2e.sh}}

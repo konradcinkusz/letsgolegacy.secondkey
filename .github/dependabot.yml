@@ -11,3 +11,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+  # The documentation PDF's Mermaid renderer (package.json); nothing in the product uses npm.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly

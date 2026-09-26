@@ -1,0 +1,18 @@
+sequenceDiagram
+  participant R as sk replay
+  participant D as bazy stron<br/>(snapshoty)
+  participant L as Legacy
+  participant C as Kandydat
+  participant F as run.skrun
+  loop każdy scenariusz z nagrania
+    R->>D: reset legacy (np. restore)
+    R->>F: state.reset
+    R->>L: wymiany po kolei (świeży<br/>cookie jar, korelacja tokenów)
+    L-->>R: odpowiedzi
+    R->>F: exchange.result (legacy)
+    R->>D: reset kandydata
+    R->>F: state.reset
+    R->>C: te same wymiany
+    C-->>R: odpowiedzi
+    R->>F: exchange.result (kandydat)
+  end

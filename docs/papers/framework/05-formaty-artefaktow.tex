@@ -1,0 +1,1216 @@
+\section{Formaty artefaktów}\label{sec:formaty}
+
+Artefakty są interfejsem produktu: każdy komponent Second Key czyta i~pisze te pliki i~nic
+więcej, więc każdy komponent można zastąpić innym, który ich dotrzymuje (ADR 0001,
+sekcja~\ref{sec:rdzen}). Autorytetem są schematy JSON w~katalogu \path{/schemas} rdzenia;
+próbki, które je spełniają, leżą w~\path{/schemas/samples} i~są sprawdzane w~CI. Rozdział jest
+referencją wszystkich formatów: reguł wspólnych, walidacji, plików \repopath{*.skcap},
+\repopath{contract.yaml}, \repopath{*.skrun}, \repopath{verdict.json} i~pakietu dowodowego,
+z~pełnym opisem języka kontraktu i~klas werdyktu. Polecenia, które te pliki piszą i~czytają,
+opisuje sekcja~\ref{sec:cli}.
+
+\subsection{Przegląd}\label{sec:formaty-przeglad}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}p{2.8cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.4cm} >{\raggedright\arraybackslash}p{2.6cm}@{}}
+\toprule
+Artefakt & Schemat & Kształt & Pisze & Czyta \\
+\midrule
+\texttt{*.skcap} & \path{skcap.schema.json} & JSON Lines: \texttt{capture.header}, potem zdarzenia
+\texttt{http.exchange} & \texttt{sk capture} (C1) & \texttt{sk replay} (C6), \texttt{sk mine} (C2) \\
+\texttt{contract.yaml} & \path{contract.schema.json} & dokument YAML & osoba, wspomagana przez
+\texttt{sk mine} & \texttt{sk compare} (C7), \texttt{sk mutate} (C9) \\
+\texttt{*.skrun} & \path{skrun.schema.json} & JSON Lines: \texttt{run.header}, zdarzenia
+\texttt{state.reset} i~\texttt{exchange.result}, \texttt{run.end} & \texttt{sk replay} (C6) &
+\texttt{sk compare} (C7) \\
+\texttt{verdict.json} & \path{verdict.schema.json} & dokument JSON & \texttt{sk compare} (C7)
+& \texttt{sk evidence} (C10), portal (C11) \\
+evidence pack & in-toto Statement v1 dla \path{statement.intoto.json} & katalog plików &
+\texttt{sk evidence} (C10) & osoba zatwierdzająca, audytor, portal (C11) \\
+\bottomrule
+\end{tabularx}
+}
+
+Plan pracy wymienia jeszcze artefakty spoza rdzenia: \path{standards/} (Markdown → skills i~NuGet, z~\path{letsgolegacy.secondkey-standards}), \repopath{*.sarif} (SARIF 2.1 z~bramki
+\path{letsgolegacy.portcullis}, czytany przez C10) oraz \repopath{evidence.dsse} --- in-toto w~kopercie DSSE, podpisywany od fazy 03.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/adr/0001-artifacts-are-the-interface.md}}
+
+\subsection{Reguły wspólne}\label{sec:formaty-reguly}
+
+\paragraph{Wersjonowanie.} Każde zdarzenie i~każdy dokument niesie wersję formatu. Czytelnik
+odrzuca wersję, której nie zna, zamiast zgadywać: schematy definiują wersję jako stałą, więc
+inna wartość jest błędem walidacji.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{5.6cm}@{}}
+\toprule
+Artefakt & Rodzaj & Wersja \\
+\midrule
+\texttt{*.skcap} & \texttt{type}: \texttt{capture.header}, \texttt{http.exchange} &
+\texttt{v: 1} w~każdym zdarzeniu \\
+\texttt{*.skrun} & \texttt{type}: \texttt{run.header}, \texttt{state.reset},
+\texttt{exchange.result}, \texttt{run.end} & \texttt{v: 1} w~każdym zdarzeniu \\
+\texttt{contract.yaml} & \texttt{kind: Contract} & \texttt{apiVersion: secondkey/v1} \\
+\texttt{verdict.json} & \texttt{kind: secondkey.verdict} & \texttt{v: 1} \\
+\texttt{manifest.json} & \texttt{kind: secondkey.evidence-manifest} & \texttt{v: 1} \\
+\path{statement.intoto.json} & \texttt{\_type}: \path{https://in-toto.io/Statement/v1} &
+\texttt{predicateType}:
+\path{https://github.com/konradcinkusz/letsgolegacy.secondkey/evidence/v1} \\
+\texttt{secondkey.yaml} & --- & \texttt{version: 1} \\
+\bottomrule
+\end{tabularx}
+}
+
+Zmiana w~\path{schemas/*.json} jest zmianą formatu: trzeba podbić pole \repopath{v}, które
+dany schemat reguluje, zaktualizować \path{docs/formats/} i~utrzymać próbki w~stanie
+walidującym.
+
+\paragraph{Ścisłość.} Nieznany klucz jest błędem --- „a~mistyped key that is silently ignored
+is a~rule nobody is enforcing”. Schematy mają \repopath{additionalProperties: false}.
+
+\paragraph{Reguły poza schematem.} Capture zaczyna się dokładnie jednym nagłówkiem i~zachowuje nagraną kolejność (\repopath{seq} ściśle rosnące, identyfikatory unikalne). Przebieg
+kończy się zdarzeniem \repopath{run.end}, którego liczba wyników musi zgadzać się z~plikiem;
+przebieg bez niego został przerwany i~nigdy nie jest porównywany. W~kontrakcie referencje
+muszą się rozwiązywać, regexy kompilować, a~ścieżki parsować.
+
+\paragraph{Nagłówki i~treści.} Nazwy nagłówków są zapisywane małymi literami, a~każda wartość
+jest listą, bo HTTP pozwala nagłówkowi się powtarzać. Wartość zredagowana to dosłownie
+\repopath{<redacted>}. Treść (body) jest zapisywana jako sparsowany JSON
+(\repopath{encoding: json}), tekst albo base64.
+
+\paragraph{Skróty SHA-256.} Każdy skrót to SHA-256 zapisany małymi literami szesnastkowo
+(64 znaki). Nagłówek przebiegu cytuje skrót pliku capture, werdykt --- skróty kontraktu i~przebiegu, z~których powstał, a~pakiet --- skrót każdego swojego pliku. Dzięki temu werdykt
+można przywiązać dokładnie do wejść, które go dały. Skrót kontraktu jest liczony z~bajtów
+pliku, tak jak leży na dysku.
+
+\paragraph{Końce linii i~kodowanie.} Każdy dokument JSON, który pisze \repopath{sk} ---
+\repopath{verdict.json}, \repopath{manifest.json} i~\repopath{statement.intoto.json} ---
+kończy linie znakiem \repopath{\textbackslash n} na każdej platformie, tak jak linie
+\repopath{*.skcap} i~\repopath{*.skrun}. \finding{Ten sam werdykt to te same bajty, a~więc
+ten sam SHA-256, niezależnie od tego, czy policzono go na hoście Windows obok systemu legacy,
+czy na runnerze linuksowym.} Pliki są w~UTF-8 bez BOM; serializacja używa nazw w~camelCase,
+pomija pola o~wartości \repopath{null} i~nie escapuje znaków spoza ASCII („é” zostaje
+czytelne). \path{.gitattributes} oznacza \repopath{*.skcap} i~\repopath{*.skrun} jako
+\repopath{-text}, żeby git nie renormalizował ich końców linii.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/README.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/CLAUDE.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Json/ArtifactJson.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Hashing/Sha256Digest.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/EvidencePack.cs},
+\path{letsgolegacy.secondkey/.gitattributes}}
+
+\subsection{Schematy i~walidatory}\label{sec:formaty-walidatory}
+
+Schematy są w~JSON Schema draft 2020-12, z~identyfikatorami pod
+\path{https://github.com/konradcinkusz/letsgolegacy.secondkey/schemas/}:
+\path{skcap.schema.json}, \path{skrun.schema.json}, \path{contract.schema.json},
+\path{verdict.schema.json}. Projekt \repopath{SecondKey.Artifacts} osadza je jako zasoby i~kompiluje raz; schemat przebiegu używa definicji żądania, odpowiedzi, nagłówków i~treści ze
+schematu capture. Walidacja wymusza formaty (np. \repopath{date-time}), a~nie tylko je
+opisuje.
+
+Artefakty JSON Lines są walidowane linia po linii, każda wobec gałęzi schematu, którą wskazuje
+jej \repopath{type}, więc błąd wskazuje konkretne pole tej gałęzi --- w~słowach komentarza w~kodzie
+„seq is missing”, a~nie „matched none of four branches”. Brak albo nieznana wartość \repopath{type} jest błędem sama w~sobie, zgłaszanym przed
+schematem („unknown event type 'sql.statement'; this version knows: …”), nigdy linią po
+cichu pominiętą. Każda niepusta linia musi być jednym obiektem JSON; pusta linia wewnątrz pliku
+to błąd, pusta linia na końcu to tylko końcowy znak nowej linii.
+
+Dokumenty (kontrakt, werdykt) są walidowane w~całości. Każdy błąd ma położenie: numer linii
+(dla JSON Lines) i~wskaźnik JSON, np. \repopath{line 3 /seq: …} albo
+\repopath{/clauses/2/assert/0: …}. Walidatory to \repopath{CaptureFile},
+\repopath{RunFile}, \repopath{ContractFile} z~\repopath{ContractRules} i~\repopath{VerdictFile}. Plik choćby częściowo niepoprawny nie jest nigdy używany: czytnik
+zgłasza wszystkie błędy naraz, a~CLI kończy się kodem 3. Polecenie \repopath{sk validate}
+opisuje sekcja~\ref{sec:cli}.
+
+\zrodla{\path{letsgolegacy.secondkey/schemas/},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Schemas/ArtifactSchemas.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Json/JsonLines.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Validation/ValidationReport.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/SecondKey.Artifacts.csproj}}
+
+\subsection{Capture: \texttt{*.skcap}}\label{sec:formaty-skcap}
+
+Plik capture zapisuje, jak system legacy odpowiedział na prawdziwy ruch. To JSON Lines:
+pierwsza linia to \repopath{capture.header}, każda następna to zdarzenie. Wersja 1 niesie
+wyłącznie wymiany HTTP; instrukcje SQL, wiadomości kolejek i~wywołania wychodzące mają przyjść
+w~późniejszych wersjach jako nowe typy zdarzeń.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Pole & Typ, ograniczenia i~znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Pole & Typ, ograniczenia i~znaczenie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\textbf{\texttt{capture.header}} & pierwsza linia; wymagane \texttt{type}, \texttt{v},
+\texttt{captureId}, \texttt{startedAt}, \texttt{tool}, \texttt{source} \\
+\texttt{captureId} & identyfikator: litera lub cyfra, potem do 127 znaków z~\texttt{A-Z},
+\texttt{a-z}, \texttt{0-9}, \texttt{.}, \texttt{\_}, \texttt{-} \\
+\texttt{startedAt} & \texttt{date-time} \\
+\texttt{tool} & \texttt{name}, \texttt{version} (wymagane), \texttt{commit} (napis albo
+\texttt{null}) --- narzędzie, które zapisało plik \\
+\texttt{source} & \texttt{kind}: \texttt{http-proxy} (proxy nagrywające) albo \texttt{synthetic}
+(ruch pisany ręcznie lub generowany); \texttt{target} (URI), \texttt{listen} \\
+\texttt{sanitization} & \texttt{redactedHeaders} (unikalne nazwy nagłówków),
+\texttt{maxBodyBytes} ($\geq 0$) \\
+\texttt{sessionKeys} & unikalne, niepuste nazwy ciasteczek albo nagłówków, których wartość
+identyfikuje sesję użytkownika; wymiany jednej sesji są odtwarzane jako jeden scenariusz \\
+\midrule
+\textbf{\texttt{http.exchange}} & każda następna linia; wszystkie pola wymagane \\
+\texttt{id} & identyfikator (jak \texttt{captureId}), unikalny w~pliku \\
+\texttt{seq} & liczba całkowita $\geq 1$, ściśle rosnąca w~pliku \\
+\texttt{session} & napis 1--128 znaków: sesja, do której należy wymiana \\
+\texttt{startedAt}, \texttt{durationMs} & \texttt{date-time}; liczba $\geq 0$ \\
+\texttt{request} & \texttt{method} (\texttt{A-Z}, 3--10 liter), \texttt{path} (zaczyna się od
+\texttt{/}), \texttt{query} (surowy, z~początkowym \texttt{?}), \texttt{headers} (wymagane),
+\texttt{body} \\
+\texttt{response} & \texttt{status} (100--599), \texttt{headers} (wymagane), \texttt{body} \\
+\midrule
+\textbf{części wspólne} & \\
+\texttt{headers} & obiekt: nazwa nagłówka małymi literami (znaki tokenu HTTP) → lista
+napisów \\
+\texttt{body} & \texttt{null} albo jeden z~trzech wariantów: \texttt{\{encoding: json, json\}},
+\texttt{\{encoding: text, text\}}, \texttt{\{encoding: base64, base64\}}; każdy może mieć
+\texttt{contentType} i~\texttt{size} (pełny rozmiar w~bajtach), a~\texttt{text} i~\texttt{base64} także \texttt{truncated} \\
+\end{xltabular}
+}
+
+\paragraph{Reguły poza schematem.} Plik zaczyna się dokładnie jednym nagłówkiem, w~pierwszej
+linii; identyfikatory wymian są unikalne, a~\repopath{seq} ściśle rośnie --- kolejność replay
+to kolejność nagrania, więc plik przestawiony jest odrzucany. Pusty plik jest błędem.
+
+\paragraph{Co zapisuje \texttt{sk capture}.} \repopath{captureId} ma postać
+\texttt{cap-<yyyyMMddHHmmss>-<6 znaków hex>}, identyfikator wymiany ---
+\repopath{ex-<seq, 6 cyfr>}, np. \repopath{ex-000001}. Sesja to \repopath{s-} i~pierwsze 12
+znaków szesnastkowych SHA-256 z~nazwy klucza i~wartości, więc nagranie nigdy nie niesie
+samego sekretu sesji; wymiana bez klucza sesji dostaje sesję \repopath{anon-<seq>}. Numer
+\repopath{seq} jest nadawany pod tą samą blokadą, pod którą zapisywana jest linia, więc
+kolejność w~pliku i~kolejność \repopath{seq} nie mogą się rozjechać. Każda wymiana jest
+zapisywana i~opróżniana z~bufora, gdy się zakończy.
+
+\paragraph{Kodowanie treści.} Typy JSON (\repopath{application/json} i~\repopath{*+json})
+są parsowane, chyba że treść obcięto; zadeklarowany JSON, który nie jest JSON-em, jest
+zapisywany jako tekst. Typy tekstowe (\repopath{text/*}, \repopath{application/xml},
+\repopath{application/javascript}, \repopath{application/x-javascript},
+\path{application/x-www-form-urlencoded}, \repopath{application/soap+xml}, \repopath{*+xml})
+oraz obcięty JSON są dekodowane zadeklarowanym charsetem --- systemy legacy często mówią
+windows-1250 albo ISO-8859-2 --- a~przy nieznanym charsecie jako UTF-8. Wszystko inne jest
+zapisywane jako base64. Treść dłuższa niż limit jest obcinana i~dostaje
+\repopath{truncated: true}; brak treści to \repopath{null}. Przykład z~\path{schemas/samples/sample.skcap} --- nagłówek i~piąta wymiana (każde zdarzenie to w~pliku
+jedna linia):
+
+\begin{lstlisting}
+{"type":"capture.header","v":1,"captureId":"cap-20260926-sample","startedAt":"2026-09-26T09:00:00Z","tool":{"name":"secondkey","version":"0.1.0","commit":null},"source":{"kind":"http-proxy","target":"http://127.0.0.1:5080/","listen":"http://127.0.0.1:8080"},"sanitization":{"redactedHeaders":["authorization","cookie","set-cookie"],"maxBodyBytes":1048576},"sessionKeys":["sk_session"]}
+{"type":"http.exchange","v":1,"id":"ex-000005","seq":5,"session":"s-19b2f4","startedAt":"2026-09-26T09:01:10.000Z","durationMs":3.3,"request":{"method":"POST","path":"/checkout","headers":{"content-type":["application/json"],"cookie":["<redacted>"]},"body":{"encoding":"json","contentType":"application/json","json":{"email":"buyer@example.com"}}},"response":{"status":500,"headers":{"content-type":["text/plain; charset=utf-8"]},"body":{"encoding":"text","contentType":"text/plain","text":"Object reference not set to an instance of an object."}}}
+\end{lstlisting}
+
+\zrodla{\path{letsgolegacy.secondkey/schemas/skcap.schema.json},
+\path{letsgolegacy.secondkey/schemas/samples/sample.skcap},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/CaptureFile.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/CaptureWriter.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/BodyCodec.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/RecordingProxy.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/SessionTracker.cs}}
+
+\subsection{Przebieg: \texttt{*.skrun}}\label{sec:formaty-skrun}
+
+Plik przebiegu (run) zapisuje, co każda strona odpowiedziała, gdy odtworzono na niej capture.
+Pierwsza linia to \repopath{run.header}, ostatnia --- \repopath{run.end}; plik bez
+\repopath{run.end} to przebieg przerwany, który komparator odrzuca.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Pole & Typ, ograniczenia i~znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Pole & Typ, ograniczenia i~znaczenie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\textbf{\texttt{run.header}} & pierwsza linia; wszystkie pola wymagane \\
+\texttt{runId}, \texttt{startedAt}, \texttt{tool} & identyfikator; \texttt{date-time}; jak w~capture \\
+\texttt{capture} & \texttt{captureId} i~\texttt{sha256} (wymagane), \texttt{path} --- który
+capture odtworzono \\
+\texttt{sides} & \texttt{legacy} i~\texttt{candidate}, każda z~\texttt{baseUrl} (URI,
+wymagane), \texttt{reset} (\texttt{none}, \texttt{sqlserver-snapshot}, \texttt{http},
+\texttt{command}) i~\texttt{probe} (\texttt{none}, \texttt{sqlserver-tables}) \\
+\texttt{scenarioMode} & \texttt{session}: wymiany jednej nagranej sesji odtwarzane razem, po
+kolei, po jednym resecie; \texttt{exchange}: każda wymiana to osobny scenariusz \\
+\midrule
+\textbf{\texttt{state.reset}} & \texttt{scenario}, \texttt{side}, \texttt{method},
+\texttt{outcome} (\texttt{ok}, \texttt{failed}), \texttt{durationMs}; opcjonalnie
+\texttt{detail} --- wynik resetu strony przed scenariuszem \\
+\midrule
+\textbf{\texttt{exchange.result}} & wymagane \texttt{exchange}, \texttt{scenario},
+\texttt{side}, \texttt{seq}, \texttt{startedAt}, \texttt{durationMs}, \texttt{request} \\
+\texttt{request} & żądanie tak, jak wysłano je tej stronie, po podstawieniach korelacji
+(definicja z~capture) \\
+\texttt{response} albo \texttt{error} & dokładnie jedno z~nich; \texttt{error} ma
+\texttt{kind} (\texttt{connection}, \texttt{timeout}, \texttt{protocol},
+\texttt{reset-failed}) i~\texttt{message} --- strona nie odpowiedziała: żądanie jest
+zapisane, odpowiedź nie \\
+\texttt{db} & zmiany wierszy widziane przez sondę: \texttt{probe} i~\texttt{tables}, gdzie
+każda tabela ma \texttt{inserted}, \texttt{deleted} (listy wierszy) i~\texttt{updated} (lista
+\texttt{\{key, before, after\}}) \\
+\texttt{outbound} & wywołania wychodzące: \texttt{method}, \texttt{url} (wymagane),
+\texttt{request} (\texttt{headers}, \texttt{body}), \texttt{response} \\
+\midrule
+\textbf{\texttt{run.end}} & ostatnia linia; wymagane \texttt{finishedAt}, \texttt{scenarios},
+\texttt{results} \\
+\end{xltabular}
+}
+
+\paragraph{Reguły poza schematem.} Nagłówek jest w~pierwszej linii i~tylko tam; po
+\repopath{run.end} nie może być nic; każda wymiana ma co najwyżej jeden wynik na stronę;
+\repopath{run.end.results} musi równać się liczbie wyników w~pliku. Pusty plik jest błędem.
+
+\paragraph{Co zapisuje \texttt{sk replay}.} \repopath{runId} ma postać
+\texttt{run-<yyyyMMddHHmmss>-<6 znaków hex>}. Nagłówek cytuje SHA-256 pliku capture i~jego
+nazwę (dla capture z~pamięci --- 64 zera; tak wygląda próbka). Każdy scenariusz jest
+odtwarzany najpierw na stronie legacy, potem na kandydacie; przed każdą stroną stoi zdarzenie
+\repopath{state.reset}. Nagłówki żądań i~odpowiedzi są w~wyniku redagowane według listy z~nagłówka capture. Pole \repopath{db} pojawia się tylko przy skonfigurowanej sondzie i~tylko
+wtedy, gdy coś się zmieniło; tabele bez zmian są pomijane. Replay w~fazie 01 nie wypełnia pola
+\repopath{outbound} (wywołania wychodzące to faza 02). Przykład z~\path{schemas/samples/sample.skrun}: nagłówek, reset i~wynik kandydata w~scenariuszu \repopath{s-19b2f4} oraz \repopath{run.end} (pozostałe linie pominięto).
+
+\begin{lstlisting}
+{"type":"run.header","v":1,"runId":"run-20260926-sample","startedAt":"2026-09-26T10:00:00Z","tool":{"name":"secondkey","version":"0.1.0","commit":null},"capture":{"captureId":"cap-20260926-sample","sha256":"0000000000000000000000000000000000000000000000000000000000000000","path":"sample.skcap"},"sides":{"legacy":{"baseUrl":"http://127.0.0.1:5080/","reset":"http","probe":"none"},"candidate":{"baseUrl":"http://127.0.0.1:5081/","reset":"http","probe":"none"}},"scenarioMode":"session"}
+{"type":"state.reset","v":1,"scenario":"s-19b2f4","side":"candidate","method":"http","outcome":"ok","durationMs":2.9}
+{"type":"exchange.result","v":1,"exchange":"ex-000005","scenario":"s-19b2f4","side":"candidate","seq":5,"startedAt":"2026-09-26T10:00:09.500Z","durationMs":3.0,"request":{"method":"POST","path":"/checkout","headers":{"content-type":["application/json"],"cookie":["<redacted>"]},"body":{"encoding":"json","contentType":"application/json","json":{"email":"buyer@example.com"}}},"response":{"status":400,"headers":{"content-type":["application/json; charset=utf-8"]},"body":{"encoding":"json","contentType":"application/json","json":{"error":"cart-empty"}}}}
+{"type":"run.end","v":1,"finishedAt":"2026-09-26T10:00:10Z","scenarios":2,"results":10}
+\end{lstlisting}
+
+\zrodla{\path{letsgolegacy.secondkey/schemas/skrun.schema.json},
+\path{letsgolegacy.secondkey/schemas/samples/sample.skrun},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Runs/RunFile.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Runs/RunWriter.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/Probes/SqlServerTableProbe.cs},
+\path{letsgolegacy.secondkey/docs/formats/contract.md}}
+
+\subsection{Kontrakt: \texttt{contract.yaml}}\label{sec:formaty-kontrakt}
+
+Kontrakt mówi, co system \textbf{musi} robić, czego \textbf{nigdy} nie może robić i~które
+różnice między dwiema wersjami nie mają znaczenia. To YAML, walidowany schematem
+\path{contract.schema.json}, a~potem regułami \repopath{ContractRules}
+(sekcja~\ref{sec:formaty-bledy}). Przykład jest na końcu tej sekcji.
+
+\subsubsection{Struktura dokumentu}
+
+\begin{lstlisting}
+apiVersion: secondkey/v1
+kind: Contract
+metadata: { name: sample-shop, revision: 1 }   # revision: bump it whenever a clause changes
+compare:   { headers: [content-type, location], html: extracts }
+extract:   [ ... ]      # named values pulled out of responses
+normalize: { ... }      # differences that do not matter
+clauses:   [ ... ]      # what must happen, what must never happen
+\end{lstlisting}
+
+Wymagane są \repopath{apiVersion} (stała \repopath{secondkey/v1}), \repopath{kind}
+(\repopath{Contract}), \repopath{metadata} i~\repopath{clauses} (co najmniej jedna).
+\repopath{metadata} wymaga \repopath{name} (mała litera, potem do 63 znaków z~liter, cyfr,
+\repopath{\_} i~\repopath{-}) oraz \repopath{revision} (liczba całkowita $\geq 1$, do
+podbicia przy każdej zmianie klauzuli); opcjonalne są \repopath{title}, \repopath{system} i~\repopath{owners} (lista napisów).
+
+\subsubsection{Klauzule: \texttt{must} i~\texttt{never}}
+
+Klauzula ma pola: \repopath{id} (UPPER-KEBAB, np. \repopath{CHECKOUT-NEVER-5XX}, najwyżej 64
+znaki, unikalny w~kontrakcie), \repopath{kind}, \repopath{title} (co najmniej 3 znaki),
+\repopath{why} (co najmniej 10 znaków), opcjonalny zakres \repopath{when}, \repopath{assert}
+(co najmniej jeden predykat) i~\repopath{provenance}. Wszystkie poza \repopath{when} są
+wymagane.
+
+\begin{itemize}
+  \item \textbf{\texttt{must}} --- każda asercja jest spełniona dla każdego żądania w~zakresie.
+  \item \textbf{\texttt{never}} --- asercje nigdy nie są spełnione \emph{wszystkie naraz} dla
+        żadnego żądania w~zakresie. Klauzula \repopath{never} opisuje sytuację zakazaną i~przechodzi, gdy ta sytuacja nie występuje.
+  \item \textbf{\texttt{why}} mówi, co psuje się dla biznesu, gdy klauzula przestaje
+        obowiązywać: „a~clause that cannot answer this is decoration”.
+\end{itemize}
+
+Klauzula jest ewaluowana osobno na obserwacji każdej wymiany po każdej stronie. Żądanie spoza
+zakresu daje \repopath{not-applicable}. Jeśli którykolwiek predykat nie daje się ewaluować
+(np. czyta wartość, której nie udało się wyekstrahować), klauzula ma wynik \repopath{error},
+który liczy się przeciwko stronie, na której wystąpił --- nieczytelna wartość nigdy nie jest
+przejściem. W~przeciwnym razie \repopath{must} daje \repopath{pass}, gdy wszystkie predykaty
+są spełnione, a~\repopath{fail} ze szczegółem pierwszego niespełnionego; \repopath{never}
+daje \repopath{fail}, gdy wszystkie predykaty są spełnione (ze szczegółami wszystkich), a~\repopath{pass} w~pozostałych przypadkach.
+
+\subsubsection{Zakres: \texttt{when}}
+
+\repopath{when} (w~klauzuli i~w~ekstraktorze) wybiera żądania; bez niego klauzula dotyczy
+każdego żądania. Każdy podany klucz musi pasować, a~obiekt musi mieć co najmniej jeden klucz:
+
+\begin{itemize}
+  \item \repopath{method} --- jedna metoda albo lista metod (wielkie litery, 3--10 znaków);
+  \item \repopath{path} --- wyrażenie regularne dopasowywane do ścieżki żądania; dopasowanie
+        nie jest domyślnie zakotwiczone, stąd \repopath{\textasciicircum/cart\$} w~przykładach;
+  \item \repopath{query} --- nazwa parametru → wyrażenie regularne; parametr musi wystąpić,
+        a~co najmniej jedna jego wartość musi pasować.
+\end{itemize}
+
+Wszystkie wyrażenia regularne kontraktu są niezależne od kultury i~mają limit czasu jednej
+sekundy.
+
+\subsubsection{Obserwacja i~korzenie ścieżek}
+
+Każda asercja wybiera wartości z~\emph{obserwacji} jednego żądania po jednej stronie ---
+dokumentu JSON o~pięciu korzeniach:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Korzeń & Zawartość \\
+\midrule
+\texttt{request} & \texttt{method}, \texttt{path}, \texttt{query.<name>} (lista),
+\texttt{headers.<name>} (lista), \texttt{body.json…}, \texttt{body.text},
+\texttt{body.form.<field>} (lista; dla treści \path{application/x-www-form-urlencoded}),
+\texttt{body.base64}, \texttt{body.size} \\
+\texttt{response} & \texttt{status}, \texttt{headers.<name>} (lista), \texttt{body.json…},
+\texttt{body.text}, \texttt{body.base64}, \texttt{body.size} \\
+\texttt{extract} & \texttt{extract.<name>} --- wartości wyciągnięte przez ekstraktory \\
+\texttt{db} & \path{db["dbo.Orders"].inserted}, \texttt{deleted}, \texttt{updated} --- zmiany wierszy, gdy
+skonfigurowano sondę \\
+\texttt{outbound} & wywołania, które system wykonał do innych systemów (faza 02) \\
+\bottomrule
+\end{tabularx}
+}
+
+Nazwy nagłówków są pisane małymi literami, a~każdy nagłówek jest listą:
+\path{response.headers.location[0]}. Gdy strona nie odpowiedziała, obserwacja nie ma korzenia
+\repopath{response}, tylko wewnętrzny element \repopath{error} z~rodzajem i~komunikatem; język
+ścieżek go nie udostępnia.
+
+\subsubsection{Składnia ścieżek}
+
+Ścieżka zaczyna się korzeniem, po którym następują segmenty:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Segment & Znaczenie \\
+\midrule
+\texttt{.name} & właściwość obiektu; nazwa z~liter i~cyfr ASCII oraz \texttt{\_}, \texttt{-},
+\texttt{\$} \\
+\texttt{[3]} & element tablicy o~indeksie 3; indeks poza końcem nie wybiera niczego \\
+\texttt{[*]} & każdy element tablicy albo każda wartość obiektu; na skalarze --- nic \\
+\texttt{.**} & bieżący węzeł i~każdy węzeł pod nim, na dowolnej głębokości; musi po nim
+nastąpić segment, np. \path{response.body.json.**.cardNumber} \\
+\path{["name.with.dots"]} & nazwa z~kropkami lub innymi znakami; \texttt{\textbackslash}
+poprzedza cudzysłów albo ukośnik wsteczny wewnątrz nazwy \\
+\bottomrule
+\end{tabularx}
+}
+
+Brakująca właściwość nie wybiera niczego, a~właściwość obecna z~wartością JSON
+\repopath{null} wybiera wpis \repopath{null}. Ścieżka z~\repopath{[*]} albo \repopath{**} jest
+wielowartościowa. Ten sam język lokalizuje różnice w~\repopath{verdict.json}, więc ścieżkę z~różnicy można wkleić do reguły \repopath{ignore} albo do klauzuli bez tłumaczenia.
+
+\textbf{Ścieżki z~nawiasami wewnątrz \texttt{\{ … \}} trzeba cytować.} W~YAML flow mapping
+nawiasy kwadratowe są składnią, więc pisze się pierwszą postać; w~stylu blokowym, w~osobnej
+linii, cudzysłowy nie są potrzebne:
+
+\begin{lstlisting}
+{ select: "response.headers.location[0]", ... }
+select: response.headers.location[0]
+\end{lstlisting}
+
+\subsubsection{Predykaty i~operatory}
+
+Predykat ma pola: \repopath{select} (ścieżka, wymagana), \repopath{op} (wymagany),
+\repopath{value} (dowolna wartość JSON), \repopath{ref} (ścieżka), \repopath{min},
+\repopath{max}, \repopath{absolute} ($> 0$), \repopath{relative} ($> 0$, $\leq 1$),
+\repopath{quantifier} i~\repopath{ignoreCase}. Zbiór operatorów jest zamknięty: nieznany
+operator jest błędem walidacji, a~silnik nie ma gałęzi domyślnej, która przepuszcza.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}p{5.3cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Operator & Wymaga (i~wyklucza) & Spełniony, gdy \\
+\midrule
+\endfirsthead
+\toprule
+Operator & Wymaga (i~wyklucza) & Spełniony, gdy \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{exists} / \texttt{absent} & nic; żadne inne pole predykatu nie jest dozwolone &
+wybrano / nie wybrano żadnej wartości różnej od \texttt{null} \\
+\texttt{equals} / \texttt{notEquals} & dokładnie jedno z~\texttt{value}, \texttt{ref}; bez
+\texttt{min}, \texttt{max}, \texttt{absolute}, \texttt{relative} & równość JSON: liczby
+numerycznie (\texttt{1}, \texttt{1.0} i~\texttt{1.00} są równe), napisy znak po znaku (ordinal; bez
+wielkości liter przy \texttt{ignoreCase}), obiekty i~tablice strukturalnie \\
+\texttt{lt} \texttt{lte} \texttt{gt} \texttt{gte} & dokładnie jedno z~\texttt{value},
+\texttt{ref}; bez \texttt{min}, \texttt{max}, \texttt{absolute}, \texttt{relative},
+\texttt{ignoreCase} & porównanie liczbowe; wartość, która nie jest liczbą, nigdy go nie
+spełnia \\
+\texttt{between} & \texttt{min} i~\texttt{max} ($\texttt{min} \leq \texttt{max}$); bez
+\texttt{value}, \texttt{ref}, \texttt{absolute}, \texttt{relative}, \texttt{ignoreCase} &
+$\texttt{min} \leq x \leq \texttt{max}$, tylko dla liczb \\
+\texttt{approx} & dokładnie jedno z~\texttt{value}, \texttt{ref} i~dokładnie jedno z~\texttt{absolute}, \texttt{relative}; bez \texttt{min}, \texttt{max}, \texttt{ignoreCase} &
+$|x - t| \leq \texttt{absolute}$ albo $|x - t| \leq \texttt{relative} \cdot |t|$, gdzie $t$ to
+wartość odniesienia \\
+\texttt{matches} / \texttt{notMatches} & \texttt{value}: niepusty napis będący poprawnym
+regexem; bez \texttt{ref}, \texttt{min}, \texttt{max}, \texttt{absolute}, \texttt{relative} &
+regex znajduje dopasowanie w~tekście wartości (napis, liczba albo wartość logiczna jako
+tekst), niezależnie od kultury; \texttt{notMatches} jest spełniony także dla wartości bez
+tekstu (\texttt{null}, obiekt, tablica) \\
+\texttt{contains} / \texttt{notContains} & dokładnie jedno z~\texttt{value}, \texttt{ref};
+bez \texttt{min}, \texttt{max}, \texttt{absolute}, \texttt{relative} & dla tablicy: któryś
+element jest równy (JSON) operandowi; w~pozostałych przypadkach: podciąg tekstu wartości \\
+\texttt{in} / \texttt{notIn} & \texttt{value}: niepusta lista; bez \texttt{ref}, \texttt{min},
+\texttt{max}, \texttt{absolute}, \texttt{relative} & wartość jest równa (JSON) jednemu /
+żadnemu elementowi listy \\
+\texttt{countEquals} \texttt{countAtLeast} \texttt{countAtMost} & \texttt{value}: liczba
+całkowita $\geq 0$; bez \texttt{ref}, \texttt{min}, \texttt{max}, \texttt{absolute},
+\texttt{relative}, \texttt{quantifier}, \texttt{ignoreCase} & na liczbie wybranych wartości
+różnych od \texttt{null} --- albo, gdy ścieżka bez \texttt{[*]} i~\texttt{**} trafia w~jedną
+tablicę (ekstraktor \texttt{all: true}), na liczbie jej elementów \\
+\end{xltabular}
+}
+
+\repopath{ignoreCase} jest dozwolony przy \repopath{equals}, \repopath{notEquals},
+\repopath{matches}, \repopath{notMatches}, \repopath{contains}, \repopath{notContains},
+\repopath{in} i~\repopath{notIn}.
+
+\subsubsection{Kwantyfikatory i~\texttt{ref}}
+
+Gdy ścieżka wybiera kilka wartości, o~wyniku operatora wartościowego decyduje
+\repopath{quantifier}: \textbf{\texttt{all}} (domyślny) --- wybrano co najmniej jedną wartość
+i~każda spełnia; \textbf{\texttt{any}} --- co najmniej jedna spełnia; \textbf{\texttt{none}}
+--- żadna nie spełnia (pusta selekcja się kwalifikuje). Wybrane wpisy \repopath{null} biorą
+udział w~teście i~nie spełniają np. porównań liczbowych. Kwantyfikator nie dotyczy
+\repopath{exists}, \repopath{absent} ani operatorów liczności.
+
+\repopath{ref} porównuje z~inną wybraną wartością zamiast z~literałem:
+
+\begin{lstlisting}
+{ select: extract.cartTotal, op: equals, ref: response.body.json.total }
+\end{lstlisting}
+
+Referencja
+musi wybrać dokładnie jedną wartość; w~przeciwnym razie predykat jest błędem („a~reference
+must select exactly one”). Referencja do ekstraktu, którego nie udało się wyciągnąć, też jest
+błędem.
+
+\subsubsection{Brak pustego przejścia}
+
+\finding{Żadna asercja nie przechodzi pusto.} Klauzula, której \repopath{when} nie dopasował
+w~przebiegu żadnego żądania, ma status \repopath{unexercised} i~nigdy nie jest raportowana jako
+spełniona: werdykt liczy takie klauzule osobno, \repopath{sk compare} wypisuje zaakceptowane
+klauzule \repopath{unexercised}, a~raport wymienia je w~części o~tym, czego dowód nie
+pokazuje. Klauzula jest \emph{exercised} w~wymianie, w~której dotyczyła co najmniej jednej
+strony. Kwantyfikator \repopath{all} nie jest spełniony przez pustą selekcję. Wartość, której
+nie udało się wyekstrahować, jest błędem, a~nie nieobecnością. Przebieg bez wyników jest
+niepoprawnym wejściem: nic nie porównano, więc nic nie może przejść.
+
+\subsubsection{Ekstraktory}
+
+Klauzule nigdy nie czytają prozy. Wartość, która żyje na stronie HTML, najpierw wyciąga
+ekstraktor:
+
+\begin{lstlisting}
+extract:
+  - name: cartTotal
+    when: { method: GET, path: "^/cart$" }
+    from: html                    # html | json | header | text
+    selector: ".order-total"      # a CSS selector for html; a regex with one group for text
+    as: decimal                   # string | decimal | integer | boolean
+    culture: pl-PL                # how numbers in the page are written; default invariant
+\end{lstlisting}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Pole & Znaczenie \\
+\midrule
+\texttt{name} & wymagana nazwa (jak \texttt{metadata.name}), unikalna; klauzule czytają
+\texttt{extract.<name>} \\
+\texttt{when} & zakres jak w~klauzuli; ekstraktor działa tylko na żądaniach w~zakresie i~tylko
+wtedy, gdy strona odpowiedziała \\
+\texttt{from}, \texttt{selector} & wymagane. \texttt{html}: selektor CSS; elementy w~kolejności
+dokumentu, ich tekst z~białymi znakami zwiniętymi do pojedynczych spacji. \texttt{json}:
+ścieżka względem treści JSON, np. \texttt{items[0].price}; napisy wprost, inne wartości jako
+tekst JSON. \texttt{header}: nazwa nagłówka odpowiedzi (bez względu na wielkość liter), każda
+jego wartość. \texttt{text}: regex na tekście treści; wartością jest pierwsza grupa każdego
+dopasowania \\
+\texttt{attribute} & tylko dla \texttt{html}: czyta ten atrybut zamiast tekstu elementu \\
+\texttt{regex} & filtr na wybranym tekście: wartością jest pierwsza grupa; brak dopasowania
+oznacza brak wartości \\
+\texttt{as} & \texttt{string} (domyślnie), \texttt{decimal} (styl liczbowy z~separatorami
+tysięcy i~symbolem waluty), \texttt{integer} (z~separatorami tysięcy), \texttt{boolean};
+tekst jest przycinany przed konwersją \\
+\texttt{culture} & kultura liczb, np. \texttt{en-US}, \texttt{pl-PL}; domyślnie niezmienna
+(invariant); musi być kulturą znaną środowisku uruchomieniowemu \\
+\texttt{all} & \texttt{true}: każde dopasowanie trafia do listy zamiast pierwszego \\
+\bottomrule
+\end{tabularx}
+}
+
+Ekstraktor bierze pierwsze dopasowanie; gdy nic nie pasuje, wartości nie ma. Tekst, którego
+nie da się przekonwertować, jest błędem ekstrakcji, np. „extractor 'cartTotal' found \textquotedbl{}…\textquotedbl{},
+which cannot be read as decimal in culture 'pl-PL'”: klauzule, które czytają tę wartość, mają
+wynik \repopath{error}, a~komparator porównuje błędy ekstrakcji między stronami jak wartości.
+
+\subsubsection{Listy z~\texttt{all: true} i~operatory jednowartościowe}
+
+Z~\repopath{all: true} ekstraktor zbiera każde dopasowanie do listy (w~kolejności dokumentu,
+także pustej): \repopath{extract.cartLineTotals} to cała lista, a~\path{extract.cartLineTotals[*]} --- jej wartości. Listę można policzyć, przeszukać albo
+sprawdzić wartość po wartości:
+
+\begin{lstlisting}
+- { select: extract.cartLineTotals, op: countAtLeast, value: 1 }    # how many
+- { select: extract.cartLineTotals, op: contains, value: 19.99 }    # is one of them
+- { select: "extract.cartLineTotals[*]", op: gt, value: 0 }         # each, under the quantifier
+\end{lstlisting}
+
+Operator, który testuje jedną wartość --- \repopath{lt}, \repopath{lte}, \repopath{gt},
+\repopath{gte}, \repopath{between}, \repopath{approx}, \repopath{matches},
+\repopath{notMatches} --- nie rozstrzyga niczego o~samej liście: lista nigdy nie jest liczbą,
+więc porównanie z~nią nigdy nie jest spełnione, i~nigdy nie jest tekstem, więc
+\repopath{matches} nigdy nie jest spełniony, a~\repopath{notMatches} zawsze. Klauzula zbudowana
+na takim operatorze przechodziłaby albo oblewała niezależnie od wartości, więc
+\repopath{sk validate} ją odrzuca --- w~\repopath{select} i~w~\repopath{ref} --- i~podaje
+ścieżkę z~\repopath{[*]}, której należy użyć. Reguła dotyczy ścieżki, która nazywa ekstraktor
+listowy i~na nim się kończy (\repopath{extract.<name>}); \path{extract.<name>[*]} i~\path{extract.<name>[0]} są poprawne.
+
+\subsubsection{Porównanie: \texttt{compare}}
+
+\repopath{compare.headers} to lista nagłówków odpowiedzi porównywanych między wersjami
+(małymi literami, unikalne; domyślnie \repopath{content-type} i~\repopath{location}).
+\repopath{compare.html} ma wartość \repopath{extracts} (domyślnie) albo \repopath{text}. Przy
+\repopath{extracts} strona HTML (\repopath{text/html}, \repopath{application/xhtml+xml}) jest
+porównywana \emph{tylko} przez wartości wyekstrahowane --- markup nie jest zachowaniem; przy
+\repopath{text} strony są porównywane jako tekst.
+
+\subsubsection{Normalizacja}
+
+Normalizacja opisuje różnice, które nie mają znaczenia:
+
+\begin{lstlisting}
+normalize:
+  ignore:     [response.body.json.generatedAt]
+  tolerances: [{ path: response.body.json.total, absolute: 0.01 }]
+  sets:       [{ path: response.body.json.items, key: sku }]   # order does not matter
+  masks:
+    timestamps: true      # ISO-8601 date-times become <timestamp>
+    guids: true           # GUIDs become <guid>
+    patterns:
+      - { name: csrf, regex: 'value="[^"]{20,}"', replacement: 'value="<token>"' }
+\end{lstlisting}
+
+\begin{itemize}
+  \item \textbf{\texttt{ignore}} --- lista unikalnych ścieżek. Różnica w~ignorowanej ścieżce
+        albo pod nią jest wyjaśniona tą regułą.
+  \item \textbf{\texttt{tolerances}} --- \repopath{path} i~dokładnie jedno z~\repopath{absolute} ($> 0$) albo \repopath{relative} ($> 0$, $\leq 1$). Dwie liczby w~pasującej ścieżce są równe, gdy $|l - c| \leq \texttt{absolute}$ albo
+        $|l - c| \leq \texttt{relative} \cdot \max(|l|, |c|)$; granica należy do tolerancji.
+  \item \textbf{\texttt{sets}} --- tablice porównywane jako kolekcje bez kolejności;
+        \repopath{path} i~opcjonalny \repopath{key}: ścieżka względem elementu (np.
+        \repopath{sku}, \repopath{id.value}). Z~kluczem elementy są porządkowane według
+        klucza, bez klucza --- według całej wartości; zagnieżdżone zbiory są porządkowane od
+        środka. Różnica kolejności jest wyjaśniona regułą zbioru tylko wtedy, gdy nic innego w~tej tablicy się nie różni.
+  \item \textbf{\texttt{masks}} --- \repopath{timestamps} zamienia daty z~czasem w~ISO-8601
+        (data, \repopath{T} albo spacja, godziny i~minuty, opcjonalnie sekundy, ułamek i~strefa, np. \repopath{2026-09-26T10:00:00Z}, \repopath{2026-09-26 10:00}) na
+        \repopath{<timestamp>}; \repopath{guids} zamienia samodzielne GUID-y (8-4-4-4-12
+        znaków szesnastkowych) na \repopath{<guid>}; \repopath{patterns} to lista
+        \repopath{\{name, regex, replacement\}}. Maski działają na każdej wartości napisowej
+        (nie na kluczach ani liczbach), w~kolejności: znaczniki czasu, GUID-y, wzorce.
+\end{itemize}
+
+\repopath{timestamps} maskuje wyłącznie daty ISO-8601. Inne formy --- \repopath{/Date(1411725600000)/}
+z~serializera JSON ASP.NET, \repopath{26.09.2026} --- są celowo pozostawione: gdy migracja
+zmienia sposób \emph{zapisu} daty, osoba powinna tę różnicę zobaczyć. Jeśli postać legacy
+trzeba ukryć po obu stronach, dodaje się maskę w~\repopath{patterns}. Reguły stosuje się w~stałej kolejności: \repopath{ignore}, potem maski, potem zbiory, a~tolerancje przy
+porównywaniu liczb. Różnica wyjaśniona którąkolwiek regułą czyni wymianę równą pod kontraktem,
+a~werdykt podaje regułę przy różnicy; różnica, której nic nie wyjaśnia, jest regresją, dopóki
+osoba nie doda reguły albo klauzuli.
+
+\subsubsection{Pochodzenie (\texttt{provenance})}
+
+\repopath{provenance} wymaga \repopath{origin} i~\repopath{status}. \repopath{origin}:
+\repopath{designed}, \repopath{mined}, \repopath{llm-draft}, \repopath{incident},
+\repopath{review}, \repopath{production-trace}, \repopath{manual-session}. \repopath{status}:
+\repopath{proposed} albo \repopath{accepted}. Tylko klauzule \repopath{accepted} decydują o~werdykcie; \repopath{proposed} --- napisane przez osobę, wydobyte z~nagrań albo naszkicowane
+przez model --- są ewaluowane i~raportowane, ale nie decydują o~niczym, dopóki osoba nie
+zaakceptuje ich w~przeglądanej zmianie pliku. Opcjonalne są \repopath{author},
+\repopath{date} (format \repopath{date}) i~\repopath{support} dla klauzul wydobytych:
+\repopath{observations} (na ilu obserwacjach widziano niezmiennik) i~\repopath{violations}
+(ile mu przeczyło).
+
+\subsubsection{Udział klauzul nieobecności}
+
+Kontrakt musi zawierać \textbf{co najmniej jedną zaakceptowaną klauzulę \texttt{never}}:
+kontrakt, który nie mówi, czego nie wolno, wykonał połowę swojej pracy. Walidator zgłasza
+brak jako błąd w~\repopath{/clauses} („the contract has no accepted 'never' clause: a~contract
+must state at least one thing that must never happen”); klauzula \repopath{never} w~statusie
+\repopath{proposed} się nie liczy. Werdykt podaje \repopath{absenceShare}: udział klauzul
+\repopath{never} wśród zaakceptowanych, zaokrąglony do czterech miejsc po przecinku; bez
+zaakceptowanych klauzul pola nie ma. \repopath{sk compare} wypisuje go w~procentach, a~raport
+pokazuje go jako „Absence share”.
+
+\subsubsection{Tekst klauzuli w~języku naturalnym}
+
+Werdykt zawiera każdą klauzulę wyrenderowaną po angielsku dla osób, które nie czytają YAML.
+Renderowanie jest deterministyczne, więc zdanie może stać w~podpisanym dowodzie. Zakres
+brzmi „For every request”, „For GET /cart” (dla ścieżki zakotwiczonej literalnie) albo „For
+requests to paths matching …”, z~dopiskiem „with query … matching …”; \repopath{must} łączy
+predykaty przez „, and”, a~\repopath{never} zaczyna się od „it never happens that”. Przykłady
+z~próbki werdyktu:
+
+\begin{lstlisting}
+For every request: it never happens that response.body.json.total is less than 0.
+For GET /cart: extract.cartTotal is present, and extract.cartLineTotals has at least 1 value(s).
+For GET /products: every response.body.json.items[*].price is greater than 0.
+\end{lstlisting}
+
+\subsubsection{Przykład}
+
+\path{schemas/samples/contract.yaml} używa każdej części formatu: ekstraktorów z~HTML, reguł
+normalizacji oraz klauzul \repopath{must} i~\repopath{never}. Poniżej jego metadane i~trzy z~sześciu klauzul --- klauzula nieobecności bez zakresu, klauzula na wartościach
+wyekstrahowanych i~klauzula w~statusie \repopath{proposed} z~pochodzeniem \repopath{mined};
+ekstraktory i~normalizacja tego pliku to te same konstrukcje, które pokazano wyżej.
+
+\begin{lstlisting}
+apiVersion: secondkey/v1
+kind: Contract
+metadata:
+  name: sample-shop
+  title: Sample shop — catalogue, cart and checkout
+  system: SampleShop (legacy)
+  revision: 1
+  owners: [second-line-risk]
+...
+clauses:
+  - id: TOTAL-NEVER-NEGATIVE
+    kind: never
+    title: A cart or order total is never negative
+    why: A negative total means a discount stacked past the price — the shop pays the customer to take goods.
+    assert:
+      - { select: response.body.json.total, op: lt, value: 0 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CART-SHOWS-TOTAL-AND-LINES
+    kind: must
+    title: The cart page shows a total and at least one line
+    why: A cart page without its total or its lines leaves the customer nothing to check the price against.
+    when: { method: GET, path: "^/cart$" }
+    assert:
+      - { select: extract.cartTotal, op: exists }
+      - { select: extract.cartLineTotals, op: countAtLeast, value: 1 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+...
+  - id: PRODUCTS-PRICED
+    kind: must
+    title: Every listed product has a positive price
+    why: A zero or missing price lets a product be ordered for free.
+    when: { method: GET, path: "^/products$" }
+    assert:
+      - { select: "response.body.json.items[*].price", op: gt, value: 0 }
+    provenance: { origin: mined, status: proposed, support: { observations: 42, violations: 0 } }
+\end{lstlisting}
+
+Wielokropki oznaczają pominięte fragmenty pliku.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/contract.md},
+\path{letsgolegacy.secondkey/docs/adr/0002-contract-language.md},
+\path{letsgolegacy.secondkey/schemas/contract.schema.json},
+\path{letsgolegacy.secondkey/schemas/samples/contract.yaml},
+\path{letsgolegacy.secondkey/schemas/samples/verdict.json},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Contracts/ContractFile.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Paths/SelectorPath.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/ContractEngine.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/RequestMatcher.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/Observations/ObservationBuilder.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/Extraction/ExtractorSet.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/Predicates/PredicateEvaluator.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/Predicates/JsonValues.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/Rendering/ClauseText.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/Normalizer.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/Comparator.cs}}
+
+\subsection{Walidacja kontraktu i~typowe błędy}\label{sec:formaty-bledy}
+
+\repopath{sk validate contract.yaml} przeprowadza kontrakt przez trzy etapy; kontrakt, który
+nie przejdzie któregokolwiek, jest odrzucany w~całości --- „a~verdict computed against three
+quarters of a~contract is not a~verdict”.
+
+\begin{enumerate}
+  \item \textbf{YAML → JSON.} Typy według YAML 1.2 core schema, nie YAML 1.1: typowane są
+        tylko \repopath{true}/\repopath{false}, \repopath{null}/\repopath{\textasciitilde{}} i~liczby; niecytowane \repopath{2026-09-26} i~\repopath{no} zostają napisami, a~skalary
+        w~cudzysłowie są zawsze napisami. Plik musi mieć dokładnie jeden dokument, klucze
+        mapowań muszą być zwykłymi napisami, a~zdublowany klucz jest błędem. Dokument musi
+        być mapowaniem.
+  \item \textbf{Schemat} \path{contract.schema.json}.
+  \item \textbf{Reguły poza schematem} (\repopath{ContractRules}): unikalne identyfikatory
+        klauzul i~nazwy ekstraktorów, referencje \repopath{extract.<name>} (w~\repopath{select}, \repopath{ref}, \repopath{ignore}, \repopath{tolerances},
+        \repopath{sets}) do zdefiniowanych ekstraktorów, parsujące się ścieżki i~klucze
+        zbiorów, kompilujące się regexy (\repopath{when.path}, \repopath{when.query},
+        \repopath{matches}, maski, ekstraktory) z~grupą tam, gdzie wartością jest pierwsza
+        grupa, znane kultury, $\texttt{min} \leq \texttt{max}$ w~\repopath{between}, zakaz
+        operatorów jednowartościowych na całej liście i~co najmniej jedna zaakceptowana
+        klauzula \repopath{never}.
+\end{enumerate}
+
+Raport błędów ma postać \repopath{<plik>: N error(s)}, a~pod nim po jednej linii na błąd:
+wskaźnik JSON i~komunikat. Typowe błędy (z~testów walidatorów):
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Przyczyna & Położenie i~komunikat \\
+\midrule
+\endfirsthead
+\toprule
+Przyczyna & Położenie i~komunikat \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\textbf{\texttt{contract.yaml}} & \\
+nieznany klucz & \texttt{/surprise}: 'surprise' is not allowed here: the format does not
+define it \\
+zdublowany klucz YAML & not valid YAML: … Duplicate key revision \\
+predykat z~\texttt{value} i~\texttt{ref}; \texttt{approx} bez tolerancji; \texttt{exists} z~\texttt{value}; \texttt{matches} z~liczbą; tolerancja z~oboma ograniczeniami; atrybut przy
+ekstraktorze innym niż \texttt{html} & błąd schematu w~położeniu predykatu, tolerancji albo
+ekstraktora, np. \texttt{/clauses/2/assert/0} \\
+klauzula bez \texttt{why}; nieznany operator; \texttt{id} w~złym kształcie & błąd schematu w~\texttt{/clauses/2}, \texttt{/clauses/0/assert/0/op}, \texttt{/clauses/0/id} \\
+zdublowany identyfikator & clause 'TOTAL-NEVER-NEGATIVE' is defined more than once;
+extractor 'cartTotal' is defined more than once \\
+niezdefiniowany ekstraktor & 'extract.grandTotal' refers to extractor 'grandTotal', which is
+not defined under extract: \\
+ścieżka \texttt{extract} bez nazwy & an extract path names the extractor, e.g.
+extract.orderTotal \\
+regex, który się nie kompiluje & not a~valid regular expression: … \\
+ścieżka, która się nie parsuje & ** must be followed by a~segment, e.g. **.name; expected a~name at position …; unterminated '[' \\
+\texttt{between} z~\texttt{min} > \texttt{max} & between: min 5 is greater than max 1 \\
+nieznana kultura & 'xx-QQ' is not a~culture this runtime knows \\
+regex ekstraktora bez grupy & '…' needs a~capture group: its first group is the extracted
+value \\
+operator jednowartościowy na całej liście & 'extract.cartLineTotals' is the whole list that
+extractor 'cartLineTotals' collects (all: true), but 'gt' tests one value, … Test each value
+with 'extract.cartLineTotals[*]' and a~quantifier, or count them with countEquals,
+countAtLeast or countAtMost. \\
+brak zaakceptowanej klauzuli \texttt{never} & \texttt{/clauses}: the contract has no accepted
+'never' clause: a~contract must state at least one thing that must never happen \\
+tekst, który nie jest mapowaniem & a~contract is a~YAML mapping \\
+\midrule
+\textbf{\texttt{*.skcap}, \texttt{*.skrun}} & \\
+brak wymaganego pola, zła metoda (\texttt{get}), status \texttt{999}, dwa kodowania treści
+naraz, nieznany klucz & błąd schematu w~linii zdarzenia, np. \texttt{line 2 /request/method} \\
+linia, która nie jest JSON-em & not valid JSON: … \\
+nieznany typ zdarzenia & unknown event type 'sql.statement'; this version knows: … \\
+brak nagłówka; drugi nagłówek & the first line of a~capture must be its capture.header; a~capture has exactly one capture.header, on its first line \\
+powtórzony identyfikator; \texttt{seq} wstecz & exchange id 'ex-000001' appears more than
+once; seq 1 does not follow 2: exchanges must be in recorded order \\
+pusta linia w~środku & blank line inside the file: every line must be one event \\
+brak \texttt{run.end} & no run.end line: the run was interrupted, and an incomplete run is
+never compared \\
+wynik z~\texttt{response} i~\texttt{error} naraz albo bez obu & błąd schematu w~linii wyniku \\
+dwa wyniki jednej wymiany po jednej stronie & exchange '…' already has a~legacy result \\
+licznik w~\texttt{run.end} się nie zgadza & run.end says 3 result(s) but the file holds … \\
+coś po \texttt{run.end}; nagłówek nie pierwszy & nothing may follow run.end; the first line
+of a~run must be its run.header \\
+\end{xltabular}
+}
+
+\zrodla{\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Contracts/ContractFile.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Yaml/YamlJson.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/CaptureFile.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Runs/RunFile.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Artifacts.Tests/ContractTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Artifacts.Tests/SkcapTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Artifacts.Tests/SkrunTests.cs},
+\path{letsgolegacy.secondkey/docs/formats/contract.md}}
+
+\subsection{Werdykt: \texttt{verdict.json}}\label{sec:formaty-werdykt}
+
+\repopath{sk compare} czyta kontrakt i~przebieg i~zapisuje jeden werdykt: każdą odtworzoną
+wymianę w~dokładnie jednej z~czterech klas oraz wynik przebiegu. Werdykt liczy wyłącznie kod
+--- ten sam kontrakt i~ten sam przebieg zawsze dają ten sam werdykt, poza
+\repopath{createdAt} (zasada 1). Autorytetem jest \path{verdict.schema.json}, a~\path{schemas/samples/verdict.json} to dokładnie to, co \repopath{sk compare} tworzy z~próbek kontraktu i~przebiegu; pilnuje tego test.
+
+\subsubsection{Co jest porównywane}
+
+Dla każdej wymiany odpowiedzi obu stron są sprowadzane do części, która jest zachowaniem:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Porównywane & Nieporównywane \\
+\midrule
+\texttt{response.status} & żądanie --- to ten sam capture po obu stronach \\
+nagłówki z~\texttt{compare.headers} (domyślnie \texttt{content-type}, \texttt{location}) &
+każdy inny nagłówek (\texttt{date}, \texttt{server}, …) \\
+treść: JSON, tekst albo base64 & strona HTML przy \texttt{compare.html: extracts} (domyślnie)
+--- porównywana przez wyekstrahowane wartości \\
+\texttt{extract} --- każda wyekstrahowana wartość i~każda nieudana ekstrakcja & rozmiar
+treści \\
+zmiany wierszy \texttt{db} i~wywołania \texttt{outbound}, gdy je zapisano & komunikat błędu
+--- tylko jego rodzaj (\texttt{timeout}, \texttt{connection}, …) \\
+\bottomrule
+\end{tabularx}
+}
+
+Dwie rzeczy, które różnią się tylko dlatego, że strony działają pod różnymi adresami, są
+wyrównywane przed jakąkolwiek regułą kontraktu: adres bazowy każdej strony staje się
+\repopath{<base-url>} wszędzie, gdzie występuje, a~\repopath{content-type} jest zapisywany w~jednej wielkości liter i~z~jednym odstępem. Klucze obiektów są porządkowane, a~liczby
+zapisywane w~jednej postaci (\repopath{1}, \repopath{1.0} i~\repopath{1.00} to ta sama
+wartość). Klauzule są ewaluowane na pełnej obserwacji, a~nie tylko na tym, co jest
+porównywane --- dlatego klauzula może rozstrzygnąć o~wymianie, której porównane odpowiedzi
+są identyczne.
+
+\subsubsection{Cztery klasy i~kolejność}
+
+Każda wymiana trafia do dokładnie jednej klasy (ADR 0003):
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Klasa & Znaczenie \\
+\midrule
+\texttt{equal} & identyczne po samej kanonikalizacji \\
+\texttt{equal-under-contract} & identyczne po zastosowaniu reguł normalizacji kontraktu \\
+\texttt{regression} & kandydat łamie klauzulę, której strona legacy dotrzymuje --- albo różni
+się w~sposób, którego nie wyjaśnia żadna klauzula ani reguła normalizacji \\
+\texttt{fix-candidate} & kandydat dotrzymuje klauzuli, którą strona legacy łamała; zawsze
+rozstrzyga osoba \\
+\bottomrule
+\end{tabularx}
+}
+
+\finding{Decyduje pierwszy krok, który ma zastosowanie.}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X l >{\raggedright\arraybackslash}p{4.8cm}@{}}
+\toprule
+Krok & Klasa & Powody (\texttt{reasons}) \\
+\midrule
+1. Strona nie ma odpowiedzi: timeout, odrzucone połączenie, nieudany reset albo brak wyniku
+& \texttt{regression} & \texttt{missing-result: candidate (timeout)}; strona nieodtworzona
+to \texttt{(not replayed)} \\
+2. Zaakceptowana klauzula przechodzi na legacy, a~na kandydacie oblewa albo nie daje się
+ewaluować & \texttt{regression} & \texttt{clause-regression: <id>}, po jednym na klauzulę \\
+3. Zaakceptowana klauzula oblewa albo nie daje się ewaluować na legacy, a~na kandydacie
+przechodzi & \texttt{fix-candidate} & \texttt{clause-fixed: <id>}, po jednym na klauzulę \\
+4. Brak różnic & \texttt{equal} & \texttt{identical} \\
+5. Każdą różnicę wyjaśnia reguła normalizacji & \texttt{equal-under-contract} &
+\texttt{normalized: <reguła>}, po jednym na regułę \\
+6. Cokolwiek innego & \texttt{regression} & \texttt{uncovered-difference} \\
+\bottomrule
+\end{tabularx}
+}
+
+Klauzule w~statusie \repopath{proposed} są ewaluowane i~wypisywane przy każdej wymianie, ale
+o~niczym nie decydują. Klauzula złamana po obu stronach też o~niczym nie decyduje; jej
+podsumowanie mówi \repopath{violated-both}. Uzasadnienie tej kolejności podaje
+sekcja~\ref{sec:rdzen}.
+
+\subsubsection{Wynik przebiegu}
+
+\repopath{outcome} to \repopath{fail}, jeśli którakolwiek wymiana jest regresją,
+\repopath{review}, jeśli żadna nie jest, ale co najmniej jedna jest kandydatem na poprawkę, i~\repopath{pass} w~pozostałych przypadkach. \repopath{sk compare} kończy się odpowiednio kodem
+1, 2 albo 0.
+
+\subsubsection{Wyniki i~statusy klauzul}
+
+Dla każdej wymiany \repopath{exchanges[].clauses} wymienia --- w~kolejności kontraktu ---
+klauzule, które dotyczyły co najmniej jednej strony, z~wynikiem po każdej stronie:
+\repopath{pass}, \repopath{fail}, \repopath{error} albo \repopath{not-applicable}, oraz
+\repopath{detail} słowami strony, która klauzulę złamała („legacy: …”, „candidate: …”, albo
+„both: …”, gdy obie powiedziały to samo). Podsumowanie klauzuli w~\repopath{clauses[]} ma
+\repopath{exercised} (liczba wymian, w~których klauzula dotyczyła którejś strony), sumy
+\repopath{pass}/\repopath{fail}/\repopath{error} po każdej stronie i~\repopath{status}:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Status & Kiedy \\
+\midrule
+\texttt{unexercised} & żadne żądanie przebiegu nie było w~zakresie klauzuli \\
+\texttt{regressed} & w~jakiejś wymianie legacy przechodzi, a~kandydat oblewa lub daje błąd;
+albo kandydat klauzulę łamie, a~legacy nigdzie \\
+\texttt{violated-both} & obie strony klauzulę łamią (istniejący defekt, który migracja
+zachowała), bez wymiany typu „legacy przechodzi, kandydat oblewa” \\
+\texttt{fixed} & łamie ją tylko strona legacy \\
+\texttt{held} & żadna strona jej nie łamie \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsubsection{Różnice i~reguły, które je wyjaśniają}
+
+\repopath{diffs} wymienia każdą surową różnicę: \repopath{path} w~języku ścieżek kontraktu,
+\repopath{kind} (\repopath{added}, \repopath{removed}, \repopath{changed}), wartości
+\repopath{legacy} i~\repopath{candidate} oraz --- gdy różnicę wyjaśnia reguła normalizacji ---
+\repopath{normalizedBy}:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+\texttt{normalizedBy} & Reguła \\
+\midrule
+\texttt{ignore: response.body.json.generatedAt} & różnica w~ignorowanej ścieżce albo pod nią \\
+\texttt{tolerances: response.body.json.total} & dwie liczby w~granicach tolerancji \\
+\texttt{masks.timestamps}, \texttt{masks.guids}, \texttt{masks.patterns.<name>} & dwa napisy
+równe po zamaskowaniu; kilka masek jest wypisywanych razem \\
+\texttt{sets: response.body.json.items} & różnica kolejności w~tablicy porównywanej jako
+zbiór --- tylko gdy nic innego w~tej tablicy się nie różni \\
+\bottomrule
+\end{tabularx}
+}
+
+Różnica bez \repopath{normalizedBy} to różnica, której nic w~kontrakcie nie wyjaśnia.
+Rozwiązuje się ją przeglądaną zmianą kontraktu: regułą normalizacji, jeśli nie ma znaczenia,
+albo klauzulą, jeśli ma.
+
+\subsubsection{Pola dokumentu}
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.8cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Pole & Zawartość \\
+\midrule
+\endfirsthead
+\toprule
+Pole & Zawartość \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{kind}, \texttt{v} & \texttt{secondkey.verdict}, \texttt{1} \\
+\texttt{createdAt} & czas powstania werdyktu; \texttt{sk compare} zapisuje go z~dokładnością do
+sekundy \\
+\texttt{tool} & \texttt{name}, \texttt{version}, \texttt{commit} \\
+\texttt{inputs.contract} & \texttt{name}, \texttt{revision}, \texttt{sha256}, \texttt{path}
+(sama nazwa pliku) \\
+\texttt{inputs.run} & \texttt{runId}, \texttt{sha256}, \texttt{path} (sama nazwa pliku) \\
+\texttt{outcome} & \texttt{pass}, \texttt{fail}, \texttt{review} \\
+\texttt{summary} & \texttt{scenarios}, \texttt{exchanges}, \texttt{equal},
+\texttt{equalUnderContract}, \texttt{regression}, \texttt{fixCandidate}; \texttt{clauses}:
+\texttt{total} (wszystkie klauzule), \texttt{accepted} (te, które decydują), a~z~nich
+\texttt{exercised}, \texttt{unexercised} oraz \texttt{absenceShare} \\
+\texttt{exchanges[]} & \texttt{exchange}, \texttt{scenario}, \texttt{request}
+(\texttt{method}, \texttt{path}, \texttt{query}), \texttt{class}, \texttt{reasons},
+\texttt{diffs}, \texttt{clauses}; w~kolejności przebiegu \\
+\texttt{clauses[]} & \texttt{id}, \texttt{kind}, \texttt{title}, \texttt{text} (klauzula w~języku naturalnym), \texttt{accepted}, \texttt{exercised}, \texttt{legacy},
+\texttt{candidate} (sumy), \texttt{status} \\
+\texttt{mutation} & wypełniane przez silnik mutacji (C9, faza 02): \texttt{mutants},
+\texttt{killed}, \texttt{perClause} \\
+\end{xltabular}
+}
+
+\subsubsection{Jak czytać \texttt{verdict.json}}
+
+\begin{enumerate}
+  \item \repopath{outcome} mówi, czy kandydata można zatwierdzić bez dalszych decyzji
+        (\repopath{pass}), czy osoba musi rozstrzygnąć kandydatów na poprawkę
+        (\repopath{review}), czy są regresje (\repopath{fail}).
+  \item \repopath{inputs} wiąże werdykt z~dokładnymi wejściami: kontrakt po nazwie, rewizji i~SHA-256, przebieg po \repopath{runId} i~SHA-256.
+  \item \repopath{summary} podaje liczby klas i~klauzul; zaakceptowane klauzule
+        \repopath{unexercised} to zachowanie, którego nagranie nie sprawdziło.
+  \item Każda wymiana z~klasą \repopath{regression} albo \repopath{fix-candidate} wymaga
+        uwagi: \repopath{reasons} mówi dlaczego, \repopath{diffs} bez \repopath{normalizedBy}
+        pokazuje, co nie jest wyjaśnione, a~\repopath{clauses} z~\repopath{detail} --- co
+        znalazła każda strona.
+  \item \repopath{clauses[].status} pokazuje klauzule \repopath{regressed}, \repopath{fixed}
+        i~\repopath{violated-both}.
+\end{enumerate}
+
+Fragment próbki: podsumowanie i~wymiana \repopath{ex-000005}, w~której legacy odpowiada 500 na
+pusty koszyk, a~kandydat 400 --- kandydat na poprawkę, bo \repopath{CHECKOUT-NEVER-5XX}
+przechodzi tylko na kandydacie, a~\repopath{ORDER-HAS-LOCATION} oblewa po obu stronach i~o
+niczym nie decyduje:
+
+\begin{lstlisting}
+  "outcome": "fail",
+  "summary": {
+    "scenarios": 2,
+    "exchanges": 5,
+    "equal": 2,
+    "equalUnderContract": 1,
+    "regression": 1,
+    "fixCandidate": 1,
+    "clauses": {
+      "total": 6,
+      "accepted": 5,
+      "exercised": 5,
+      "unexercised": 0,
+      "absenceShare": 0.6
+    }
+  },
+  ...
+      "exchange": "ex-000005",
+      "scenario": "s-19b2f4",
+      "request": {
+        "method": "POST",
+        "path": "/checkout"
+      },
+      "class": "fix-candidate",
+      "reasons": [
+        "clause-fixed: CHECKOUT-NEVER-5XX"
+      ],
+      ...
+      "clauses": [
+      ...
+        {
+          "id": "CHECKOUT-NEVER-5XX",
+          "legacy": "fail",
+          "candidate": "pass",
+          "detail": "legacy: response.status = 500"
+        },
+        {
+          "id": "ORDER-HAS-LOCATION",
+          "legacy": "fail",
+          "candidate": "fail",
+          "detail": "legacy: response.status = 500; candidate: response.status = 400"
+        },
+\end{lstlisting}
+
+Wielokropki oznaczają pominięte fragmenty pliku.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey/schemas/verdict.schema.json},
+\path{letsgolegacy.secondkey/schemas/samples/verdict.json},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/Comparator.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/ComparableDocument.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/CanonicalJson.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/JsonDiff.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/ContractEngine.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CompareCommand.cs}}
+
+\subsection{Pakiet dowodowy}\label{sec:formaty-pakiet}
+
+\repopath{sk evidence} składa to, czego osoba zatwierdzająca --- rada zmian, druga linia
+obrony, audytor --- potrzebuje, by zdecydować o~zmigrowanym systemie bez uruchamiania Second
+Key: jeden katalog, który wyjaśnia werdykt, niesie jego wejścia i~podaje SHA-256 każdego
+pliku.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Plik & Co to jest \\
+\midrule
+\endfirsthead
+\toprule
+Plik & Co to jest \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{index.html} & raport: wynik, bramka, każda regresja i~każdy kandydat na poprawkę z~różnicami, każda klauzula z~wynikiem każdej strony, to, co kontrakt uznaje za nieistotne, to,
+czego dowód nie pokazuje, i~skróty. Jeden samodzielny plik: bez skryptów i~bez sieci ---
+zabrania ich Content Security Policy --- a~każda nagrana wartość jest kodowana jako HTML \\
+\texttt{report.pdf} & ten sam raport wydrukowany przez headless przeglądarkę opartą na
+Chromium \\
+\texttt{verdict.json} & werdykt, taki, jak zapisał go \texttt{sk compare} \\
+\texttt{contract.yaml} & kontrakt, z~którego policzono werdykt \\
+\texttt{run.skrun} & przebieg, gdy podano \texttt{-{}-run}; razem z~kontraktem wystarcza do
+ponownego policzenia werdyktu. Pomija się go, gdy nagrany ruch musi zostać w~swojej granicy \\
+\texttt{sarif/*.sarif} & logi bramki bez zmian; logi o~tej samej nazwie dostają przyrostek
+\texttt{-2}, \texttt{-3}, … \\
+\path{statement.intoto.json} & in-toto Statement v1, który wymienia pliki pakietu z~ich
+SHA-256 (wszystkie poza manifestem i~samym sobą); niepodpisany (\texttt{\textquotedbl{}signed\textquotedbl{}: false}) \\
+\texttt{manifest.json} & każdy plik poza samym manifestem, z~SHA-256 i~rozmiarem \\
+\end{xltabular}
+}
+
+\paragraph{\texttt{manifest.json}.} Pola: \repopath{kind} (\repopath{secondkey.evidence-manifest}),
+\repopath{v} (1), \repopath{createdAt} (UTC, z~dokładnością do sekundy), \repopath{tool}
+(\repopath{name}, \repopath{version}, \repopath{commit}) i~\repopath{files}: lista
+\repopath{\{path, sha256, size\}} dla każdego pliku pakietu poza manifestem, ze ścieżkami z~ukośnikami \repopath{/}, posortowana według ścieżki (porównanie ordinal). Manifest obejmuje także
+\repopath{statement.intoto.json}.
+
+\paragraph{\texttt{statement.intoto.json}.} \repopath{\_type} to
+\path{https://in-toto.io/Statement/v1}; \repopath{subject} wymienia każdy plik poza
+manifestem i~samym statementem jako \repopath{\{name, digest: \{sha256\}\}};
+\repopath{predicateType} to
+\path{https://github.com/konradcinkusz/letsgolegacy.secondkey/evidence/v1}. Predykat zawiera
+\repopath{signed: false}, \repopath{createdAt}, \repopath{tool}, \repopath{outcome},
+\repopath{summary} werdyktu, kontrakt (\repopath{name}, \repopath{revision},
+\repopath{sha256}), przebieg (\repopath{runId}, \repopath{sha256}) i~\repopath{gate}:
+\repopath{passes}, \repopath{blocking}, \repopath{findings} i~\repopath{logs} albo
+\repopath{null}, gdy nie podano SARIF.
+
+\paragraph{\texttt{index.html}.} Raport ma kolejno: nagłówek z~odznaką „Behaviour:
+PASS/FAIL/REVIEW” i~odznaką bramki („Gate: PASS”, „Gate: FAIL · N blocking” albo „Gate: not
+supplied”), podsumowanie w~kafelkach (wymiany, klasy, zaakceptowane klauzule, udział klauzul
+nieobecności), bramkę (tabela reguł i~znaleziska blokujące), regresje, kandydatów na
+poprawkę, klauzule, wymiany równe pod kontraktem, wymiany równe, „What the contract says does
+not matter”, „What this evidence does not show” i~„Integrity” (skróty kontraktu, przebiegu,
+\repopath{verdict.json} i~logów SARIF). Przy wymianie raport pokazuje najwyżej 50 różnic
+(wszystkie są w~\repopath{verdict.json}), a~wartości skraca do 300 znaków. W~regresji
+niewyjaśniona różnica jest oznaczona jako problem, w~kandydacie na poprawkę --- neutralnie,
+bo to zmiana, o~której decyduje osoba.
+
+\paragraph{Wejścia i~katalog wyjściowy.} Pakiet odrzuca (kod 3) kontrakt albo przebieg, który
+nie jest tym, który nazywa werdykt --- porównuje ich SHA-256 z~\repopath{inputs} werdyktu ---
+więc nie może połączyć werdyktu ze złymi wejściami. Zapis do katalogu z~poprzednim pakietem
+zastępuje dokładnie pliki wymienione w~jego manifeście; katalog, w~którym jest cokolwiek
+innego, jest odrzucany, nigdy opróżniany.
+
+\paragraph{Sprawdzenie pakietu.}
+
+\begin{lstlisting}
+cd evidence
+python3 -c "import json,hashlib; [print('ok' if hashlib.sha256(open(f['path'],'rb').read()).hexdigest()==f['sha256'] else 'CHANGED', f['path']) for f in json.load(open('manifest.json'))['files']]"
+sk validate verdict.json contract.yaml
+sk compare --contract contract.yaml --run run.skrun --out recomputed.json   # the same verdict, apart from createdAt
+\end{lstlisting}
+
+\paragraph{Czego jeszcze nie ma.} Podpisu: w~fazie 03 statement ma być podpisywany kluczem
+właściciela do koperty DSSE (\repopath{evidence.dsse}). Do tego czasu pakiet dowodzi, które
+pliki należą do siebie i~co mówią, a~niczego o~tym, kto go złożył. Tryby PDF, wyszukiwanie
+przeglądarki i~reguły bramki opisuje sekcja~\ref{sec:cli}.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/EvidencePack.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/HtmlReport.cs},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Próbki}\label{sec:formaty-probki}
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.5cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Plik & Co zawiera \\
+\midrule
+\path{schemas/samples/contract.yaml} & kontrakt \repopath{sample-shop}: dwa ekstraktory, sześć
+klauzul, w~tym jedna \repopath{proposed} wydobyta z~nagrań \\
+\path{schemas/samples/sample.skcap} & nagłówek i~pięć wymian w~dwóch sesjach \\
+\path{schemas/samples/sample.skrun} & dwa scenariusze, dziesięć wyników \\
+\path{schemas/samples/verdict.json} & werdykt, który \repopath{sk compare} tworzy z~próbek
+kontraktu i~przebiegu; zawiera wszystkie cztery klasy \\
+\path{samples/contract.yaml} & kontrakt \repopath{sample-shop-live} dla demonstracji
+end-to-end; celowo bez reguły o~kolejności listy produktów \\
+\path{samples/gate/portcullis.sarif} & syntetyczny log SARIF napisany ręcznie w~kształcie
+Portcullis: dwa ostrzeżenia i~jeden wyciszony błąd; nie jest wynikiem prawdziwego skanu \\
+\bottomrule
+\end{tabularx}
+}
+
+Syntetyczne próbki żyją w~\path{schemas/samples/}, a~fixtures testów w~\path{tests/**/fixtures/}; nagranie z~prawdziwego systemu nigdy nie trafia do gita. Testy
+walidatorów sprawdzają, że każda próbka się waliduje, test komparatora --- że próbki kontraktu
+i~przebiegu dają dokładnie próbkę werdyktu, a~test CLI --- że \repopath{sk validate} przyjmuje
+wszystkie cztery.
+
+\zrodla{\path{letsgolegacy.secondkey/schemas/samples/},
+\path{letsgolegacy.secondkey/samples/contract.yaml},
+\path{letsgolegacy.secondkey/samples/gate/portcullis.sarif},
+\path{letsgolegacy.secondkey/CONTRIBUTING.md},
+\path{letsgolegacy.secondkey/tests/SecondKey.Compare.Tests/ComparatorTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/ValidateCommandTests.cs}}

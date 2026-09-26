@@ -1,0 +1,1093 @@
+\section{Procedura pracy z frameworkiem krok po kroku}\label{sec:procedura}
+
+Ten rozdział prowadzi przez pracę z frameworkiem od oceny systemu legacy do
+opublikowanego pakietu dowodowego. Kroki odpowiadają łańcuchowi z
+rozdziału~\ref{sec:architektura}. Tam, gdzie framework ma implementację referencyjną ---
+skrypty benchu nopCommerce, runbook P6, tutorial Portcullis, przewodnik standardów ---
+procedura przytacza ją dosłownie i odsyła do rozdziału z pełną referencją. Każdy krok
+kończy się tabelą trybów awarii (objaw → przyczyna) i checklistą.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[height=0.8\textheight]{\dgm{a6-procedura}}
+  \caption{Kroki procedury i pętle powrotne.}
+  \label{fig:procedura}
+\end{figure}
+
+\begin{xltabular}{\linewidth}{@{}p{1.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}p{3.3cm}@{}}
+\toprule
+Krok & Cel & Wynik & Referencja \\
+\midrule
+\endfirsthead
+\toprule
+Krok & Cel & Wynik & Referencja \\
+\midrule
+\endhead
+0 & Inwentaryzacja ryzyka technologicznego (EOL, CVE) & raport w przeglądarce & rozdz.~\ref{sec:risk-scan} \\
+1 & System legacy w znanym, powtarzalnym stanie & działający system, snapshot bazy & rozdz.~\ref{sec:bench} \\
+2 & Nagranie zachowania systemu legacy & \repopath{*.skcap} & rozdz.~\ref{sec:cli}, \ref{sec:formaty} \\
+3 & Spisanie kontraktu: co musi się dziać, czego nie wolno & \repopath{contract.yaml} & rozdz.~\ref{sec:formaty} \\
+4 & Dowód A/A: kontrakt trzyma na legacy, a łańcuch nie wnosi własnych różnic & werdykt \repopath{pass} & rozdz.~\ref{sec:cli} \\
+5 & Migracja przez agenta ze standardami & pull request kandydata & rozdz.~\ref{sec:standardy} \\
+6 & Bramka na zmienionych liniach & \repopath{*.sarif} & rozdz.~\ref{sec:portcullis} \\
+7 & Replay legacy kontra kandydat & \repopath{*.skrun}, \repopath{verdict.json} & rozdz.~\ref{sec:cli} \\
+8 & Analiza różnic i decyzje & poprawiony kandydat albo przeglądnięta zmiana kontraktu & rozdz.~\ref{sec:formaty} \\
+9 & Pakiet dowodowy & \repopath{evidence/} & rozdz.~\ref{sec:formaty} \\
+10 & Publikacja wyniku i liczb & opublikowany pakiet & rozdz.~\ref{sec:bench} \\
+\bottomrule
+\end{xltabular}
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Role i wymagania wstępne}\label{sec:procedura-wymagania}
+
+Źródła opisują następujących uczestników procedury:
+
+\begin{itemize}
+  \item \textbf{operator łańcucha} --- uruchamia skrypty strony legacy i polecenia
+        \repopath{sk}; w benchu robi to CI, a na stacji roboczej człowiek, tymi samymi
+        skryptami;
+  \item \textbf{autor kontraktu} --- człowiek; w fazie 02 klauzule może proponować miner
+        C2, ale klauzula decyduje dopiero po akceptacji;
+  \item \textbf{operator agenta migracyjnego} --- osoba z subskrypcją GitHub Copilot,
+        która uruchamia modernize-dotnet (P6 w benchu to praca człowieka);
+  \item \textbf{osoba zatwierdzająca} --- ktoś, kto na podstawie pakietu dowodowego
+        decyduje o zmigrowanym systemie bez uruchamiania Second Key (na przykład komitet
+        zmian, druga linia obrony, audytor).
+\end{itemize}
+
+Narzędzia potrzebne w poszczególnych krokach:
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.6cm}@{}}
+\toprule
+Narzędzie & Do czego & Kroki \\
+\midrule
+\endfirsthead
+\toprule
+Narzędzie & Do czego & Kroki \\
+\midrule
+\endhead
+przeglądarka; lokalnie Node 22 & strona legacy-risk-scan & 0 \\
+Windows z IIS i SQL Server; Visual Studio 2022 lub Build Tools 2022 z workloadem web; git & build i hosting systemu legacy na .NET Framework (w benchu SQL Server 2022 Express) & 1, 2, 4, 7 \\
+Windows PowerShell 5.1 lub PowerShell 7 & skrypty benchu & 1--9 \\
+.NET 10 SDK & \repopath{sk}, Portcullis, generator standardów, build kandydata & 2--9 \\
+GitHub Copilot z trybem agenta; Visual Studio, VS Code albo Copilot CLI z modernize-dotnet; GitHub CLI & migracja & 5 \\
+przeglądarka oparta na Chromium & \repopath{report.pdf} w pakiecie & 9 \\
+gitleaks & skan sekretów przed commitem w każdym repozytorium & wszystkie \\
+Docker (tylko przy rozwoju rdzenia) & testy resetu SQL Server & --- \\
+\bottomrule
+\end{xltabular}
+
+\repopath{sk} i Portcullis nie mają jeszcze wydanych pakietów. Bench buduje oba z
+przypiętych commitów (\path{pins.json}, sekcja \repopath{chain}) i uruchamia je jako
+\repopath{dotnet <assembly>}. Ręcznie robi się to tak:
+
+\begin{lstlisting}
+git clone https://github.com/konradcinkusz/letsgolegacy.secondkey.git secondkey
+git -C secondkey checkout 967c49c0005c4412180914f43437d75b43f148dc   # chain.secondKey.commit
+dotnet build secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj -c Release -o <work>/tools/chain/secondkey
+git clone https://github.com/konradcinkusz/letsgolegacy.portcullis.git portcullis
+git -C portcullis checkout 84e1925fe0d85cf23415f0d33c98590f86128722  # chain.portcullis.commit
+dotnet build portcullis/src/Portcullis.Cli/Portcullis.Cli.csproj -c Release -o <work>/tools/chain/portcullis
+\end{lstlisting}
+
+Skrypty benchu znajdują narzędzia w \path{<work>\tools\chain\} albo pod ścieżkami ze
+zmiennych \repopath{NOPBENCH\_SK} i \repopath{NOPBENCH\_PORTCULLIS}. W rdzeniu CLI
+uruchamia się też bez instalacji:
+\repopath{dotnet run --project src/SecondKey.Cli -- --help}.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.legacy-risk-scan/README.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 0: ocena ryzyka technologicznego}\label{sec:procedura-krok0}
+
+\textbf{Cel.} Zanim zapadnie decyzja o migracji, spisać, które składniki systemu są po
+końcu wsparcia (EOL) albo mają znane podatności. Krok jest niezależny od łańcucha: nie
+produkuje artefaktu, który czytają dalsze kroki.
+
+\textbf{Wejście.} Plik projektu albo zależności: \path{.csproj} lub \path{.vbproj}
+(SDK-style i klasyczny), \path{Directory.Packages.props}, \path{packages.config},
+\path{composer.json}, \path{composer.lock}, \path{package.json}.
+
+\textbf{Postępowanie.}
+\begin{enumerate}
+  \item Otwórz stronę legacy-risk-scan. Publikuje ją \path{deploy.yml} na GitHub Pages z
+        gałęzi \repopath{main}; według planu pracy ticket L18 jest scalony, a za
+        ukończony uzna go dopiero przejście jobu \repopath{verify} po pierwszym udanym
+        wdrożeniu. Lokalnie stronę uruchamia \repopath{./scripts/setup.sh}, a potem
+        \repopath{npm start}; serwer udostępnia ją pod
+        \url{http://127.0.0.1:4173/letsgolegacy.legacy-risk-scan/}.
+  \item Wklej plik. Parsowanie odbywa się w przeglądarce; na zewnątrz trafiają tylko
+        współrzędne pakietów (nazwa, ekosystem, wersja) --- jedno zapytanie
+        \repopath{querybatch} do OSV.dev, potem po jednym \repopath{GET} na każde zwrócone
+        advisory.
+  \item Przeczytaj raport: status wydania (zakończone, kończy się w ciągu 12 miesięcy,
+        wspierane) liczony z dat w dniu raportu, advisories z OSV oraz datę, z której
+        pochodzą dane EOL (\repopath{generatedAt}).
+  \item Sprawdź ograniczenia, zanim uznasz raport za pełny (tabela niżej).
+\end{enumerate}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna \\
+\midrule
+\endfirsthead
+\toprule
+Objaw & Przyczyna \\
+\midrule
+\endhead
+Pakiet NuGet bez advisories, choć powinien je mieć & OSV porównuje identyfikatory NuGet z uwzględnieniem wielkości liter; ręcznie edytowany \repopath{PackageReference} może mieć inną wielkość liter niż kanoniczna \\
+Brak Bootstrapa lub wtyczek jQuery w raporcie z klasycznego \repopath{.csproj} & klasyczny projekt wymienia tylko pakiety z DLL; pakiety samych treści widać tylko w \repopath{packages.config} \\
+Wersja w raporcie starsza niż zainstalowana & ograniczenia (\repopath{composer.json}, \repopath{package.json}, zakresy NuGet) są sprawdzane w najniższej dozwolonej wersji; dokładny wynik dają pliki lock \\
+Pozycje „do ręcznego przeglądu” & DLL skopiowane ręcznie i komponenty z GAC nie dają się sprawdzić automatycznie \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Przeskanowany plik z dokładnymi wersjami (lock albo \repopath{packages.config}), jeśli istnieje.
+  \item Zapisana data danych EOL z raportu.
+  \item Pozycje do ręcznego przeglądu obejrzane osobno.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 1: system legacy w znanym stanie}\label{sec:procedura-krok1}
+
+\textbf{Cel.} Uruchomić system legacy tak, żeby każdy scenariusz --- przy nagrywaniu i
+przy każdym replay, na każdej stronie --- zaczynał się od dokładnie tego samego stanu
+danych i działał na dokładnie tej samej platformie. \finding{System legacy nie jest przy
+tym zmieniany: żadnej zmiany kodu, rekompilacji ani modułu IIS} (zasada projektowa 4).
+Implementacją referencyjną tego kroku są skrypty 1--6 benchu i początek skryptu 7.
+
+\textbf{Zasady, które krok realizuje, i ich powody.}
+\begin{enumerate}
+  \item \textbf{Przypięta wersja źródeł.} Bench przypina nopCommerce
+        \repopath{release-3.90} do commita \repopath{12d1f01} w \path{pins.json}; skrypt 1
+        weryfikuje checkout i odmawia, gdy tag upstream się przesunął.
+  \item \textbf{Powtarzalny build z manifestem.} Skrypt 2 zapisuje SHA-256 każdego
+        opublikowanego pliku (\path{state\legacy-site.sha256}, zgodny z
+        \repopath{sha256sum -c}) i \path{state\build.json}; nagranie ruchu podaje potem
+        skrót manifestu, więc wiadomo, jaki build obserwowało.
+  \item \textbf{Ustalona platforma.} To, co host dokłada do zachowania, jest przypięte
+        (tabela poniżej).
+  \item \textbf{Znany stan danych.} Świeża baza z danymi przykładowymi instalatora, potem
+        konfiguracja potrzebna scenariuszom --- \textbf{przez UI samego systemu, nigdy
+        przez SQL}, z odczytem każdej zmiany. Tak każdy wiersz, który system zapisuje, jest
+        wierszem, który zapisałby sam, razem z cache i zdarzeniami.
+  \item \textbf{Timery w aplikacji wyłączone przed resetem.} nopCommerce 3.90 uruchamia
+        zadania harmonogramu na timerach w aplikacji webowej; restore bazy pod działającym
+        zadaniem wywraca proces roboczy i sklep odpowiada 500 do czasu restartu. Bench
+        wyłącza cztery zadania włączone w instalacji przykładowej i restartuje aplikację.
+  \item \textbf{Snapshot bazy jako stan startowy.} Po konfiguracji powstaje snapshot SQL
+        Server (\repopath{nopcommerce\_legacy\_snapshot}), przywracany przed każdym
+        scenariuszem --- przy nagrywaniu i w replay po obu stronach.
+\end{enumerate}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Ustawienie hosta & Wartość w benchu & Dlaczego ma znaczenie \\
+\midrule
+\endfirsthead
+\toprule
+Ustawienie hosta & Wartość w benchu & Dlaczego ma znaczenie \\
+\midrule
+\endhead
+Collation SQL & \path{SQL_Latin1_General_CP1_CI_AS} dla serwera i bazy & porządek i równość w zapytaniach (sortowanie katalogu, wyszukiwanie) \\
+Runtime .NET Framework & 4.8 (hosta), aplikacja zbudowana dla 4.5.1 & runtime in-place, tak jak na każdym produkcyjnym hoście tego sklepu \\
+Kultura & \repopath{en-US}, ustawiana per żądanie z języka sklepu & formatowanie cen i dat; porównanie NLS → ICU w P7 dotyczy runtime, więc obie strony muszą widzieć tę samą kulturę \\
+Strefa czasowa & UTC na hostowanych runnerach & ważność rabatów, daty zamówień, „nowe” produkty \\
+Kompresja & niezainstalowana & nagrane ciała odpowiedzi zostają czytelne \\
+Zegar & czas rzeczywisty & nie da się go kontrolować bez zmiany kodu legacy; komparator normalizuje czasy \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Polecenia (bench, host Windows).} W katalogu głównym repozytorium benchu, w
+PowerShell 5.1 albo 7:
+
+\begin{lstlisting}
+.\scripts\1-fetch-nopcommerce.ps1
+.\scripts\2-build-legacy.ps1
+# od tego miejsca w PowerShell z uprawnieniami administratora:
+.\scripts\3-install-iis-sql.ps1
+.\scripts\4-deploy-and-install.ps1
+.\scripts\5-smoke.ps1
+.\scripts\6-configure-store.ps1
+\end{lstlisting}
+
+Gdy polityka blokuje uruchamianie skryptów:
+\begin{lstlisting}
+powershell -ExecutionPolicy Bypass -File .\scripts\<script>.ps1
+\end{lstlisting}
+Każdy krok sprawdza swoje warunki wstępne i mówi, czego brakuje; nic, co zapisuje, nie
+trafia do repozytorium. Każdy krok zapisuje wynik w \path{<work>\state\<krok>.json}, a
+następny krok go czyta, gdy nie podano parametru: najpierw jawny parametr, potem plik
+przekazania, potem wartość domyślna. Katalog roboczy (\repopath{-WorkRoot} albo
+\repopath{NOPBENCH\_WORK}, domyślnie \path{C:\nopbench}) powinien mieć krótką ścieżkę,
+bo pipeline publikacji zagnieżdża ścieżki głęboko, a starsze zadania MSBuild wciąż trafiają
+w limit 260 znaków.
+
+\textbf{Jedyny sekret.} Skrypt 4 tworzy administratora sklepu z hasłem generowanym na
+przebieg (albo wziętym z \repopath{NOPBENCH\_ADMIN\_PASSWORD}). Hasło jest maskowane w
+logach CI, nigdy nie jest drukowane i trafia tylko do
+\path{<work>\secrets\legacy-admin.json}. Baza nie ma hasła: witryna łączy się tożsamością
+puli aplikacji (uwierzytelnianie Windows).
+
+\textbf{Stacja robocza zamiast CI.} Te same skrypty działają na maszynie wirtualnej
+Windows Server 2022 pod Hyper-V (wersja ewaluacyjna wystarcza; 4 vCPU i 8~GB są wygodne)
+albo na Windows 10/11 Pro lub Enterprise z IIS. Żeby strona linuksowa (WSL2 albo maszyna
+wirtualna) dotarła do sklepu, trzeba otworzyć port na hoście Windows; potem smoke test
+działa także z Linuksa:
+
+\begin{lstlisting}
+New-NetFirewallRule -DisplayName 'nopbench legacy 8080' -Direction Inbound -Protocol TCP -LocalPort 8080 -Action Allow
+pwsh scripts/5-smoke.ps1 -BaseUrl http://<windows-host>:8080/
+\end{lstlisting}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endfirsthead
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endhead
+Każda kwota podatku i wysyłki w nagraniu wynosi \$0.00 & pominięta konfiguracja sklepu: dane przykładowe nie mają stawek \\
+Pierwsze żądania po restore dostają 500, potem sklep wraca & restore pod działającym zadaniem harmonogramu; wyłącz zadania i zrestartuj aplikację (skrypt 6) \\
+Skrypt 6 kończy się błędem na sklepie już skonfigurowanym & oczekuje sklepu w stanie po instalacji; najpierw ponowna instalacja (skrypt 4) \\
+Build się nie udaje & otwórz \path{<work>\logs\build.binlog} (albo \path{publish.binlog}) w MSBuild Structured Log Viewer; CI publikuje te pliki jako artefakt \repopath{legacy-build-logs} \\
+Dowolna awaria hosta & \path{.\scripts\collect-diagnostics.ps1} zbiera logi IIS, dziennika zdarzeń, SQL Server i nopCommerce do \path{<work>\diagnostics} (w CI: artefakt \repopath{legacy-iis-diagnostics}) \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Źródła legacy przypięte do commita i zweryfikowane.
+  \item Build z manifestem SHA-256; skrót manifestu zapisany.
+  \item Collation, runtime, kultura, strefa czasowa i kompresja ustalone i zapisane.
+  \item Konfiguracja wykonana przez UI systemu, każda zmiana odczytana.
+  \item Timery działające na bazie wyłączone, aplikacja zrestartowana.
+  \item Smoke test przechodzi.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0005-nopcommerce-traffic-recording.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 2: nagranie ruchu}\label{sec:procedura-krok2}
+
+\textbf{Cel.} Zapisać, jak system legacy naprawdę się zachowuje, jako plik
+\repopath{*.skcap}: zestaw scenariuszy, z których każdy jest jedną sesją, nagrany przez
+proxy \repopath{sk capture} stojące przed systemem.
+
+\textbf{Planowanie scenariuszy.} Bench spisuje zestaw w planie ruchu (P4-TRAFFIC-PLAN),
+zanim cokolwiek nagra: obszary (katalog, koszyk, rabaty, podatki, wysyłka, checkout,
+zamówienia), persony, kroki i regułę biznesową, którą każdy scenariusz ćwiczy --- z
+odwołaniem do kodu systemu legacy, który tę regułę realizuje. Reguły opisują, jak
+zachowuje się \emph{ten} system, a nie jak powinien zachowywać się sklep w ogóle. Zasady
+nagrywania z planu:
+
+\begin{enumerate}
+  \item \textbf{Każdy scenariusz startuje ze snapshotu} --- scenariusze są niezależne od
+        siebie i od kolejności, więc każdy da się nagrać i odtworzyć osobno.
+  \item \textbf{Tylko przez proxy.} Żądanie, które omija proxy, nie jest dowodem.
+  \item \textbf{Jeden scenariusz --- jedna sesja}: własny cookie jar i nagłówek
+        \repopath{x-bench-scenario: <id>} w każdym żądaniu. Ten nagłówek jest session
+        key capture, więc scenariusz jest jedną sesją w \repopath{*.skcap} i jednym
+        scenariuszem w replay. Historia z dwiema osobami to dwa scenariusze.
+  \item \textbf{Jak przeglądarka}: linki i formularze samego systemu, każdy formularz z
+        wszystkimi polami, token anti-forgery czytany ze strony, która go wydała.
+  \item \textbf{Sondy (probes).} Język kontraktu zawęża klauzulę tylko metodą, ścieżką i
+        query, więc żądanie, na którego odpowiedzi kontrakt stwierdza fakt właściwy
+        jednemu scenariuszowi, dostaje w query \repopath{probe=<nazwa>}
+        (\repopath{/cart?probe=T11}); system ignoruje nieznany parametr, a parametr tylko
+        nazywa żądanie.
+  \item \textbf{Deterministyczne dane wejściowe}: stałe produkty, ilości, adresy, kody
+        kuponów, klienci; rejestracja zawsze tym samym adresem (snapshot sprawia, że jest
+        wolny).
+  \item \textbf{Brak wywołań wychodzących}: tylko płatności i wysyłka offline, więc
+        outbound stubs (S16) nie są potrzebne.
+\end{enumerate}
+
+\textbf{Polecenie.} Ogólna postać (szczegóły opcji: rozdział~\ref{sec:cli}):
+
+\begin{lstlisting}
+sk capture --target http://127.0.0.1:5080 --listen http://127.0.0.1:8080 --session-key ASP.NET_SessionId
+\end{lstlisting}
+
+W benchu robi to skrypt 7, a proxy słucha na \repopath{http://127.0.0.1:8000/} i przekazuje
+do \repopath{http://localhost:8080/}:
+
+\begin{lstlisting}
+.\scripts\7-record-traffic.ps1              # cały zestaw
+.\scripts\7-record-traffic.ps1 -Only T14    # jeden scenariusz; nagranie oznaczone jako częściowe
+\end{lstlisting}
+
+Skrypt uruchamia \repopath{sk capture} z opcjami \repopath{--listen}, \repopath{--target},
+\repopath{--out} i \repopath{--session-key}, czeka na linię
+\repopath{sk capture: recording}, prowadzi scenariusze, a na końcu czeka, aż plik będzie
+zawierał tyle wymian, ile żądań wysłano, i dopiero wtedy zatrzymuje proces. Jeśli liczba
+się nie zgadza, nagranie jest odrzucane: żądanie bez odpowiedzi legacy nie zostało
+zapisane, a żądanie od kogoś innego „nie jest nasze”. Scenariusz, który się nie powiódł,
+nie zatrzymuje pozostałych; skrypt drukuje log nopCommerce dla nieudanego scenariusza
+(następny restore go skasuje) i kończy się błędem.
+
+\textbf{Zatrzymanie capture.} Ctrl+C albo SIGTERM zatrzymuje proxy czysto: nie przyjmuje
+nowych żądań, pozwala dokończyć żądania w locie (do 30 sekund), zamyka plik, drukuje
+podsumowanie i kończy się kodem 0:
+
+\begin{lstlisting}
+sk capture: recorded 290 exchange(s), skipped 0 the legacy system did not answer.
+\end{lstlisting}
+
+Żądanie, na które system legacy nie odpowiedział, dostaje od proxy 502 albo 504 i
+\textbf{nie jest nagrywane}, więc w nagraniu brakuje go w scenariuszu --- skryptowane
+nagranie musi mieć \repopath{skipped 0}. Każda wymiana jest zapisywana i spłukiwana na
+dysk od razu, więc zabity proces zachowuje to, co nagrał, ale zabicie w trakcie zapisu
+zostawia uciętą ostatnią linię, którą \repopath{sk validate} odrzuca. Tam, gdzie pipeline
+może proces tylko zabić, podaje się \repopath{--exit-after <n>} z liczbą wymian, które
+skrypt wyśle.
+
+\textbf{Po nagraniu.}
+\begin{lstlisting}
+sk validate traffic.skcap
+\end{lstlisting}
+Zapisz liczbę scenariuszy i skrót manifestu buildu legacy razem z nagraniem (bench:
+\path{state\traffic.json} --- ścieżka i skrót nagrania, lista scenariuszy z
+identyfikatorami sesji i liczbą żądań, snapshot, odpowiedzi na pierwsze żądanie po każdym
+restore, skrót manifestu witryny).
+
+\textbf{Prywatność nagrania.} Capture redaguje nagłówki przed zapisem: zawsze
+\repopath{authorization}, \repopath{proxy-authorization}, \repopath{cookie},
+\repopath{set-cookie} i \repopath{x-api-key}, oraz każdy dodany opcją
+\repopath{--redact-header}. Ciała ponad \repopath{--max-body-bytes} (domyślnie 1~MiB) są
+ucinane i oznaczane jako obcięte. Nagrania systemów rzeczywistych nigdy nie trafiają do
+git (\repopath{.gitignore} wyklucza \repopath{*.skcap} i \repopath{*.skrun} poza
+syntetycznymi próbkami).
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna \\
+\midrule
+\endfirsthead
+\toprule
+Objaw & Przyczyna \\
+\midrule
+\endhead
+Replay rozjeżdża się od pierwszego scenariusza & replay nie startował ze snapshotu albo nagranie ominęło proxy \\
+Liczba wymian w pliku mniejsza niż liczba wysłanych żądań & system legacy nie odpowiedział na część żądań (proxy zwróciło 502/504 i pominęło je) \\
+\repopath{sk validate} odrzuca ostatnią linię & proces zabity w trakcie zapisu; użyj \repopath{--exit-after} albo zatrzymaj sygnałem \\
+Reguła \repopath{never} przechodzi, niczego nie sprawdzając & scenariusz nie dotarł do tego, czego reguła pilnuje; każda reguła \repopath{never} potrzebuje pozytywnego bliźniaka w tym samym scenariuszu \\
+Identyfikatory zamówień różnią się między stronami & scenariusze startowały z różnych snapshotów albo dodatkowe żądanie utworzyło zamówienie \\
+Absolutne URL-e w odpowiedziach wskazują port systemu, nie proxy & capture wysyła do systemu nagłówek host celu (domyślne zachowanie YARP); skrypty scenariuszy używają wyłącznie ścieżek względnych, więc nic nie omija nagrania \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Konfiguracja wykonana, potem snapshot; każdy scenariusz startuje ze snapshotu.
+  \item Każde żądanie każdego scenariusza przeszło przez proxy.
+  \item Każda persona ma własny cookie jar; tokeny anti-forgery czytane ze stron.
+  \item Każda reguła planowana do kontraktu jest ćwiczona przez nagrany scenariusz, a
+        każda reguła \repopath{never} ma pozytywnego bliźniaka.
+  \item \repopath{skipped 0}; liczba wymian równa liczbie wysłanych żądań;
+        \repopath{sk validate} przechodzi.
+  \item Liczba scenariuszy i skrót manifestu legacy zapisane razem z nagraniem.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Chain.ps1},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/.gitignore}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 3: kontrakt}\label{sec:procedura-krok3}
+
+\textbf{Cel.} Spisać w \repopath{contract.yaml}, co w nagranym zachowaniu jest regułą
+biznesową: co musi się dziać (klauzule \repopath{must}) i czego nigdy nie wolno
+(klauzule \repopath{never}), oraz które różnice nie mają znaczenia (normalizacja). Pełna
+referencja języka: rozdział~\ref{sec:formaty}.
+
+\textbf{Postępowanie.}
+\begin{enumerate}
+  \item \textbf{Weź reguły z planu ruchu.} Każda reguła ma identyfikator, rodzaj
+        (\repopath{must}/\repopath{never}), scenariusze, które ją ćwiczą, i miejsce w kodzie
+        legacy, z którego pochodzi (w benchu R01--R46).
+  \item \textbf{Wartości ze stron HTML wyciągaj ekstraktorami.} Klauzule nigdy nie czytają
+        prozy: wartość, która żyje na stronie HTML, najpierw wyciąga ekstraktor (selektor
+        CSS, JSON, nagłówek albo wyrażenie regularne z jedną grupą). Przy domyślnym
+        \repopath{compare.html: extracts} strona HTML jest porównywana między wersjami
+        wyłącznie przez wyciągnięte wartości --- markup nie jest zachowaniem. Gdy
+        ekstraktor ma \repopath{all: true}, lista jest całością: liczy się ją
+        (\repopath{countAtLeast} i pokrewne), przeszukuje (\repopath{contains}) albo testuje
+        wartość po wartości przez \repopath{[*]}; operator jednej wartości
+        (\repopath{gt}, \repopath{between}, \repopath{matches}\ldots{}) na całej liście
+        \repopath{sk validate} odrzuca.
+  \item \textbf{Zawężaj klauzule} przez \repopath{when} (metoda, ścieżka, query) --- dla
+        faktów jednego scenariusza przez sondę \repopath{probe=<nazwa>}.
+  \item \textbf{Pisz klauzule nieobecności.} Kontrakt, który mówi tylko, co musi się
+        dziać, powiedział połowę. Bench celuje w około 20\,\% klauzul \repopath{never}
+        (wynik: 15 z 76, 19,7\,\%). \finding{Każda klauzula \repopath{never} potrzebuje
+        pozytywnego bliźniaka w tym samym scenariuszu}, inaczej może przejść bez
+        sprawdzenia czegokolwiek.
+  \item \textbf{Normalizuj tylko to, co różni się między dwoma przebiegami tego samego
+        systemu}: ciasteczka i GUID-y klientów, tokeny anti-forgery, ciasteczka sesji i
+        uwierzytelniania, GUID-y zamówień i znaczniki czasu, nagłówki transportowe
+        wynikające z ciał. Nie normalizuj tego, co musi się zgadzać --- w benchu numery
+        zamówień, które z tego samego snapshotu i tych samych żądań muszą być równe po obu
+        stronach.
+  \item \textbf{Nadaj pochodzenie} (\repopath{provenance}): klauzula \repopath{proposed}
+        jest liczona i pokazywana, ale o niczym nie decyduje; decyduje dopiero
+        \repopath{accepted}.
+  \item \textbf{Zwaliduj}:
+\begin{lstlisting}
+sk validate contract.yaml secondkey.yaml
+\end{lstlisting}
+        Błąd walidacji wskazuje miejsce (ścieżkę w dokumencie) i powód.
+\end{enumerate}
+
+Plan ruchu benchu zawiera też sondy NLS → ICU dla P7: miejsca w nopCommerce, w których
+dane kulturowe docierają do klienta (formatowanie ujemnych kwot walutowych, zamiana
+wielkości liter i przycinanie kodów kuponów, porównanie kodów pocztowych, sortowanie
+nazw, daty i godziny). Źródło traktuje je jako hipotezy do potwierdzenia albo obalenia w
+P7, a nie jako znaleziska.
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Każda klauzula ma \repopath{why} i pochodzenie; reguła w planie wskazuje kod legacy.
+  \item Udział klauzul \repopath{never} około 20\,\%; każda ma pozytywnego bliźniaka.
+  \item Normalizacja obejmuje tylko wartości zmienne między przebiegami tego samego systemu.
+  \item \repopath{sk validate} przechodzi dla kontraktu i \repopath{secondkey.yaml}.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/contract.md},
+\path{letsgolegacy.secondkey/docs/adr/0002-contract-language.md},
+\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 4: dowód A/A na systemie legacy}\label{sec:procedura-krok4}
+
+\textbf{Cel.} Zanim kontrakt oceni kandydata, musi przejść na samym systemie legacy:
+replay nagrania na legacy po obu stronach (A/A), z przywróceniem snapshotu przed każdym
+scenariuszem na każdej stronie, ma dać werdykt \repopath{pass} z każdą zaakceptowaną
+klauzulą utrzymaną i żadną niesprawdzoną. Taki przebieg pokazuje, że łańcuch nie wnosi
+różnic od siebie i że kontrakt trzyma na systemie legacy.
+
+\textbf{Polecenia (bench).}
+\begin{lstlisting}
+.\scripts\8-replay.ps1       # sk replay, A/A: obie strony to legacy
+.\scripts\9-verdict.ps1      # sk compare, sk evidence
+\end{lstlisting}
+
+Skrypt 8 uruchamia
+\begin{lstlisting}
+sk replay --config contract/secondkey.yaml --capture <nagranie> --out <przebieg> --legacy <url> --candidate <url>
+\end{lstlisting}
+z tym samym adresem po obu stronach, a reset
+\repopath{sqlServerSnapshot} z \repopath{secondkey.yaml} przywraca snapshot przed każdym
+scenariuszem. Łańcuch połączenia dla resetu skrypt ustawia tylko dla procesu \repopath{sk}
+w zmiennej \repopath{NOPBENCH\_SK\_SQL} (uwierzytelnianie Windows, bez sekretu). Przebieg
+z wynikiem bez odpowiedzi albo z nieudanym resetem jest odrzucany jako nieuczciwe
+porównanie. Skrypt 9 waliduje kontrakt i przebieg, uruchamia \repopath{sk compare}, waliduje
+werdykt, składa pakiet \repopath{sk evidence} i sprawdza skrót SHA-256 każdego pliku z
+manifestu; przebieg A/A musi przejść z każdą zaakceptowaną klauzulą utrzymaną.
+
+\textbf{Co A/A znajduje.} W benchu pierwszy przebieg tej bramki nie przeszedł, a obie
+przyczyny leżały po stronie kontraktu:
+\begin{itemize}
+  \item \textbf{Kontrakt mylił się co do systemu legacy.} Klauzula o stronie głównej
+        oczekiwała sześciu produktów, a dane przykładowe oznaczają cztery; klauzula
+        złamana po obu stronach dostaje status \repopath{violated-both}. Poprawka:
+        klauzula nazywa teraz cztery produkty.
+  \item \textbf{Niedeterminizm do maskowania.} 17 odpowiedzi JSON różniło się między dwoma
+        replay tego samego żądania: świeży token anti-forgery w podsumowaniu zamówienia i
+        obraz pozycji koszyka z cache, którego restore bazy nie resetuje. Oba przypadki
+        maskuje teraz normalizacja (tylko wartości) i kontrakt mówi dlaczego.
+\end{itemize}
+
+\textbf{Pętla.} Różnica, której nic w kontrakcie nie tłumaczy, to \repopath{regression}
+(\repopath{uncovered-difference}), także w A/A. Rozwiązuje się ją przeglądniętą zmianą
+kontraktu: regułą normalizacji, jeśli różnica nie ma znaczenia, klauzulą, jeśli ma. Wróć
+do kroku~3 i powtarzaj, aż A/A da \repopath{pass}.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endfirsthead
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endhead
+Klauzula \repopath{violated-both} & kontrakt myli się co do systemu legacy; popraw klauzulę \\
+\repopath{uncovered-difference} w A/A & wartość zmienna między przebiegami; maska z uzasadnieniem albo klauzula \\
+Klauzula \repopath{unexercised} & żadne żądanie nie trafiło w jej \repopath{when}; nigdy nie jest liczona jako spełniona --- popraw zakres albo dograj scenariusz \\
+\repopath{sk replay} kończy się kodem 4 & reset strony się nie udał; scenariusze tej strony nie zostały odtworzone (\repopath{reset-failed}); przebieg nie jest uczciwym porównaniem \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Snapshot przywracany przed każdym scenariuszem po obu stronach; zero nieudanych resetów.
+  \item Zero wyników bez odpowiedzi; liczba scenariuszy w przebiegu równa liczbie w nagraniu.
+  \item Werdykt \repopath{pass}: każda zaakceptowana klauzula utrzymana, zero niesprawdzonych.
+  \item Każda maska ma zapisane uzasadnienie.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/8-replay.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/9-verdict.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md},
+\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/cli.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 5: migracja przez agenta ze standardami}\label{sec:procedura-krok5}
+
+\textbf{Cel.} Uzyskać kandydata --- zmigrowany system --- jako pull request, którego diff
+jest dokładnie migracją, wykonaną przez agenta modernize-dotnet ze standardami
+frameworku załadowanymi jako skill, z pełnym zapisem przebiegu. W benchu to ticket P6,
+praca człowieka z subskrypcją GitHub Copilot; kryterium odbioru: kandydat się buduje, a
+istniejące testy przechodzą. Poniższe kroki pochodzą z runbooka P6 benchu i przewodnika
+standardów (rozdział~\ref{sec:standardy}).
+
+\textbf{5.1 Wymagania.} GitHub Copilot (Pro, Business lub Enterprise) z trybem agenta;
+jeden klient z agentem modernizacji: Visual Studio 2026 (albo 2022 17.14 lub nowsze) z
+\emph{GitHub Copilot app modernization}, VS Code z rozszerzeniem albo GitHub Copilot CLI;
+Windows z MSBuild dla .NET Framework, .NET 10 SDK, git i GitHub CLI. Standardy: wydanie
+repozytorium standardów z \path{generated/skills/}; przed pierwszym wydaniem przewodnik
+standardów dopuszcza \repopath{main} z zapisanym commitem. Uruchom stoper: wszystko do
+otwarcia pull requestu liczy się do godzin P6.
+
+\textbf{5.2 Fork i gałęzie.} Kandydat jest zmodyfikowanym nopCommerce, więc mieszka w
+forku upstream, a nie w repozytorium benchu:
+
+\begin{lstlisting}
+gh repo fork nopSolutions/nopCommerce --clone=false
+git init nop-p6 && cd nop-p6
+git config core.autocrlf false
+git remote add upstream https://github.com/nopSolutions/nopCommerce.git
+git remote add fork https://github.com/<your-account>/nopCommerce.git
+git fetch --depth 1 upstream tag release-3.90
+git rev-parse "release-3.90^{commit}"          # must print 12d1f0139149a9d6e84964d325d62bae6ac748f6
+git checkout -b secondkey/p6-base 12d1f0139149a9d6e84964d325d62bae6ac748f6
+\end{lstlisting}
+
+Gałąź \repopath{secondkey/p6-base} to przypięty commit plus jeden commit ze skillem i nie
+zmienia się po starcie P6; \repopath{secondkey/p6-candidate} powstaje z niej i zbiera
+wszystkie zmiany agenta i człowieka. Pull request idzie z kandydata do bazy, więc jego
+diff to dokładnie migracja.
+
+\textbf{5.3 Standardy jako skill.} Skill kopiuje się z wydania standardów do
+\path{.github/skills/} repozytorium docelowego i commituje osobno na gałęzi bazowej:
+
+\begin{lstlisting}
+git clone --depth 1 --branch <standards-tag> https://github.com/konradcinkusz/letsgolegacy.secondkey-standards.git ../standards
+mkdir -p .github/skills
+cp -R ../standards/generated/skills/. .github/skills/
+git -C ../standards rev-parse HEAD             # commit standardów do zapisu przebiegu
+git add .github/skills
+git commit -m "Add Second Key standards skills (<standards-tag>, <standards-commit>)"
+git push -u fork secondkey/p6-base
+git checkout -b secondkey/p6-candidate
+git push -u fork secondkey/p6-candidate
+\end{lstlisting}
+
+Kopii skilla się nie edytuje --- zmiana standardu to zmiana w repozytorium standardów.
+Sprawdzenie: istnieje
+\path{.github/skills/applying-dotnet-migration-standards/SKILL.md}, a
+\repopath{metadata.version} w jego front matter to wersja, którą miałeś wziąć.
+
+\textbf{5.4 Bazowa linia testów legacy.} „Istniejące testy przechodzą” wymaga punktu
+odniesienia: które testy przechodzą na niezmienionym kodzie. nopCommerce 3.90 ma pięć
+projektów testowych NUnit 3 w \path{src/Tests}. Bench buduje je skryptami 1 i 2, a potem:
+
+\begin{lstlisting}
+nuget install NUnit.ConsoleRunner -Version 3.22.0 -OutputDirectory C:\nopbench\tools
+$runner = 'C:\nopbench\tools\NUnit.ConsoleRunner.3.22.0\tools\nunit3-console.exe'
+& $runner (Get-ChildItem C:\nopbench\legacy-src\src\Tests\*\bin\Release\*.Tests.dll).FullName --result=C:\nopbench\p6-legacy-tests.xml
+\end{lstlisting}
+
+Zapisz liczby (wszystkie, zaliczone, niezaliczone, pominięte) per assembly. Test, który
+nie przechodzi na legacy, nie jest regresją, gdy nie przechodzi na kandydacie; test, który
+przechodzi na legacy i nie przechodzi na kandydacie --- jest.
+
+\textbf{5.5 Uruchomienie agenta.} Otwórz \repopath{nop-p6} na gałęzi kandydata. Przed
+czymkolwiek innym zapytaj agenta, jakie skille załadował z repozytorium, i wklej odpowiedź
+do zapisu przebiegu; jeśli skilli Second Key brak, zatrzymaj się i popraw krok 5.3 (to jest
+dokładnie kryterium R4: agent podejmuje skill). Punkt startu zależy od klienta (Visual
+Studio: menu kontekstowe solution albo Copilot Chat w trybie agenta; VS Code: Copilot Chat
+w trybie Agent; Copilot CLI: \repopath{copilot} w katalogu repozytorium). Źródła podają
+dwa brzmienia pierwszego promptu:
+
+\begin{itemize}
+  \item \textbf{runbook P6 benchu} (wysłać dosłownie):
+\begin{lstlisting}
+Modernize the solution in src/NopCommerce.sln from .NET Framework 4.5.1 to .NET 10.
+Migrate the ASP.NET MVC 5 web application (Nop.Web, the Administration area and the
+plugins) to ASP.NET Core on .NET 10. Keep the SQL Server database schema, the public
+URLs and the observable behaviour of the storefront unchanged. Keep the existing unit
+test projects and make them build and run on .NET 10. Follow the standards in
+.github/skills. Commit your work on the current branch in logical steps.
+\end{lstlisting}
+  \item \textbf{przewodnik standardów} (pierwszy prompt, potem instrukcja stała, którą
+        agent zapisuje w \path{.github/upgrades/<scenarioId>/scenario-instructions.md}):
+\begin{lstlisting}
+Upgrade this solution to .NET 10. Apply the applying-dotnet-migration-standards skill from
+.github/skills to every task: preserve behaviour, and record every behaviour flag in
+docs/migration/behaviour-flags.md instead of fixing it.
+
+From now on, for all tasks in this upgrade, follow the applying-dotnet-migration-standards skill.
+\end{lstlisting}
+\end{itemize}
+
+Oba źródła zgadzają się co do istoty: agent ma stosować standardy ze
+\path{.github/skills} i zachować obserwowalne zachowanie. Przewodnik standardów dodaje
+rejestr flag zachowania: podejrzany defekt agent oznacza, zamiast go naprawiać (standard
+SK-MIG-011). Etapy agenta --- assessment (\repopath{assessment.md}), planning
+(\repopath{plan.md}), execution (\repopath{tasks.md}) --- przegląda się przed każdym
+„kontynuuj”; w assessment musi być bazowa linia legacy, o którą prosi skill (źródło
+kultury, klucze konfiguracji, lazy loading EF6, endpointy JSON, testy niezaliczone).
+
+\textbf{5.6 Interwencje człowieka.} Każdą zmianę kodu przez człowieka robi się osobnym
+commitem z komunikatem zaczynającym się od \repopath{human:} i powodem; pakiet dowodowy
+odróżnia zmiany agenta od zmian człowieka po tym prefiksie. Każdy prompt, każde pytanie
+agenta i każdy wybór idą do zapisu dosłownie, w kolejności; commitów agenta się nie
+squashuje.
+
+\textbf{5.7 Build i testy kandydata.}
+\begin{lstlisting}
+dotnet --version
+dotnet build src\NopCommerce.sln -c Release
+dotnet test  src\NopCommerce.sln -c Release --logger "trx;LogFileName=p6-candidate-tests.trx"
+\end{lstlisting}
+P6 jest zrobione, gdy build się udaje, a każdy test zaliczony w bazowej linii przechodzi.
+Test usunięty, pominięty albo opróżniony przez agenta nie liczy się jako zaliczony.
+
+\textbf{5.8 Potwierdzenie, że agent użył standardów.} Przynajmniej jedno z poniższych
+musi zachodzić, a pierwsze dwa powinny: agent wymienia skill
+\repopath{applying-dotnet-migration-standards}; instrukcja stała jest w
+\repopath{scenario-instructions.md}; rejestr flag istnieje z bazową linią; identyfikatory
+reguł (\repopath{SK-MIG-}) pojawiają się w assessment, planie albo notatkach zadań; brak
+cichego przełączenia globalizacji:
+
+\begin{lstlisting}
+git grep -n "SECONDKEY-FLAG"
+git grep -n -E "InvariantGlobalization|UseNls|AppLocalIcu|EnsureCreated"
+\end{lstlisting}
+
+\textbf{5.9 Pull request i zapis przebiegu.}
+\begin{lstlisting}
+git push fork secondkey/p6-candidate
+gh pr create --repo <your-account>/nopCommerce --base secondkey/p6-base --head secondkey/p6-candidate \
+  --title "P6: modernize-dotnet candidate - nopCommerce 3.90 to .NET 10" \
+  --body-file p6-record.md
+git rev-parse HEAD                                  # commit kandydata
+\end{lstlisting}
+Pull requestu się nie scala: jego head commit jest kandydatem, a późniejsze commity tworzą
+nowego kandydata. Zapis przebiegu (operator, czasy, godziny, wersje klienta, agenta i
+SDK, commit legacy, wersja i commit standardów, lista skilli podana przez agenta, PR i
+commit kandydata, liczby testów legacy i kandydata, testy przechodzące na legacy, a nie na
+kandydacie, commity \repopath{human:}, prompty i odpowiedzi) trafia jako
+\path{results/p6/run-record.md} do benchu, a godziny do \path{P10-ONBOARDING-HOURS.md}.
+
+\textbf{5.10 Konfiguracja bramki w kandydacie.} Pakiet NuGet \repopath{SecondKey.Standards}
+ustawia severity każdej diagnostyki, która sprawdza standard. Nie jest na nuget.org:
+pochodzi z artefaktu CI repozytorium standardów albo z \repopath{./scripts/verify-package.sh}.
+Wersja pakietu musi być ta sama co wersja skilla --- agent i bramka muszą dostać te same
+standardy:
+
+\begin{lstlisting}
+mkdir -p .packages && cp /path/to/SecondKey.Standards.0.1.0.nupkg .packages/
+\end{lstlisting}
+\begin{lstlisting}
+<!-- nuget.config: <add key="secondkey-local" value=".packages" /> -->
+<GlobalPackageReference Include="SecondKey.Standards" Version="0.1.0" />
+\end{lstlisting}
+
+Krok CI \repopath{konradcinkusz/letsgolegacy.secondkey-standards/actions/drift-check@main}
+w repozytorium docelowym kończy się błędem, gdy istnieje nowsze wydanie albo gdy skill i
+pakiet się nie zgadzają. Przed pierwszym wydaniem standardów zgłasza „no release” i się nie
+udaje, więc dla P6 przed wydaniem się go pomija.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endfirsthead
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endhead
+Agent nie wspomina standardów & \path{.github/skills/} nie ma w otwartym folderze albo klient nie ładuje skilli repozytorium; sprawdź ścieżkę, poproś o skill z nazwy, zrestartuj klienta, w Copilot CLI \repopath{/skills reload}; w razie potrzeby skopiuj skill także do \path{.github/upgrades/skills/} \\
+Diff PR zawiera tysiące niezwiązanych linii & gałęzie nie powstały z przypiętego commita albo konwersja końców linii (\repopath{core.autocrlf}) \\
+„Testy przechodzą”, ale wykonało się ich mniej & agent wykluczył, pominął albo usunął projekty testowe; porównaj liczby z bazową linią \\
+P7 nie odtwarza buildu & kandydat zależy od czegoś tylko na maszynie operatora (lokalne źródło NuGet, SDK preview); zapisz SDK i każde źródło \\
+Kandydat zmienił się w trakcie P7 & ktoś wypchnął zmiany na gałąź kandydata; P7 przypina commit, nigdy gałąź \\
+\repopath{git push}: „shallow update not allowed” & fork utworzony z kopią tylko domyślnej gałęzi; pobierz tag bez \repopath{--depth} albo utwórz fork domyślnie przez \repopath{gh repo fork} \\
+Agent włącza \repopath{InvariantGlobalization} albo zmienia oczekiwaną wartość w teście & poszedł za ogólną poprawką zamiast reguły; wskaż mu SK-MIG-007 (albo SK-MIG-013), niech cofnie zmianę i zapisze flagę zachowania \\
+Build kończy się błędem \repopath{PORTCULLIS\_} albo \repopath{CA} & zainstalowana konfiguracja bramki, a kod łamie regułę o severity \repopath{error}; popraw zgodnie z regułą albo wycisz linię z uzasadnieniem \repopath{SECONDKEY-FLAG} \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Checklista (runbook P6)}
+\begin{checklista}
+  \item Fork; \repopath{secondkey/p6-base} to przypięty commit plus commit ze skillami i nic więcej.
+  \item Skille z otagowanego wydania standardów; tag i commit w zapisie.
+  \item Bazowa linia testów legacy (liczby per assembly).
+  \item Agent wymienił skille Second Key przed jakąkolwiek zmianą.
+  \item Każdy prompt, pytanie i wybór zapisane dosłownie; zmiany człowieka jako commity \repopath{human:}.
+  \item \repopath{dotnet build} się udaje; każdy test zaliczony na legacy przechodzi na kandydacie.
+  \item Pull request do \repopath{secondkey/p6-base}, niescalony; commit kandydata zapisany.
+  \item Zapis przebiegu w benchu jako \path{results/p6/run-record.md}; godziny w logu P10.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md},
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 6: bramka Portcullis na pull request kandydata}\label{sec:procedura-krok6}
+
+\textbf{Cel.} Sprawdzić deterministycznymi analyzerami Roslyn linie, które pull request
+kandydata zmienia, i zapisać wynik jako SARIF do pakietu dowodowego. W benchu to ticket P8
+(plan: reguły migracyjne Portcullis na PR kandydata, SARIF dołączony do pakietu).
+Referencja: rozdział~\ref{sec:portcullis}.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.8\linewidth,height=0.55\textheight,keepaspectratio]{\dgm{a8-bramka-portcullis}}
+  \caption{Bramka Portcullis: znalezione a blokujące.}
+  \label{fig:bramka}
+\end{figure}
+
+\textbf{Postępowanie.}
+\begin{enumerate}
+  \item Checkout z pełną historią (\repopath{fetch-depth: 0} w GitHub Actions,
+        \repopath{GIT\_DEPTH: 0} w GitLab). Bez commita bazowego PR Portcullis nie ustali
+        zmienionych linii i przejdzie na zakres całego drzewa --- ostrzega o tym, ale
+        poprawką jest pełny checkout.
+  \item Skan z zakresem commitów i zapisem SARIF (przed wydaniem pakietów --- z kodu
+        źródłowego):
+\begin{lstlisting}
+BASE=$(git merge-base origin/main HEAD)
+dotnet run --project /path/to/letsgolegacy.portcullis/src/Portcullis.Cli -- \
+  scan ./src --provenance-range "$BASE..HEAD" --provenance-repo . --sarif portcullis.sarif
+\end{lstlisting}
+  \item Odczytaj wynik: \repopath{summary} to wszystko, co znaleziono; \repopath{gate} to
+        to, co blokuje. Blokuje tylko naruszenie o poziomie błędu w liniach zmienionych
+        przez PR, nieprzyjęte przez baseline. Różnica między tymi liczbami to istniejący
+        dług. Kody wyjścia: 0 --- nie blokuje, 1 --- blokuje (werdykt, nie awaria),
+        2 --- błędne użycie.
+  \item Na kodzie z istniejącymi naruszeniami: zakres diff (domyślny w akcji), ratcheting
+        severity w \repopath{.editorconfig} i plik baseline
+        (\repopath{--baseline portcullis-baseline.json}, raz z
+        \repopath{--write-baseline}); znalezisko przyjęte przez baseline jest raportowane,
+        ale nigdy nie blokuje.
+  \item Dołącz SARIF do łańcucha: \repopath{sk gate --sarif portcullis.sarif} podsumowuje
+        logi per reguła i kończy się kodem 1, gdy znalezisko blokuje (błąd, którego nie
+        obejmuje zaakceptowana suppression ani stan baseline \repopath{unchanged}/
+        \repopath{absent}); ostrzeżenia i uwagi nigdy nie blokują. Plik, który nie jest
+        SARIF 2.1.0, to błędne wejście (kod 3), nigdy „brak znalezisk”.
+\end{enumerate}
+
+Na GitHub gotową bramką jest akcja
+\repopath{konradcinkusz/letsgolegacy.portcullis@v0} (wejścia \repopath{path},
+\repopath{diff-scoped}, \repopath{comment}, \repopath{fail-on-block},
+\repopath{dotnet-version}); SARIF do code scanning publikuje się na razie osobnym krokiem
+CLI i \repopath{github/codeql-action/upload-sarif}. Pakiety i obraz kontenera są
+zbudowane i sprawdzone lokalnie, ale jeszcze nieopublikowane --- do pierwszego tagu
+\repopath{v*} działa ścieżka z kodu źródłowego.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endfirsthead
+\toprule
+Objaw & Przyczyna i działanie \\
+\midrule
+\endhead
+\repopath{gate.scope} to \repopath{"all"} zamiast \repopath{"diff"} & brak commita bazowego w checkoucie; pełna historia. Przy \repopath{"all"} z \repopath{degradedReason} git nie rozwiązał zakresu i skan przeszedł na całe drzewo --- powód mówi, co zawiodło \\
+Bramka przechodzi, choć powinna blokować & przy \repopath{"diff"} naruszenie leży poza liniami zmienionymi przez PR --- bramka działa zgodnie z projektem \\
+Pakiet się instaluje, ale diagnostyk brak & DLL musi być w \path{analyzers/dotnet/cs/} w \repopath{.nupkg}; analyzer spakowany do \path{lib/} nic nie robi \\
+\repopath{warning CS9057} & SDK starszy niż .NET 8; \repopath{Portcullis.Analyzers} celuje w Roslyn 4.8 właśnie po to, żeby tego uniknąć \\
+Reguły nie odpalają na kodzie, o którym wiesz, że jest zły & Portcullis parsuje źródła bezpośrednio, nie przez MSBuild, więc typ z pakietu NuGet albo innego projektu się nie rozwiązuje \\
+\bottomrule
+\end{xltabular}
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Pełny checkout; \repopath{gate.scope} równe \repopath{"diff"}.
+  \item SARIF zapisany dla head commita kandydata.
+  \item Wersja pakietu standardów w kandydacie równa wersji skilla.
+  \item \repopath{sk gate} uruchomione na SARIF; wynik trafia do pakietu.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.portcullis/docs/TUTORIAL.md},
+\path{letsgolegacy.portcullis/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/eshop/5-scan-eshop.ps1}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 7: replay legacy kontra kandydat i werdykt}\label{sec:procedura-krok7}
+
+\textbf{Cel.} Odtworzyć nagrany ruch na legacy i na kandydacie w identycznych warunkach
+i porównać obie strony względem kontraktu. W benchu to ticket P7; kryterium odbioru:
+\repopath{verdict.json} istnieje, a różnica NLS → ICU jest znaleziona albo jej brak jest
+udokumentowany.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{\dgm{a4-sekwencja-replay}}
+  \caption{Replay: reset i odtworzenie scenariusza po każdej stronie.}
+  \label{fig:replay}
+\end{figure}
+
+\textbf{Postępowanie.}
+\begin{enumerate}
+  \item \textbf{Przypnij kandydata} --- commit, nigdy gałąź. Zbuduj go i uruchom obok
+        systemu legacy. Plan benchu: host Windows, \repopath{http://localhost:8090/},
+        własna kopia bazy odtworzona z tego samego snapshotu.
+  \item \textbf{Skonfiguruj reset po obu stronach} w \repopath{secondkey.yaml}
+        (\repopath{http}, \repopath{sqlServerSnapshot} albo \repopath{command}; łańcuch
+        połączenia wyłącznie przez zmienną środowiskową \repopath{connectionStringEnv}).
+        Reset \repopath{sqlServerSnapshot} tworzy snapshot przy pierwszym resecie i
+        zostawia go po przebiegu; zamyka wszystkie połączenia z bazą, także połączenia
+        aplikacji z puli, i nie czeka, aż aplikacja się podniesie; resetuje tylko bazę ---
+        cache, sesje i timery aplikacji przetrwają.
+  \item \textbf{Uruchom replay}:
+\begin{lstlisting}
+sk replay --capture .secondkey/traffic.skcap --legacy http://127.0.0.1:5080 --candidate http://127.0.0.1:5081
+\end{lstlisting}
+        W benchu: \repopath{.\textbackslash{}scripts\textbackslash{}8-replay.ps1
+        -Candidate http://localhost:8090/}. Każdy scenariusz dostaje po każdej stronie
+        świeży cookie jar (nagrane ciasteczka nigdy nie są wysyłane), przekierowania nie
+        są śledzone (302 to odpowiedź do porównania), a korelacja przenosi wartości
+        generowane przez serwer (np. tokeny anti-forgery) z ostatniej odpowiedzi tej samej
+        strony. Kod 4 oznacza nieudany reset: scenariusz nie został wysłany do tej strony
+        (\repopath{reset-failed}) i przebieg nie jest uczciwym porównaniem.
+  \item \textbf{Porównaj}:
+\begin{lstlisting}
+sk compare --contract contract.yaml --run .secondkey/run.skrun --out .secondkey/verdict.json
+\end{lstlisting}
+        Kod 0 --- \repopath{pass}, 1 --- \repopath{fail} (jakakolwiek regresja),
+        2 --- \repopath{review} (bez regresji, jest fix candidate do decyzji), 3 --- błędne
+        wejście (np. przebieg bez wyników: nic nie porównano, więc nic nie może przejść).
+\end{enumerate}
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Kandydat przypięty commitem; ta sama wersja nagrania co w A/A.
+  \item Obie strony startują każdy scenariusz z tego samego snapshotu; zero nieudanych resetów.
+  \item Zero wyników bez odpowiedzi albo każdy taki wynik zrozumiany (to \repopath{regression}).
+  \item \repopath{verdict.json} zapisany i zwalidowany (\repopath{sk validate verdict.json}).
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 8: analiza różnic i decyzje}\label{sec:procedura-krok8}
+
+\textbf{Cel.} Zrozumieć każdą wymianę, która nie jest równa, i podjąć właściwą decyzję:
+poprawić kandydata, zmienić kontrakt w przeglądzie albo przekazać fix candidate osobie,
+która decyduje.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=0.9\linewidth,height=0.62\textheight,keepaspectratio]{\dgm{a5-klasy-werdyktu}}
+  \caption{Klasa wymiany: pierwszy pasujący krok decyduje.}
+  \label{fig:klasy}
+\end{figure}
+
+\textbf{Jak czytać werdykt.} Każda wymiana jest w dokładnie jednej klasie; decyduje
+pierwszy pasujący krok (rysunek~\ref{fig:klasy}). Wynik przebiegu to \repopath{fail}, gdy
+jakakolwiek wymiana jest regresją, \repopath{review}, gdy żadna nie jest, ale jest fix
+candidate, i \repopath{pass} w pozostałych przypadkach. Pole \repopath{diffs} wymienia
+każdą surową różnicę ze ścieżką w języku ścieżek kontraktu --- można ją wkleić do reguły
+\repopath{ignore} albo klauzuli bez zmian --- a różnica wyjaśniona przez normalizację
+nazywa regułę w \repopath{normalizedBy}. \repopath{summary.clauses} liczy klauzule
+wszystkie, decydujące i niesprawdzone.
+
+\textbf{Decyzje.}
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Klasa i powód & Co zrobić \\
+\midrule
+\endfirsthead
+\toprule
+Klasa i powód & Co zrobić \\
+\midrule
+\endhead
+\repopath{regression}, \repopath{missing-result} & strona bez odpowiedzi (timeout, połączenie, reset); najpierw środowisko: przebieg z nieudanym resetem nie jest uczciwym porównaniem \\
+\repopath{regression}, \repopath{clause-regression: <id>} & kandydat łamie zaakceptowaną klauzulę, którą legacy spełnia; poprawka po stronie kandydata \\
+\repopath{regression}, \repopath{uncovered-difference} & różnica, której kontrakt nie tłumaczy; jeśli jest zachowaniem --- poprawka kandydata; jeśli nie ma znaczenia --- przeglądnięta zmiana kontraktu (reguła normalizacji albo klauzula) \\
+\repopath{fix-candidate}, \repopath{clause-fixed: <id>} & kandydat spełnia klauzulę, którą legacy łamie; decyduje człowiek (wynik \repopath{review}); standard SK-MIG-011 każe agentowi flagować podejrzany defekt, a nie naprawiać go po cichu \\
+klauzula \repopath{violated-both} & kontrakt myli się co do legacy; poprawka kontraktu i ponowny dowód A/A \\
+\bottomrule
+\end{xltabular}
+
+Sondy NLS → ICU z planu ruchu benchu (formatowanie ujemnych kwot walutowych, zamiana
+wielkości liter i przycinanie kodów kuponów, porównanie kodów pocztowych, sortowanie,
+daty) są hipotezami do sprawdzenia właśnie w tym kroku; najmocniejszym kandydatem według
+źródła są ujemne kwoty w walucie \repopath{en-US}: NLS formatuje je jako
+\repopath{(\$100.00)}, dane ICU jako \repopath{-\$100.00}.
+
+\textbf{Pętla zmiany.} Każda poprawka kandydata to nowy commit, więc nowy kandydat: krok 6
+(bramka) i krok 7 (replay i werdykt) wykonuje się ponownie na nowym head commicie, a zapis
+przebiegu to odnotowuje. Kontrakt zmienia się wyłącznie przeglądniętą zmianą; po każdej
+zmianie kontraktu wraca się do dowodu A/A.
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Każda regresja przypisana: środowisko, kandydat albo kontrakt.
+  \item Każdy fix candidate przekazany do decyzji człowieka, z powodem.
+  \item Po zmianie kontraktu ponowny dowód A/A (\repopath{pass}).
+  \item Po zmianie kandydata ponownie krok 6 i 7 na nowym commicie.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey-standards/README.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 9: pakiet dowodowy}\label{sec:procedura-krok9}
+
+\textbf{Cel.} Złożyć katalog, który pozwala osobie zatwierdzającej zdecydować o
+zmigrowanym systemie bez uruchamiania Second Key: wyjaśnia werdykt, niesie jego wejścia i
+podaje SHA-256 każdego pliku.
+
+\begin{lstlisting}
+sk gate --sarif portcullis.sarif
+sk evidence --verdict verdict.json --contract contract.yaml --run run.skrun \
+            --sarif portcullis.sarif --out evidence --pdf auto
+\end{lstlisting}
+
+\begin{itemize}
+  \item \repopath{sk evidence} kończy się kodem 0, gdy pakiet jest zapisany, niezależnie od
+        werdyktu: pipeline powinien opublikować także pakiet, który wyjaśnia porażkę. Kod
+        własny werdyktu zwraca \repopath{sk compare}.
+  \item Odmawia (kod 3) kontraktu albo przebiegu, który nie jest tym, który nazywa werdykt.
+  \item \repopath{--run} dołącza przebieg, żeby każdy mógł przeliczyć werdykt; gdy
+        nagrany ruch musi zostać w swojej granicy, pomija się go.
+  \item \repopath{--pdf auto} drukuje \repopath{report.pdf}, gdy na maszynie jest
+        przeglądarka oparta na Chromium (\repopath{SK\_CHROME\_PATH}, potem PATH);
+        \repopath{required} czyni brak PDF błędem (kod 4), \repopath{off} pomija PDF.
+  \item Katalog z poprzednim pakietem jest nadpisywany dokładnie o pliki z jego manifestu;
+        katalog z czymkolwiek innym jest odrzucany, nigdy czyszczony. Bench przed złożeniem
+        usuwa katalog pakietu i po złożeniu weryfikuje skrót każdego pliku z manifestu.
+\end{itemize}
+
+\textbf{Sprawdzenie pakietu} przez kogoś, kto go otrzymał:
+
+\begin{lstlisting}
+cd evidence
+python3 -c "import json,hashlib; [print('ok' if hashlib.sha256(open(f['path'],'rb').read()).hexdigest()==f['sha256'] else 'CHANGED', f['path']) for f in json.load(open('manifest.json'))['files']]"
+sk validate verdict.json contract.yaml
+sk compare --contract contract.yaml --run run.skrun --out recomputed.json   # ten sam werdykt poza createdAt
+\end{lstlisting}
+
+\finding{Pakiet w fazie 01 jest niepodpisany}: statement in-toto ma \repopath{"signed":
+false}. Dowodzi, które pliki należą do siebie i co mówią, a nic nie mówi o tym, kto go
+złożył. Podpis (koperta DSSE, klucz właściciela) dochodzi w fazie 03.
+
+\textbf{Checklista}
+\begin{checklista}
+  \item Pakiet złożony z werdyktu, kontraktu i --- jeśli wolno --- przebiegu z tego samego P7.
+  \item SARIF bramki dołączony; \repopath{sk gate} wykonane.
+  \item Każdy skrót z \repopath{manifest.json} zgodny; werdykt przeliczony ponownie daje to samo.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/9-verdict.ps1}}
+
+% ---------------------------------------------------------------------------
+\subsection{Krok 10: publikacja i liczby}\label{sec:procedura-krok10}
+
+Bramką fazy 01 jest ticket P9 benchu: opublikować pakiet dowodowy, kontrakt i liczby ---
+scenariusze, różnice, regresje, zabite mutanty. Na przypiętych commitach P9 ma status
+„planned”. Liczby scenariuszy i klauzul istnieją już dla legacy (P4: 38 scenariuszy, 290
+wymian; P5: 76 klauzul, w tym 15 \repopath{never}); różnice i regresje przyniesie P7.
+Komponent mutacji C9 (\repopath{sk mutate}) należy do fazy 02 --- w fazie 01 kończy się
+kodem 70. Pakiet cytuje pull request kandydata, jego head commit, wersję standardów i zapis
+przebiegu P6.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/cli.md}}
+
+% ---------------------------------------------------------------------------
+\subsection{Praca nad samym frameworkiem}\label{sec:procedura-rozwoj}
+
+Repozytoria frameworku rozwija się według tych samych reguł:
+
+\begin{enumerate}
+  \item \textbf{Zacznij od planu pracy.} \path{docs/WORKPLAN.md} każdego repozytorium
+        wymienia tickety, ich kryteria „done when” i status. Jeden ticket to jeden pull
+        request, a kryterium odbioru nie jest parafrazowane w PR.
+  \item \textbf{W rdzeniu przeczytaj analizę.} \path{docs/analysis/phase-01.md} mówi, które
+        pliki należą do którego ticketu i jakie decyzje zapadły; jeśli zmiana się z nią
+        nie zgadza, najpierw zmienia się analizę. \path{docs/reference-notes.md} mówi, co
+        przeniesiono ze starszych repozytoriów.
+  \item \textbf{Przygotuj klon.} \repopath{./scripts/setup.sh} sprawdza narzędzia i instaluje
+        hook skanu sekretów (w rdzeniu, standardach i legacy-risk-scan; w Portcullis
+        \path{./scripts/install-hooks.sh}; w benchu
+        \path{git config core.hooksPath .githooks}). Hook bez gitleaks odmawia commitu.
+  \item \textbf{Zbuduj i przetestuj lokalnie} tak jak CI; w standardach generator z
+        \repopath{generate --check}, w benchu PSScriptAnalyzer z ustawieniami repozytorium,
+        w rdzeniu:
+\begin{lstlisting}
+dotnet build SecondKey.slnx && dotnet test SecondKey.slnx
+./scripts/mutation.sh
+\end{lstlisting}
+  \item \textbf{Formaty artefaktów to interfejs produktu.} Zmiana \path{schemas/*.json}
+        to zmiana formatu: podbij pole \repopath{v}, zaktualizuj \path{docs/formats/} i
+        utrzymaj walidujące się próbki.
+  \item \textbf{Obsługa napisów jawna co do kultury} wszędzie (ostrzeżenia CA1305, CA1307,
+        CA1309, CA1310 są błędami): produkt istnieje po to, żeby łapać błędy kulturowe.
+  \item \textbf{Decyzje zapisuj w ADR} (\path{docs/adr/}), z powodem.
+  \item \textbf{Scalanie.} Od 26 IX 2026, na stałe polecenie właściciela, pull request jest
+        scalany, gdy każdy check na jego head commicie jest zielony; stosy scala się po
+        kolei, commitami merge. Nikt nie przegląda PR przed scaleniem: checki --- testy,
+        progi mutacyjne, job end-to-end, CodeQL, skan sekretów --- są przeglądem
+        (zaakceptowane ryzyko A3).
+  \item \textbf{Zaktualizuj ten dokument}, gdy zmiana dotyczy czegoś, co opisuje
+        (\path{docs/papers/}, \path{docs/diagrams/}).
+\end{enumerate}
+
+\zrodla{\path{letsgolegacy.secondkey/CLAUDE.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.portcullis/scripts/install-hooks.sh},
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.legacy-risk-scan/README.md}}

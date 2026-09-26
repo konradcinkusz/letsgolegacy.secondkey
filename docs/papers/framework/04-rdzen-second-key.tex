@@ -1,0 +1,1101 @@
+\section{Second Key --- rdzeń}\label{sec:rdzen}
+
+Repozytorium \path{letsgolegacy.secondkey}, dalej: rdzeń, mieści każdy komponent Second Key,
+który nie ma własnego powodu, by mieszkać gdzie indziej. W~fazie 01 jest to cały łańcuch
+weryfikacji poza bramką: CLI \repopath{sk}, przechwytywanie ruchu HTTP, silnik kontraktu,
+replay, komparator i~niepodpisany evidence pack (pakiet dowodowy). Rozdział opisuje migawkę
+rdzenia w~commicie \repopath{dfe3982}: po co rdzeń istnieje, gdzie mieszkają komponenty,
+jakie zasady projektowe egzekwuje i~dlaczego, jak zbudowane jest solution, jak rdzeń jest
+budowany, testowany i~sprawdzany w~CI, jakie ryzyka zaakceptowano, co przejął ze starszych
+repozytoriów i~jaki jest status ticketów. Łańcuch jako całość opisuje
+sekcja~\ref{sec:architektura}, formaty plików --- sekcja~\ref{sec:formaty}, polecenia
+\repopath{sk} --- sekcja~\ref{sec:cli}.
+
+\subsection{Po co istnieje}\label{sec:rdzen-cel}
+
+Second Key ma dawać niezależny, deterministyczny dowód, że system .NET zmigrowany przez
+agenta migracyjnego nadal dotrzymuje swojego kontraktu biznesowego. README opisuje podział
+ról jako dwa klucze:
+
+\begin{itemize}
+  \item \textbf{Pierwszy klucz} przekręca agent migracyjny: migruje kod.
+  \item \textbf{Drugi klucz} przekręca Second Key: zapisuje, jak obecny system naprawdę się
+        zachowuje, odtwarza to zachowanie na wersji zmigrowanej, sprawdza każdą różnicę
+        względem spisanego kontraktu --- tego, co musi się dziać, i~tego, co nie może się
+        zdarzyć nigdy --- i~przekazuje osobie zatwierdzającej pakiet dowodowy dla każdej
+        zmiany.
+\end{itemize}
+
+\finding{Second Key weryfikuje; nie przepisuje.} Nie poprawia kodu kandydata (candidate) i~nie dotyka systemu legacy. Jego wynikiem jest werdykt i~pakiet dowodowy, a~nie zmiana w~kodzie.
+
+ADR 0003 odróżnia to twierdzenie od tego, czego dowodzą narzędzia typu replay. Replay
+dowodzi parytetu: nowy system robi to, co stary, łącznie z~jego błędami. Second Key twierdzi,
+że nowy system nadal dotrzymuje \emph{kontraktu}. Różnica między wersjami nie jest więc
+automatycznie błędem, a~identyczność nie jest automatycznie poprawna. Każda porównana
+wymiana (exchange), czyli para żądanie–odpowiedź, trafia do jednej z~czterech klas, na
+podstawie których osoba zatwierdzająca może działać, a~przydział do klasy musi być
+deterministyczny.
+
+Status według README: faza 01 (demo). Łańcuch działa end to end na sample shop; następnym
+krokiem jest publiczny okaz, bench nopCommerce 3.x. Nic nie zostało wydane; wspólna wersja
+projektów w~\path{Directory.Build.props} to \repopath{0.1.0}. Bramką fazy 01 jest publiczny
+pakiet dowodowy na nopCommerce 3.x.
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/Directory.Build.props}}
+
+\subsection{Komponenty C0–C12 i~gdzie mieszkają}\label{sec:rdzen-komponenty}
+
+Łańcuch ma siedem kroków: capture, contract, standards, gate, replay, mutations i~evidence
+(sekcja~\ref{sec:architektura}). Numery komponentów C0–C12 pochodzą z~README i~planu pracy
+rdzenia. Tabela mówi, gdzie każdy komponent mieszka w~rdzeniu --- w~którym projekcie i~katalogu --- albo w~którym repozytorium poza nim, oraz w~jakim jest stanie w~tej migawce.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}l >{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.3cm}@{}}
+\toprule
+Id & Komponent & Gdzie mieszka & Stan w~migawce \\
+\midrule
+\endfirsthead
+\toprule
+Id & Komponent & Gdzie mieszka & Stan w~migawce \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+C0 & CLI \texttt{sk} & \path{src/SecondKey.Cli}: polecenia w~\path{Commands/}, konfiguracja
+w~\path{Configuration/}, kody wyjścia w~klasie \texttt{ExitCodes} & dostępne (S7) \\
+C1 & capture: proxy nagrywające przed systemem legacy & faza 01 --- tylko HTTP i~tylko ruch
+przychodzący: \path{src/SecondKey.Capture} (\texttt{RecordingProxy}); od fazy 02 SQL,
+kolejki i~PII w~\path{letsgolegacy.secondkey-capture} (strona Windows/IIS, własny cykl
+wydań) & capture HTTP dostępne (S9) \\
+C2 & miner kontraktu & rdzeń; w~tej wersji wyłącznie stub \texttt{sk mine}
+(\path{Commands/StubCommand.cs}) & faza 02; stub kończy się kodem 70 \\
+C3 & silnik kontraktu & \path{src/SecondKey.Contract} (\texttt{ContractEngine}) & dostępny
+(S8) \\
+C4 & pakiet standardów (skills i~NuGet) & \path{letsgolegacy.secondkey-standards} & poza
+rdzeniem \\
+C5 & bramka: analyzery Roslyn na zmienionych liniach & \path{letsgolegacy.portcullis}; rdzeń
+czyta wyłącznie jej SARIF (\texttt{sk gate}, \path{src/SecondKey.Evidence/Sarif/}) & poza
+rdzeniem; podsumowanie SARIF dostępne (S14) \\
+C6 & replay, reset stanu, sonda bazy & \path{src/SecondKey.Replay} (\texttt{ReplayEngine},
+\path{Resets/}, \path{Probes/}) & dostępne (S10, S11); stuby wywołań wychodzących (S16) w~fazie 02 \\
+C7 & komparator i~werdykt & \path{src/SecondKey.Compare} (\texttt{Comparator},
+\texttt{Normalizer}) & dostępny (S12, S13) \\
+C8 & doradcza triage różnic & rdzeń według README; w~migawce nie ma jeszcze kodu & faza
+02–03; nigdy nie zmienia werdyktu \\
+C9 & silnik mutacji & rdzeń; w~tej wersji wyłącznie stub \texttt{sk mutate} & faza 02; stub
+kończy się kodem 70 \\
+C10 & pakiet dowodowy & \path{src/SecondKey.Evidence} (\texttt{EvidencePack},
+\texttt{HtmlReport}, \texttt{PdfRenderer}) & niepodpisany dostępny (S14); podpis w~fazie 03 \\
+C11 & portal dowodów & \path{letsgolegacy.secondkey-portal} & poza rdzeniem \\
+C12 & pakowanie wewnątrz granicy klienta & \path{letsgolegacy.secondkey-sandbox} & poza
+rdzeniem \\
+\end{xltabular}
+}
+
+Warstwa formatów, \path{src/SecondKey.Artifacts}, nie ma numeru komponentu: jest wspólną
+biblioteką, przez którą każdy komponent czyta i~pisze artefakty (ADR 0001). Publiczny okaz
+ma własne repozytorium, \path{letsgolegacy.secondkey-nopcommerce-bench}. Plan pracy rdzenia
+śledzi też znane trudne problemy komponentów C1, C2, C6, C9/C5 i~C10; opisuje je
+sekcja~\ref{sec:architektura}.
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs}}
+
+\subsection{Zasady projektowe i~to, jak rdzeń je egzekwuje}\label{sec:rdzen-zasady}
+
+Plan pracy rdzenia numeruje siedem zasad projektowych („design rules this repository
+enforces”). Przy każdej podano uzasadnienie ze źródeł i~mechanizm, którym rdzeń ją
+egzekwuje.
+
+\begin{enumerate}
+  \item \textbf{Werdykt jest deterministyczny}: o~pass/fail decyduje wyłącznie kod bez modelu
+        językowego. Model może szkicować klauzule kontraktu albo pomagać w~triage różnic;
+        nigdy nie decyduje. \emph{Dlaczego:} osoba zatwierdzająca potrzebuje decyzji
+        deterministycznej (ADR 0003); ten sam kontrakt i~ten sam przebieg dają zawsze ten
+        sam werdykt, poza polem \repopath{createdAt}, więc werdykt można przeliczyć z~plików
+        w~pakiecie; także tekst klauzuli w~języku naturalnym jest deterministyczny, żeby
+        mógł stać w~podpisanym dowodzie. \emph{Jak:} w~\repopath{SecondKey.Contract} i~\repopath{SecondKey.Compare} nic nie może wołać modelu językowego --- opisy obu
+        projektów mówią „Deterministic; no model in it”; komparator jest czysty, a~czas i~wartości losowe w~odpowiedziach maskuje normalizacja z~kontraktu; klauzule
+        \repopath{proposed}, także naszkicowane przez model, są ewaluowane i~raportowane,
+        ale nie decydują, dopóki osoba nie zaakceptuje ich w~przeglądanej zmianie kontraktu;
+        triage C8 nigdy nie zmienia klasy; z~agent-eval-bench nie przeniesiono warstwy z~sędzią LLM w~ścieżce werdyktu. Analiza fazy 01 wyklucza model w~ścieżce werdyktu
+        „na stałe”.
+  \item \textbf{Wszystko działa wewnątrz granicy klienta; domyślnie zero ruchu
+        wychodzącego.} \emph{Dlaczego:} Second Key obsługuje nagrania ruchu innych systemów,
+        które mogą zawierać dane osobowe i~poświadczenia. \emph{Jak:} nic nie jest wysyłane
+        przez sieć poza dwa porównywane systemy; capture redaguje skonfigurowane nagłówki,
+        zanim cokolwiek trafi na dysk, więc sanityzacja odbywa się w~sieci klienta; pakiet
+        dowodowy pozwala pominąć \repopath{run.skrun}, gdy nagrany ruch musi zostać w~swojej
+        granicy; raport HTML zakazuje skryptów i~żądań sieciowych polityką Content Security
+        Policy.
+  \item \textbf{Tylko technologie, które klient już eksploatuje}: .NET, SQL Server, Entra
+        ID, GitHub albo Azure DevOps, Kubernetes. \emph{Jak:} logika kalibracji z~judge-worker (TypeScript) ma zostać przepisana na C\# zamiast przeniesiona; PDF
+        raportu drukuje przeglądarka oparta na Chromium, która już jest na maszynie.
+  \item \textbf{System legacy jest nietykalny}: capture nie wymaga zmiany kodu ani
+        rekompilacji. \emph{Jak:} proxy przekazuje każde żądanie bez zmian, poza prośbą o~nieskompresowaną odpowiedź, i~oddaje klientowi odpowiedź systemu legacy bez zmian;
+        zmienia się tylko adres, pod który łączą się klienci systemu. Czas i~losowość w~kodzie legacy (\repopath{DateTime.Now}, \repopath{Guid.NewGuid()}) bez wstrzykiwania
+        zależności obsługuje normalizacja w~C7, a~nie ingerencja w~system. Ticket S9
+        powołuje się na tę zasadę.
+  \item \textbf{Dowód jest artefaktem kryptograficznym, nie dashboardem.} \emph{Jak:} pakiet
+        to katalog plików z~SHA-256 każdego pliku w~\repopath{manifest.json} i~niepodpisanym
+        in-toto Statement. Faza 01 niesie skróty i~niepodpisany statement po to, żeby podpis
+        w~fazie 03 niczego w~formacie nie zmienił. Ticket S14 powołuje się na tę zasadę.
+  \item \textbf{Brak własnej usługi tożsamości}; używany jest IdP klienta. \emph{Jak:}
+        repozytorium authservice służy wyłącznie próbnej instancji portalu hostowanej
+        samodzielnie (C11, faza 03); produkcyjnie portal używa IdP klienta przez OIDC.
+  \item \textbf{Każdy krok działa z~CLI w~pipeline}; portal jest oknem, nie interfejsem.
+        \emph{Jak:} każdy krok łańcucha to polecenie \repopath{sk} ze stabilnymi kodami
+        wyjścia, na których pipeline może się rozgałęziać bez czytania werdyktu;
+        \repopath{sk evidence} kończy się kodem 0 niezależnie od werdyktu, żeby pipeline
+        mógł opublikować pakiet, który wyjaśnia porażkę. Ticket S7 powołuje się na tę
+        zasadę.
+\end{enumerate}
+
+\paragraph{Reguły, które łatwo złamać przez przypadek.} \path{CLAUDE.md} wymienia cztery:
+
+\begin{itemize}
+  \item \textbf{Formaty artefaktów są interfejsem produktu.} Zmiana w~\path{schemas/*.json} jest zmianą formatu: trzeba podbić pole \repopath{v}, które
+        dany schemat reguluje, zaktualizować \path{docs/formats/} i~utrzymać próbki w~stanie
+        walidującym.
+  \item \textbf{Brak modelu w~ścieżce werdyktu} (zasada 1).
+  \item \textbf{Obsługa napisów jawnie określająca kulturę wszędzie.} CA1305, CA1307,
+        CA1309 i~CA1310 są ostrzeżeniami, a~ostrzeżenia są błędami. \path{.editorconfig}
+        podaje powód: operacje na napisach zależne od kultury to dokładnie ta pułapka
+        migracyjna, na którą produkt poluje (NLS w~.NET Framework, ICU we współczesnym
+        .NET), więc sam produkt musi być jawny.
+  \item \textbf{Nagrania z~prawdziwych systemów nigdy nie trafiają do gita}; tylko
+        syntetyczne próbki i~fixtures.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/CLAUDE.md},
+\path{letsgolegacy.secondkey/SECURITY.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey/docs/formats/contract.md},
+\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/docs/reference-notes.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/RecordingProxy.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/CaptureOptions.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/Rendering/ClauseText.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/PdfRenderer.cs},
+\path{letsgolegacy.secondkey/.editorconfig}}
+
+\subsection{Decyzje architektoniczne: ADR 0001–0003}\label{sec:rdzen-adr}
+
+Trzy ADR-y rdzenia mają status „accepted” i~datę 2026-09-26. Poniżej kontekst, decyzja i~konsekwencje każdego; pełną referencję formatów, języka kontraktu i~klas werdyktu zawiera
+sekcja~\ref{sec:formaty}.
+
+\subsubsection{ADR 0001: pliki artefaktów są interfejsem produktu}
+
+\emph{Tickety S3–S6.} \textbf{Kontekst.} Second Key to łańcuch komponentów --- capture,
+contract, replay, compare, evidence --- które są budowane, wymieniane i~wdrażane osobno:
+capture działa po stronie Windows/IIS, reszta w~sandboksie linuksowym; bramka jest osobnym
+repozytorium; miner, silnik mutacji i~portal przychodzą w~późniejszych fazach. Komponenty
+muszą móc się zmieniać bez skoordynowanego wydania wszystkich naraz.
+
+\textbf{Decyzja.} Komponenty komunikują się wyłącznie przez wersjonowane pliki, których
+formaty definiują schematy JSON w~\path{/schemas}: \repopath{*.skcap},
+\repopath{contract.yaml}, \repopath{*.skrun}, \repopath{verdict.json}, a~z~innych
+repozytoriów SARIF i~skills. Żaden komponent nie wywołuje kodu innego. Strumienie zdarzeń
+(capture, run) są w~formacie JSON Lines, więc można je dopisywać w~trakcie działania systemu
+i~czytać bez ładowania w~całości do pamięci. Każde zdarzenie i~każdy dokument niesie wersję
+formatu \repopath{v}; czytelnik odrzuca wersje, których nie zna. Schematy są ścisłe
+(\repopath{additionalProperties: false}); reguły, których schemat nie wyrazi, sprawdza kod
+i~raportuje z~tak samo zlokalizowanymi błędami. Werdykty cytują SHA-256 swoich wejść.
+
+\textbf{Konsekwencje.} Zmiana formatu to przeglądana zmiana schematu, jego próbek i~\path{docs/formats/}; CI waliduje próbki przy każdym buildzie. Każdy komponent
+można przepisać --- także poza projektem --- pod warunkiem, że czyta i~pisze te same
+pliki. Formaty są z~konstrukcji publiczne; nagrania prawdziwych systemów nie są publiczne
+nigdy i~trzyma je poza gitem \path{.gitignore}.
+
+\subsubsection{ADR 0002: język kontraktu}
+
+\emph{Ticket S4.} \textbf{Kontekst.} Kontrakt musi być czytelny dla osób, które zatwierdzają
+zmianę (ryzyko, change approval, audyt), dość precyzyjny, by dało się go ewaluować bez
+osądu, i~dość ekspresywny, by powiedzieć, co nie może się zdarzyć nigdy. Opisywane systemy
+to legacy aplikacje webowe, których zachowanie w~dużej części widać tylko w~HTML
+renderowanym po stronie serwera. agent-eval-bench pokazał dyscypliny, które czynią taki
+korpus wiarygodnym: dane zamiast kodu, ścisły schemat, asercje nieobecności jako
+pełnoprawny element, brak pustych przejść, nieznane asercje jako błędy.
+
+\textbf{Decyzja.} Klauzule mają rodzaj \repopath{must} albo \repopath{never}, wymagane
+\repopath{why} i~pochodzenie ze statusem \repopath{proposed} albo \repopath{accepted};
+decydują tylko zaakceptowane, a~kontrakt potrzebuje co najmniej jednej zaakceptowanej
+klauzuli \repopath{never}. Predykaty wybierają wartości ścieżką z~obserwacji i~stosują jeden
+operator z~zamkniętego zbioru. Język ścieżek jest mały i~własny zamiast pełnego JSONPath,
+bo każdą konstrukcję trzeba umieć wyjaśnić w~tekście klauzuli w~języku naturalnym. Nic nie
+dopasowuje prozy: wartości z~HTML wyciągają nazwane ekstraktory z~jawnym typem i~kulturą.
+Klauzula bez dopasowanego żądania jest \repopath{unexercised}, a~pusta selekcja nie spełnia
+predykatu z~kwantyfikatorem \repopath{all}. Normalizacja mieszka w~kontrakcie, więc reguły,
+które czynią dwie wersje „równymi pod kontraktem”, są przeglądane razem z~klauzulami, którym
+służą.
+
+\textbf{Konsekwencje.} Ekstraktor, którego selektor przestał pasować po zmianie markupu,
+sprawia, że jego klauzule nie przechodzą albo są \repopath{unexercised} --- głośno, nigdy po
+cichu. Autorzy kontraktów muszą cytować ścieżki z~nawiasami kwadratowymi wewnątrz YAML flow
+mappings. Język rośnie przez dodawanie operatorów do zamkniętego zbioru; schemat, silnik i~renderowanie tekstu zmieniają się razem.
+
+\subsubsection{ADR 0003: cztery klasy werdyktu, niewyjaśniona różnica zamyka bramkę}
+
+\emph{Ticket S6, stosowany przez S13.} \textbf{Kontekst.} Replay dowodzi parytetu, a~Second
+Key dotrzymania kontraktu (sekcja~\ref{sec:rdzen-cel}). Osoba zatwierdzająca potrzebuje
+każdej porównanej wymiany w~klasie, na podstawie której może działać, a~decyzja musi być
+deterministyczna (zasada 1).
+
+\textbf{Decyzja.} Każda wymiana trafia do dokładnie jednej z~czterech klas, przydzielanych
+w~ustalonej kolejności: \repopath{equal}, \repopath{equal-under-contract},
+\repopath{regression} albo \repopath{fix-candidate}. Wynik przebiegu to \repopath{fail},
+\repopath{review} albo \repopath{pass}. Definicje i~kolejność zawiera
+sekcja~\ref{sec:formaty}.
+
+\textbf{Konsekwencje.} \finding{Niewyjaśniona różnica blokuje (fail closed), dopóki osoba
+nie doda reguły normalizacji albo klauzuli.} Reguła mówi, że różnica nie ma znaczenia;
+klauzula --- że ma znaczenie i~od teraz jest zapisana. Każda taka decyzja jest przeglądaną
+zmianą kontraktu, czyli dokładnie tym zapisem, którego potrzebuje druga linia obrony.
+Klauzule złamane po obu stronach są raportowane jako \repopath{violated-both} ---
+istniejący wcześniej defekt, który migracja zachowała --- i~same nie oblewają przebiegu.
+Triage C8 może pomóc przeglądającemu posortować setki różnic, ale nigdy nie zmienia klasy.
+
+\textbf{Poprawka z~2026-09-26, zastosowana przez S13}, zmienia kolejność w~dwóch miejscach,
+w~obu w~stronę zamykania bramki. Po pierwsze, kandydat na poprawkę jest rozstrzygany
+\emph{przed} równością: klauzula może czytać to, czego porównanie nie widzi --- stronę HTML
+porównywaną tylko przez ekstrakty, nagłówek spoza \repopath{compare.headers}, wartość
+usuniętą regułą \repopath{ignore}. W~pierwotnej kolejności taka klauzula mogła zmienić się
+ze złamanej na dotrzymaną wewnątrz wymiany sklasyfikowanej jako \repopath{equal}, a~przebieg
+dostałby \repopath{pass}: zmiana zachowania, o~której nikt nie zdecydował. Po drugie, strona
+bez odpowiedzi jest regresją w~pierwszej kolejności (\repopath{missing-result}): timeout,
+odrzucone połączenie, nieudany reset albo wymiana odtworzona tylko po jednej stronie. Dwie
+strony, które obie nie odpowiedziały, nie są „równe”; przebieg nic o~nich nie mówi.
+
+\subsubsection{Decyzje D-1–D-3 z~analizy fazy 01}
+
+Wszystkie trzy podjęła sesja implementująca i~zapisała je w~analizie.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4.4cm}@{}}
+\toprule
+Id & Decyzja & Koszt, jeśli błędna \\
+\midrule
+D-1 & S7 definiuje sześć podpoleceń; \texttt{compare} i~\texttt{validate} dodano jako dwa
+kolejne, bo łańcuch ich potrzebuje, a~ticket tego nie zabrania & interfejs CLI większy niż
+ticket, do ponownej oceny w~przeglądzie \\
+D-2 & różnica, której nie wyjaśnia żadna klauzula, jest regresją (fail closed) --- ADR 0003
+& więcej przeglądu przez ludzi, nigdy przeoczona regresja \\
+D-3 & nopCommerce serwuje HTML, więc język kontraktu wyciąga wartości z~HTML selektorem CSS,
+zanim uruchomi się jakikolwiek predykat; żaden predykat nie czyta prozy --- ADR 0002 &
+selektory psują się przy zmianie markupu; psują się głośno, jako \texttt{unexercised}, nie po
+cichu \\
+\bottomrule
+\end{tabularx}
+}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/adr/0001-artifacts-are-the-interface.md},
+\path{letsgolegacy.secondkey/docs/adr/0002-contract-language.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Struktura solution}\label{sec:rdzen-solution}
+
+Solution \path{SecondKey.slnx} ma trzy foldery: \path{/src/} z~siedmioma projektami
+produktu, \path{/samples/} z~aplikacją \repopath{SampleShop} i~\path{/tests/} z~siedmioma
+projektami testów, po jednym na projekt produktu. Każdy projekt produktu udostępnia typy
+\repopath{internal} swojemu projektowi testów (\repopath{InternalsVisibleTo}).
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Projekt & Referencje do projektów & Pakiety i~framework \\
+\midrule
+\path{SecondKey.Artifacts} & --- & JsonSchema.Net, YamlDotNet; schematy z~\path{/schemas}
+osadzone jako zasoby \\
+\path{SecondKey.Capture} & Artifacts & \path{Microsoft.AspNetCore.App}, Yarp.ReverseProxy \\
+\path{SecondKey.Contract} & Artifacts & AngleSharp \\
+\path{SecondKey.Replay} & Artifacts & \path{Microsoft.Data.SqlClient} \\
+\path{SecondKey.Compare} & Contract (a~przez nią Artifacts) & --- \\
+\path{SecondKey.Evidence} & Artifacts & --- \\
+\path{SecondKey.Cli} & Artifacts, Capture, Replay, Compare, Evidence & System.CommandLine \\
+\path{SampleShop} & --- & SDK \path{Microsoft.NET.Sdk.Web} \\
+\bottomrule
+\end{tabularx}
+}
+
+Zależności biegną w~jedną stronę, do warstwy formatów. \repopath{SecondKey.Evidence} nie
+zależy od komparatora: czyta \repopath{verdict.json} przez warstwę formatów, jak każdy inny
+konsument.
+
+\subsubsection{Projekty produktu}
+
+{\raggedright
+\textbf{SecondKey.Artifacts --- warstwa formatów} („the artifact formats that are Second
+Key's product interface”). Schematy z~\path{/schemas} są osadzone jako zasoby o~nazwach
+\path{schemas/<plik>}, nie kopiowane. Główne typy: \texttt{ArtifactSchemas} z~wyliczeniem
+\texttt{ArtifactKind} (\texttt{Capture}, \texttt{Contract}, \texttt{Run}, \texttt{Verdict});
+\texttt{ValidationReport}, \texttt{ArtifactError} (linia, wskaźnik JSON, komunikat) i~\texttt{ArtifactValidationException}; w~\path{Capture/} zdarzenia \texttt{CaptureHeader} i~\texttt{HttpExchange}, rekordy \texttt{HttpRequestRecord}, \texttt{HttpResponseRecord},
+\texttt{BodyRecord}, czytnik \texttt{CaptureFile}, bezpieczny wątkowo \texttt{CaptureWriter}
+i~\texttt{BodyCodec}; w~\path{Runs/} zdarzenia \texttt{RunHeader}, \texttt{StateReset},
+\texttt{ExchangeResult}, \texttt{RunEnd}, \texttt{RunFile} i~\texttt{RunWriter}; w~\path{Contracts/} \texttt{ContractDocument}, \texttt{ContractFile} (YAML → JSON → schemat →
+reguły) i~\texttt{ContractRules}; w~\path{Verdicts/} \texttt{VerdictDocument} i~\texttt{VerdictFile}, który waliduje dokument przed zapisem; ponadto \texttt{SelectorPath}
+(jeden język ścieżek dla klauzul, ekstraktów i~normalizacji), \texttt{YamlJson},
+\texttt{ArtifactJson} (jedyny zestaw opcji serializacji), \texttt{Sha256Digest} i~\texttt{ToolInfo} (nazwa \texttt{secondkey}, wersja i~commit z~metadanych buildu, zapisywane
+w~każdym artefakcie).\par
+\smallskip
+\textbf{SecondKey.Capture --- C1} („a~recording proxy in front of the legacy system that
+writes *.skcap without touching the system”): \texttt{RecordingProxy} na
+\texttt{IHttpForwarder} z~YARP, \texttt{CaptureOptions}, \texttt{SessionTracker} (przypisanie
+wymiany do sesji), \texttt{TeeStream} (kopia odpowiedzi do nagrania bez wstrzymywania
+klienta).\par
+\smallskip
+\textbf{SecondKey.Contract --- C3} („evaluates a~contract's clauses against what each side
+answered; deterministic; no model in it”): \texttt{ContractEngine} (\texttt{Compile},
+\texttt{Evaluate}, \texttt{EvaluateRun} → \texttt{ContractReport}), \texttt{CompiledClause},
+\texttt{ClauseEvaluation}, \texttt{RequestMatcher}, \texttt{ExtractorSet} (HTML parsowany
+przez AngleSharp), \texttt{Observation}, \texttt{ObservationBuilder},
+\texttt{CompiledPredicate}, \texttt{JsonValues}, \texttt{ClauseText}.\par
+\smallskip
+\textbf{SecondKey.Replay --- C6} („replays a~capture against the legacy system and the
+candidate under identical conditions, writing *.skrun”): \texttt{ReplayEngine}
+(\texttt{RunAsync}, \texttt{Plan}), \texttt{ReplayOptions}, \texttt{SideTarget},
+\texttt{CorrelationRule}, \texttt{ReplaySummary}; interfejs \texttt{IStateReset} z~implementacjami \texttt{NoReset}, \texttt{HttpReset}, \texttt{CommandReset},
+\texttt{SqlServerSnapshotReset}; \texttt{SqlServerTableProbe}.\par
+\smallskip
+\textbf{SecondKey.Compare --- C7} („compares what the legacy system and the candidate
+answered, against the contract, into a~four-class verdict; deterministic; no model in it”):
+\texttt{Comparator} (\texttt{Compare}, \texttt{Outcome}, \texttt{Classify}),
+\texttt{ComparisonInputs}, \texttt{ComparableDocument}, \texttt{CanonicalJson},
+\texttt{JsonDiff} z~\texttt{Change}, \texttt{Normalizer}.\par
+\smallskip
+\textbf{SecondKey.Evidence --- C10} („the evidence pack --- a~standalone HTML report, a~PDF,
+a~manifest and an unsigned in-toto statement”): \texttt{EvidencePack},
+\texttt{EvidenceOptions}, \texttt{EvidenceResult}, \texttt{EvidenceOutputException},
+\texttt{HtmlReport}, \texttt{PdfRenderer} z~\texttt{PdfMode}; w~\path{Sarif/}
+\texttt{SarifLog}, \texttt{SarifFinding}, \texttt{GateSummary}, \texttt{RuleSummary}.\par
+\smallskip
+\textbf{SecondKey.Cli --- C0}: \texttt{Program}, \texttt{SecondKeyCli} (drzewo poleceń na
+System.CommandLine), \texttt{ExitCodes}, klasy poleceń w~\path{Commands/},
+\texttt{StubCommand} dla poleceń planowanych, \texttt{SecondKeyConfig} z~\texttt{ConfigurationException}. Projekt pakuje się jako narzędzie .NET:
+\texttt{PackAsTool}, \texttt{ToolCommandName} = \texttt{sk}, \texttt{PackageId} =
+\texttt{SecondKey.Cli}, \texttt{InvariantGlobalization} = \texttt{false}.\par
+\smallskip
+\textbf{SampleShop} („a~tiny shop that plays both roles of the phase 01 demo: the legacy
+system and the migrated candidate”). Projekt wyłącza ostrzeżenia CA1305, CA1307, CA1309 i~CA1310, bo jego obsługa kultury ma demonstrować pułapkę NLS → ICU. Zachowanie obu wariantów
+opisuje sekcja~\ref{sec:cli}.\par
+}
+
+\subsubsection{Projekty testów}
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4.2cm}@{}}
+\toprule
+Projekt & Co testuje & Szczególne \\
+\midrule
+\endfirsthead
+\toprule
+Projekt & Co testuje & Szczególne \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\path{SecondKey.Artifacts.Tests} & osadzone schematy, próbki, walidatory
+\texttt{*.skcap}, \texttt{*.skrun}, kontraktu i~werdyktu, \texttt{BodyCodec},
+\texttt{SelectorPath}, \texttt{YamlJson}, \texttt{ToolInfo}, \texttt{ValidationReport} &
+--- \\
+\path{SecondKey.Capture.Tests} & proxy nagrywające przed \texttt{SampleShop}, cykl życia
+proxy, \texttt{SessionTracker} & \path{Microsoft.AspNetCore.Mvc.Testing}; referencja do
+\texttt{SampleShop} \\
+\path{SecondKey.Contract.Tests} & klauzule, predykaty, ekstraktory, obserwacje,
+\texttt{JsonValues}, tekst klauzul, silnik na próbkach i~na celowo zepsutych kandydatach &
+--- \\
+\path{SecondKey.Replay.Tests} & \texttt{ReplayEngine} na \texttt{SampleShop}, szczegóły HTTP
+(nagłówki, przekierowania, prefiks ścieżki bazowej, korelacja), resety, wartości sondy,
+snapshot i~sonda SQL Server & \texttt{[DockerFact]}; Testcontainers.MsSql; plik
+\path{SampleShopHost.cs} dołączony z~projektu testów capture \\
+\path{SecondKey.Compare.Tests} & \texttt{CanonicalJson}, \texttt{ComparableDocument},
+\texttt{JsonDiff}, \texttt{Normalizer}, \texttt{Comparator} & --- \\
+\path{SecondKey.Evidence.Tests} & pakiet, raport HTML (w~tym test golden z~\path{Golden/sample-report.html}), \texttt{PdfRenderer}, SARIF, \texttt{GateSummary} &
+\texttt{[PdfFact]}, kategoria \texttt{Browser}; referencja także do
+\texttt{SecondKey.Compare} \\
+\path{SecondKey.Cli.Tests} & linia poleceń, kody wyjścia, konfiguracja, polecenia
+\texttt{capture}, \texttt{replay}, \texttt{compare}, \texttt{gate}, \texttt{evidence},
+\texttt{validate} & \texttt{[UnixFact]}; uruchamia \texttt{sk} w~procesie albo jako osobny
+proces \\
+\end{xltabular}
+}
+
+Kryteria akceptacji ticketów mają w~testach odpowiedniki nazwane niemal dosłownie, np.
+\path{A_request_through_the_proxy_produces_a_valid_skcap_line} (S9),
+\path{Two_consecutive_scenarios_start_from_the_same_state} (S11),
+\path{The_sample_run_has_a_regression_and_a_fix_candidate} (S13) i~\path{The_pack_renders_from_the_sample_fixtures} (S14).
+
+\zrodla{\path{letsgolegacy.secondkey/SecondKey.slnx},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/SecondKey.Artifacts.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/SecondKey.Capture.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Contract/SecondKey.Contract.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/SecondKey.Replay.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/SecondKey.Compare.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/SecondKey.Evidence.csproj},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj},
+\path{letsgolegacy.secondkey/samples/SampleShop/SampleShop.csproj},
+\path{letsgolegacy.secondkey/src/}, \path{letsgolegacy.secondkey/tests/}}
+
+\subsection{Budowanie}\label{sec:rdzen-build}
+
+Rdzeń buduje się jednym SDK i~jednym zestawem właściwości wspólnych dla wszystkich
+projektów. Polecenia z~\path{CLAUDE.md}:
+
+\begin{lstlisting}
+./scripts/setup.sh
+dotnet build SecondKey.slnx && dotnet test SecondKey.slnx
+./scripts/mutation.sh
+\end{lstlisting}
+
+\path{global.json} przypina SDK \texttt{10.0.100} z~\texttt{rollForward} równym
+\texttt{latestFeature} i~bez wersji prerelease.
+
+\path{Directory.Build.props} jest „jednym miejscem na to, co dzielą wszystkie projekty”
+(REPO-BASELINE §1): \texttt{TargetFramework} \texttt{net10.0}, \texttt{LangVersion}
+\texttt{latest}, \texttt{Nullable} i~\texttt{ImplicitUsings} włączone,
+\texttt{TreatWarningsAsErrors}, \texttt{AnalysisLevel} \texttt{latest},
+\texttt{EnforceCodeStyleInBuild}, \texttt{Deterministic}, \texttt{GenerateDocumentationFile}
+z~wyłączonym CS1591 (dokumentacja API jest pisana tam, gdzie niesie znaczenie, a~nie na
+każdym członku), \texttt{Version} \texttt{0.1.0}. Projekty o~nazwie kończącej się na
+\texttt{.Tests} dostają \texttt{IsPackable=false}, \texttt{IsTestProject=true} i~nie
+generują pliku dokumentacji.
+
+\path{Directory.Packages.props} włącza centralne zarządzanie wersjami pakietów („one version
+per package, one diff to upgrade it”):
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l l >{\raggedright\arraybackslash}X l@{}}
+\toprule
+Produkt & Wersja & Testy & Wersja \\
+\midrule
+AngleSharp & 1.8.2 & Microsoft.AspNetCore.Mvc.Testing & 10.0.12 \\
+JsonSchema.Net & 9.4.0 & Microsoft.NET.Test.Sdk & 18.10.1 \\
+Microsoft.Data.SqlClient & 7.1.0 & Testcontainers.MsSql & 4.15.0 \\
+System.CommandLine & 2.0.12 & xunit & 2.9.3 \\
+Yarp.ReverseProxy & 2.3.0 & xunit.runner.visualstudio & 4.0.0 \\
+YamlDotNet & 18.1.0 & & \\
+\bottomrule
+\end{tabularx}
+}
+
+\path{.config/dotnet-tools.json} deklaruje lokalne narzędzie \repopath{dotnet-stryker} w~wersji \repopath{5.0.0} bez roll-forward; przywraca je \repopath{dotnet tool restore}.
+\path{.editorconfig} ustala UTF-8, końce linii LF, końcowy znak nowej linii i~wcięcia
+czterema spacjami (dwiema dla JSON, YAML, \texttt{.props}, \texttt{.csproj}, \texttt{.slnx}
+i~XML); w~C\# wymusza przestrzenie nazw o~zasięgu pliku i~pola \texttt{readonly}
+(ostrzeżenia) oraz podnosi CA1305, CA1307, CA1309 i~CA1310 do ostrzeżeń, co przy
+\texttt{TreatWarningsAsErrors} czyni z~nich błędy; w~testach wyłącza CA1707.
+
+Według \path{CONTRIBUTING.md} jeden ticket to jeden pull request (PR) albo jeden commit w~PR
+kamienia milowego, a~linia „done when” ticketu jest kryterium akceptacji cytowanym w~PR
+dosłownie. Przed pushem: build i~testy solution, a~przy zmianach logiki także
+\repopath{./scripts/mutation.sh}.
+
+\zrodla{\path{letsgolegacy.secondkey/CLAUDE.md},
+\path{letsgolegacy.secondkey/CONTRIBUTING.md},
+\path{letsgolegacy.secondkey/global.json},
+\path{letsgolegacy.secondkey/Directory.Build.props},
+\path{letsgolegacy.secondkey/Directory.Packages.props},
+\path{letsgolegacy.secondkey/.config/dotnet-tools.json},
+\path{letsgolegacy.secondkey/.editorconfig}}
+
+\subsection{Testy, testy mutacyjne i~testy na Dockerze}\label{sec:rdzen-testy}
+
+Testy są w~xUnit; \repopath{dotnet test SecondKey.slnx} uruchamia wszystkie projekty testów.
+Część testów potrzebuje środowiska, którego lokalnie może nie być: Dockera (SQL Server),
+przeglądarki (PDF) albo sygnałów POSIX. Taki test, gdy środowiska brak, raportuje się jako
+pominięty z~powodem --- nigdy jako zaliczony --- a~w~CI zmienne środowiskowe zamieniają brak
+w~porażkę.
+
+\subsubsection{Testy SQL Server na Dockerze}
+
+\texttt{SqlServerTests} sprawdzają reset snapshotem i~sondę na prawdziwym SQL Server:
+fixture \texttt{SqlServerFixture} uruchamia przez Testcontainers.MsSql kontener
+\path{mcr.microsoft.com/mssql/server:2022-latest}. Test
+\path{Two_consecutive_scenarios_start_from_the_same_state} jest kryterium akceptacji S11.
+Testy mają atrybut \texttt{[DockerFact]}; Docker uznaje się za dostępny, gdy ustawiono
+\repopath{DOCKER\_HOST} albo istnieje \path{/var/run/docker.sock}.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l l l >{\raggedright\arraybackslash}X@{}}
+\toprule
+\texttt{SK\_REQUIRE\_DOCKER} & \texttt{SK\_SKIP\_DOCKER} & Docker & Wynik \\
+\midrule
+\texttt{1} & dowolna & dowolny & test uruchamiany zawsze; brak Dockera to porażka \\
+inna niż \texttt{1} & \texttt{1} & dowolny & pominięty celowo, z~powodem: testy SQL Server
+zostają dla jobu build-and-test \\
+inna niż \texttt{1} & inna niż \texttt{1} & jest & uruchamiany \\
+inna niż \texttt{1} & inna niż \texttt{1} & brak & pominięty z~powodem: test potrzebuje
+prawdziwego SQL Server, CI go uruchamia \\
+\bottomrule
+\end{tabularx}
+}
+
+To jest zaakceptowane ryzyko A1: lokalny przebieg bez Dockera dowodzi mniej niż CI.
+\repopath{SK\_SKIP\_DOCKER=1} ustawia skrypt \path{scripts/mutation.sh} dla projektu
+\repopath{SecondKey.Replay}, bo kontener SQL Server na każdego mutanta byłby daleko poza
+budżetem, a~kod SQL Server jest wyłączony z~mutacji. Kolejność warunków w~\texttt{DockerFactAttribute} daje pierwszeństwo \repopath{SK\_REQUIRE\_DOCKER=1}: przy obu
+zmiennych równych \repopath{1} test jest uruchamiany.
+
+\subsubsection{Testy PDF i~sygnałów}
+
+Testy z~atrybutem \texttt{[PdfFact]} potrzebują przeglądarki opartej na Chromium. Gdy
+\repopath{SK\_REQUIRE\_PDF} ma wartość \repopath{1}, są uruchamiane zawsze i~brak
+przeglądarki jest porażką (CI ustawia tę zmienną; zaakceptowane ryzyko A2); w~przeciwnym
+razie bez przeglądarki są pomijane z~powodem. Oba takie testy mają cechę
+\texttt{Category=Browser}, którą konfiguracja Strykera wyklucza z~testów mutacyjnych.
+Atrybut \texttt{[UnixFact]} pomija na Windows test, który wysyła procesowi \texttt{sk} sygnał
+SIGTERM: Windows nie potrafi wysłać Ctrl+C jednemu procesowi konsoli bez innych, które
+dzielą tę samą konsolę.
+
+\subsubsection{Testy mutacyjne}
+
+Testy mutacyjne wykonuje Stryker.NET (\repopath{dotnet-stryker} 5.0.0) z~konfiguracją
+\path{stryker-config.json}: reportery \texttt{progress}, \texttt{json} i~\texttt{html};
+\texttt{mutation-level} \texttt{Standard}; \texttt{ignore-methods} \texttt{ConfigureAwait};
+\texttt{test-case-filter} \texttt{Category!=Browser}; progi \texttt{high} 85, \texttt{low}
+70 i~\texttt{break} 60. \finding{Wynik poniżej progu \texttt{break} kończy przebieg porażką.}
+Skrypt \path{scripts/mutation.sh} jest lokalnym odpowiednikiem jobu \texttt{mutation} w~CI:
+
+\begin{lstlisting}
+./scripts/mutation.sh              every project in the table below
+./scripts/mutation.sh Artifacts    only the projects whose name contains the word
+\end{lstlisting}
+
+Skrypt przechodzi po parach „katalog testów : projekt testowany” --- Artifacts, Contract,
+Compare, Evidence i~Replay, każdy ze swoim projektem testów --- i~dla każdej uruchamia
+Strykera z~katalogu testów, z~raportem w~\path{StrykerOutput/<projekt>}. Dla
+\repopath{SecondKey.Replay} zakres mutacji to \path{**/*.cs} bez \path{**/SqlServer*.cs},
+a~Stryker dostaje zmienną \repopath{SK\_SKIP\_DOCKER=1}.
+
+Mutacjom podlega ścieżka werdyktu --- formaty, silnik kontraktu, komparator, evidence --- i~silnik replay, który decyduje, co komparator zobaczy. Dwie części zostają testom
+integracyjnym, bo mutowanie ich powtarzałoby I/O~dla każdego mutanta, daleko poza budżetem
+CI (TESTING-STRATEGY §2): proxy capture oraz reset i~sonda SQL Server w~replay. Po każdym
+projekcie skrypt dopisuje do \repopath{\$GITHUB\_STEP\_SUMMARY} (poza Actions do
+\path{/dev/null}) wiersz tabeli „Mutation scores” z~kolumnami Project, Score, Killed,
+Survived, No coverage i~Timeout. Wynik to $(K + T) / (K + S + N + T)$, gdzie $K$ to mutanty
+zabite, $S$ --- mutanty, które przeżyły, $N$ --- bez pokrycia, $T$ --- timeout; bez mutantów
+skrypt wypisuje „n/a~(no mutants)”. Kończy się kodem 1, jeśli którykolwiek przebieg Strykera
+się nie powiódł, więc liczba jest raportowana przy każdym przebiegu, a~nie zapamiętywana
+(S1, S8).
+
+Druga rewizja analizy fazy 01 włączyła replay do testów mutacyjnych: \repopath{SecondKey.Replay}
+bez kodu SQL Server przeszedł z~60,7\% do 89,5\%. Doszły wtedy testy tego, czego replay nie
+wysyła (nagłówki hop-by-hop, nagrane ciasteczka, wartości zredagowane, nagrany
+\texttt{content-length}), tego, że przekierowanie jest zapisywane, a~nie wykonywane, że
+ścieżka adresu bazowego poprzedza każde żądanie i~że korelacja zostawia w~spokoju treści,
+których nie umie odczytać. Otwarte pozostaje to, że reset i~sonda SQL Server są pokryte
+tylko testami integracyjnymi.
+
+\zrodla{\path{letsgolegacy.secondkey/stryker-config.json},
+\path{letsgolegacy.secondkey/scripts/mutation.sh},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/DockerFactAttribute.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/SqlServerTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/Fixtures.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/UnixFactAttribute.cs}}
+
+\subsection{Workflowy CI}\label{sec:rdzen-ci}
+
+Rdzeń ma cztery workflowy GitHub Actions i~konfigurację Dependabota. Wszystkie workflowy
+mają uprawnienie \repopath{contents: read}, CodeQL dodatkowo
+\repopath{security-events: write}. Używane akcje: \texttt{actions/checkout@v7},
+\texttt{actions/setup-dotnet@v6} (SDK z~\path{global.json}),
+\texttt{actions/upload-artifact@v7} i~\texttt{github/codeql-action} w~wersji 4. Zestawienie
+workflowów wszystkich repozytoriów frameworku zawiera dodatek~\ref{app:ci}.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Workflow & Triggery & Joby \\
+\midrule
+\path{ci.yml} (CI) & PR, push na \texttt{main}, ręcznie & \texttt{build-test} (ubuntu-latest),
+\texttt{build-test-windows} (windows-latest), \texttt{mutation} (ubuntu-latest, macierz
+pięciu projektów, po \texttt{build-test}) \\
+\path{e2e.yml} (End-to-end) & PR, push na \texttt{main}, ręcznie & \texttt{e2e}
+(ubuntu-latest, limit 20 minut) \\
+\path{codeql.yml} (CodeQL) & PR, push na \texttt{main}, harmonogram \texttt{17 3 * * 1} &
+\texttt{analyze} (C\#) \\
+\path{secret-scan.yml} (Secret scan) & PR, push na \texttt{main} & \texttt{gitleaks} \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsubsection{CI: build, testy i~mutacje}
+
+\path{ci.yml} ma grupę współbieżności zależną od gałęzi (\texttt{ci-} i~ref) z~anulowaniem
+trwającego przebiegu. Zmienne na poziomie workflowu:
+
+\begin{lstlisting}
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  # In CI a missing Docker or browser is a failure, never a silent skip (analysis A1, A2).
+  SK_REQUIRE_DOCKER: "1"
+  SK_REQUIRE_PDF: "1"
+\end{lstlisting}
+
+Joby \texttt{build-test} („build and test”, ubuntu-latest) i~\texttt{build-test-windows}
+(„build and test (windows)”, windows-latest) wykonują po checkout i~instalacji SDK te same
+kroki:
+
+\begin{lstlisting}
+dotnet restore SecondKey.slnx
+dotnet build SecondKey.slnx --no-restore --configuration Release
+dotnet test SecondKey.slnx --no-build --configuration Release --logger "trx" --results-directory TestResults
+\end{lstlisting}
+
+Po porażce katalog \path{TestResults/} trafia do artefaktu \texttt{test-results} (Linux) albo
+\path{test-results-windows}. Na Linuksie działają testy SQL Server na Dockerze i~testy PDF.
+Job Windows nadpisuje \texttt{SK\_REQUIRE\_DOCKER} wartością \texttt{0} i~ustawia
+\texttt{SK\_SKIP\_DOCKER} na \texttt{1}. Powód z~komentarza w~workflowie: strona legacy
+wdrożenia to Windows i~IIS, a~\texttt{sk capture} i~\texttt{sk replay} działają obok niej
+(ticket P4 benchu), więc zestaw testów działa także na Windows; testy kontenera SQL Server
+zostają na Linuksie, bo runnery Windows nie uruchamiają kontenerów linuksowych.
+
+Job \texttt{mutation} („mutation testing (\emph{projekt})”, ubuntu-latest,
+\texttt{needs: build-test}) ma macierz \texttt{project} z~wartościami Artifacts, Contract,
+Compare, Evidence i~Replay oraz \texttt{fail-fast: false}. Każdy job uruchamia
+\repopath{./scripts/mutation.sh} z~nazwą projektu i~zawsze wysyła \path{StrykerOutput/} jako
+artefakt \texttt{mutation-report-}\emph{projekt}. Po jednym jobie na projekt, równolegle:
+pięć projektów po kolei trwałoby kilka razy dłużej niż reszta CI. Job nie nadpisuje zmiennych
+z~poziomu workflowu, więc dziedziczy \texttt{SK\_REQUIRE\_DOCKER} równą \texttt{1} obok
+\texttt{SK\_SKIP\_DOCKER=1} ustawianej przez skrypt; skutek tej kombinacji opisuje
+sekcja~\ref{sec:rdzen-testy}.
+
+\subsubsection{End-to-end}
+
+\path{e2e.yml} realizuje S15: łańcuch fazy 01 na sample shop w~jednym jobie --- capture,
+replay, compare, gate, evidence --- zakończony pakietem dowodowym do pobrania. Job
+\texttt{e2e} („capture, replay, compare, evidence”) ma limit 20 minut i~grupę
+współbieżności \texttt{e2e-} i~ref. Uruchamia \repopath{./scripts/e2e.sh} ze zmienną
+\texttt{SK\_PDF} równą \texttt{required}: CI ma przeglądarkę, więc pakiet bez PDF jest tu
+porażką (A2). Niezależnie od wyniku wysyła dwa artefakty: \texttt{evidence-pack} z~katalogu
+\path{.secondkey/e2e/evidence/} oraz \texttt{e2e-artifacts} z~plikami
+\path{.secondkey/e2e/traffic.skcap}, \path{.secondkey/e2e/run.skrun},
+\path{.secondkey/e2e/verdict.json} i~katalogiem \path{.secondkey/e2e/logs/}. Przebieg
+skryptu opisuje sekcja~\ref{sec:cli}.
+
+\subsubsection{CodeQL, skan sekretów i~Dependabot}
+
+\path{codeql.yml} analizuje C\# przy PR, pushu na \texttt{main} i~co tydzień według
+harmonogramu \texttt{17 3 * * 1} (poniedziałek, 03:17 UTC): inicjalizacja CodeQL z~\texttt{languages: csharp} i~\texttt{build-mode: manual}, build solution w~konfiguracji
+Release, analiza.
+
+\path{secret-scan.yml} to połowa egzekwowania P5 po stronie CI; drugą połową jest hook
+pre-commit (sekcja~\ref{sec:rdzen-setup}). Job \texttt{gitleaks} pobiera całą historię
+(\texttt{fetch-depth: 0}), bo poświadczenie dodane i~później usunięte i~tak zostało
+wypchnięte, instaluje gitleaks \texttt{8.28.0} z~wydań na GitHubie i~uruchamia:
+
+\begin{lstlisting}
+gitleaks detect --redact --config .gitleaks.toml --verbose
+\end{lstlisting}
+
+\path{.github/dependabot.yml} co tydzień sprawdza pakiety NuGet (z~grupą
+\texttt{test-stack} dla \texttt{xunit*} i~\texttt{Microsoft.NET.Test.Sdk}) oraz akcje GitHub
+Actions.
+
+\zrodla{\path{letsgolegacy.secondkey/.github/workflows/ci.yml},
+\path{letsgolegacy.secondkey/.github/workflows/e2e.yml},
+\path{letsgolegacy.secondkey/.github/workflows/codeql.yml},
+\path{letsgolegacy.secondkey/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.secondkey/.github/dependabot.yml},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Onboarding, hook i~skan sekretów}\label{sec:rdzen-setup}
+
+\subsubsection{Skrypt \texttt{setup.sh}}
+
+Onboarding jednym poleceniem (REPO-BASELINE §3): \path{scripts/setup.sh} wykonuje wszystkie
+kroki, a~z~opcją \texttt{-{}-check} tylko raportuje, czego brakuje, i~niczego nie zmienia
+(kod 1, gdy brakuje wymaganego narzędzia, w~przeciwnym razie 0).
+
+\begin{enumerate}
+  \item \textbf{Prerequisites.} Wymagany jest .NET SDK 10.x; inna wersja albo brak SDK to
+        \texttt{[FAIL]} z~odnośnikiem do pobrania, a~skrypt kończy się kodem 1. Opcjonalne,
+        nazwane tak, żeby pominięcie było świadomym wyborem (P8): działający Docker (tylko
+        dla testów snapshotu SQL Server, S11; bez niego te testy lokalnie raportują się jako
+        pominięte), gitleaks (dla skanu pre-commit w~kroku 3; job CI skanuje niezależnie) i~przeglądarka headless (tylko do PDF pakietu; raport HTML powstaje zawsze).
+        Przeglądarki skrypt szuka w~kolejności: \texttt{SK\_CHROME\_PATH}, \texttt{chromium},
+        \texttt{chromium-browser}, \texttt{google-chrome}, \texttt{google-chrome-stable}.
+  \item \textbf{Restore}: \repopath{dotnet restore SecondKey.slnx} i~\repopath{dotnet tool restore}.
+  \item \textbf{Pre-commit secret scan} (opcjonalny): gdy gitleaks jest zainstalowany,
+        skrypt kopiuje \path{scripts/hooks/pre-commit} do \path{.git/hooks/pre-commit} i~nadaje mu prawo wykonania; w~przeciwnym razie krok jest pomijany.
+  \item \textbf{Local secrets}: jeśli \path{.env} istnieje, zostaje nietknięty; jeśli nie,
+        powstaje z~\path{secrets.env.example} (każda zmienna w~nim jest opcjonalna).
+\end{enumerate}
+
+\subsubsection{Hook pre-commit i~skan lokalny}
+
+Hook \path{scripts/hooks/pre-commit} blokuje commit, którego zmiany w~stagingu zawierają
+poświadczenie (P5): uruchamia \texttt{gitleaks protect -{}-staged -{}-redact} z~konfiguracją
+\path{.gitleaks.toml} z~korzenia repozytorium. Gdy gitleaks nie jest zainstalowany, hook
+odmawia commitu (kod 1) z~komunikatem, że nic nie zostało zeskanowane, i~przypomina, że job
+CI skanuje niezależnie. Przy znalezisku wypisuje instrukcję: jeśli to poświadczenie ---
+zdjąć je ze stagingu i~czytać ze środowiska (\path{secrets.env.example} wymienia każdą
+zmienną, którą czytają skrypty), a~nagrania \texttt{*.skcap} i~\texttt{*.skrun} z~prawdziwego systemu nigdy nie należą do gita; jeśli to nie jest poświadczenie --- dodać
+ścieżkę albo kształt do \texttt{[allowlist]} w~\path{.gitleaks.toml} w~tym samym commicie,
+żeby wyjątek był przeglądalny.
+
+\path{scripts/scan-secrets.sh} jest lokalnym odpowiednikiem jobu CI (REPO-BASELINE §4): bez
+argumentów uruchamia \texttt{gitleaks detect} na drzewie roboczym i~historii, z~\texttt{-{}-staged} --- \texttt{gitleaks protect -{}-staged}, jak hook. Bez gitleaks kończy
+się kodem 127, bo „a~scanner that reports success when it did not run is worse than none”.
+
+\subsubsection{Konfiguracja gitleaks, sekrety i~pliki higieny}
+
+\path{.gitleaks.toml} rozszerza domyślny zestaw reguł (\texttt{useDefault = true}) o~regułę
+\path{sqlserver-connection-string-with-password}: connection string SQL Server z~hasłem
+wpisanym wprost. Sekretem jest samo hasło (\texttt{secretGroup = 1}); bez tego gitleaks
+brałby pierwszą grupę --- „Server” --- a~placeholder nigdy nie trafiłby na allowlistę.
+Allowlista reguły przepuszcza wartości zaczynające się od \texttt{<}, czyli placeholdery w~nawiasach ostrych, np. \texttt{Password=<from SK\_LEGACY\_DB>}. Globalna allowlista wyłącza
+plik \path{secrets.env.example}, który ma pokazywać kształt sekretu bez sekretu. Ten plik
+wymienia trzy opcjonalne zmienne: \repopath{SK\_LEGACY\_DB} i~\repopath{SK\_CANDIDATE\_DB}
+--- connection stringi baz strony legacy i~kandydata, potrzebne tylko do replay na SQL
+Server z~resetem snapshotem (S11) --- oraz \repopath{SK\_CHROME\_PATH}, bezwzględną ścieżkę
+przeglądarki Chromium/Chrome, gdy nie ma jej w~\texttt{PATH}, potrzebną tylko do PDF pakietu.
+
+\path{.gitignore} wyklucza lokalne sekrety (\path{.env}, \path{secrets.env}, poza plikami
+przykładowymi), wyniki testów i~Strykera oraz \texttt{*.skcap} i~\texttt{*.skrun} poza
+\path{samples/**}, \path{schemas/samples/**} i~\path{tests/**/fixtures/**}, a~także katalogi
+\path{.secondkey/} i~\path{evidence-out/}. \path{.gitattributes} normalizuje końce linii do
+LF i~oznacza \texttt{*.skcap} oraz \texttt{*.skrun} jako \texttt{-text}: nagrane próbki są
+danymi, ich końców linii nie wolno renormalizować. Szablon PR wymaga ticketu z~linią „done
+when” cytowaną dosłownie i~testu pokrywającego każde kryterium; szablon zgłoszenia błędu ---
+reprodukcji wyłącznie na syntetycznych artefaktach („A~wrong verdict is the most severe class
+of bug here”). \path{.github/CODEOWNERS} wymienia osobno ścieżki istotne dla bezpieczeństwa:
+\path{/.github/}, \path{/.gitleaks.toml}, \path{/schemas/} i~\path{/src/SecondKey.Capture/}.
+\path{SECURITY.md} prosi o~zgłaszanie podatności prywatnie przez „Report a~vulnerability”.
+
+\zrodla{\path{letsgolegacy.secondkey/scripts/setup.sh},
+\path{letsgolegacy.secondkey/scripts/hooks/pre-commit},
+\path{letsgolegacy.secondkey/scripts/scan-secrets.sh},
+\path{letsgolegacy.secondkey/.gitleaks.toml},
+\path{letsgolegacy.secondkey/secrets.env.example},
+\path{letsgolegacy.secondkey/.gitignore},
+\path{letsgolegacy.secondkey/.gitattributes},
+\path{letsgolegacy.secondkey/.github/pull_request_template.md},
+\path{letsgolegacy.secondkey/.github/ISSUE_TEMPLATE/bug.yml},
+\path{letsgolegacy.secondkey/.github/CODEOWNERS},
+\path{letsgolegacy.secondkey/SECURITY.md}}
+
+\subsection{Ryzyka: co zmiana naraża i~co zaakceptowano}\label{sec:rdzen-ryzyka}
+
+Analiza fazy 01 wymienia ryzyka, które zmiana stwarza, i~to, co je trzyma w~ryzach:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Ryzyko & Co je trzyma \\
+\midrule
+Nagrania (\texttt{*.skcap}, \texttt{*.skrun}) wnoszą dane klienta do gita & \path{.gitignore}
+wyklucza je poza syntetycznymi próbkami i~fixtures; capture redaguje skonfigurowane nagłówki
+przed zapisem \\
+Sekret trafia do commitu & gitleaks jako hook pre-commit \emph{i} job CI (P5, REPO-BASELINE
+§2) \\
+Punkt wejścia testów, którego nikt nie uruchamia & każdy projekt testów jest w~solution i~uruchamia go \path{ci.yml}; skrypt e2e uruchamia \path{e2e.yml} (TESTING-STRATEGY §9) \\
+Werdykt zależny od modelu albo od zegara & komparator jest czysty; czas i~wartości losowe w~odpowiedziach maskuje normalizacja z~kontraktu, a~nie ingerencja w~system legacy \\
+\bottomrule
+\end{tabularx}
+}
+
+\paragraph{Zaakceptowane ryzyka A1–A3.} Analiza zapisuje trzy zaakceptowane ryzyka; A1 i~A2
+przyjęła sesja implementująca, A3 --- właściciel.
+
+{\small
+\begin{tabularx}{\linewidth}{@{}l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.9cm}@{}}
+\toprule
+Id & Zaakceptowane ryzyko & Koszt, jeśli błędne \\
+\midrule
+A1 & Test snapshotu SQL Server potrzebuje Dockera; CI (ubuntu-latest) go ma. Lokalnie, bez
+Dockera, test raportuje się jako pominięty z~powodem; w~CI \texttt{SK\_REQUIRE\_DOCKER=1}
+zamienia brak Dockera w~porażkę. \texttt{SK\_SKIP\_DOCKER=1} pomija test celowo, z~powodem:
+ustawia ją job mutacyjny, bo kod SQL Server jest wyłączony z~mutacji. & żaden w~CI; przebieg
+lokalny dowodzi mniej niż CI \\
+A2 & Renderowanie PDF potrzebuje headless Chromium. CI je ma; \texttt{SK\_REQUIRE\_PDF=1} w~CI czyni jego brak porażką, lokalnie jest raportowany jako pominięty. & żaden w~CI \\
+A3 & Od 26 IX 2026, na stałe polecenie właściciela, sesja implementująca merguje PR, gdy
+każdy check na jego głowie jest zielony; stosy PR merguje się po kolei, merge commitami.
+Żadna osoba nie przegląda PR przed merge: przeglądem są checki --- testy, progi mutacyjne,
+job end-to-end, CodeQL, skan sekretów. & defekt, którego nie łapie żaden check, trafia na
+\texttt{main} nieprzejrzany; testy mutacyjne ograniczają to, czego nie widzą testy, na
+ścieżkach, które pokrywają, i~nic ponadto \\
+\bottomrule
+\end{tabularx}
+}
+
+\paragraph{Poza zakresem fazy 01.} Miner kontraktu C2 i~silnik mutacji C9 (\repopath{sk mine}
+i~\repopath{sk mutate} to w~fazie 01 stuby); podpisywanie (in-toto/DSSE z~kluczem klienta) i~magazyn WORM --- faza 03, a~pakiet fazy 01 niesie skróty SHA-256 i~niepodpisany statement
+in-toto, żeby podpis niczego w~formacie nie zmienił; capture SQL i~kolejek oraz tokenizacja
+PII --- faza 02, w~\path{letsgolegacy.secondkey-capture}; jakikolwiek model w~ścieżce
+werdyktu --- wykluczony zasadą 1 na stałe.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Co przeniesiono ze starszych repozytoriów}\label{sec:rdzen-referencje}
+
+\path{docs/reference-notes.md} (ticket S2) powstał przed jakimkolwiek kodem produktu, żeby
+każdy późniejszy PR mógł powiedzieć, którą z~tych decyzji realizuje, zamiast odkrywać ją na
+nowo. \finding{Reguła każdego wpisu: przenosić model, nie kod.} Starsze repozytoria
+weryfikują agenta MCP (agent-eval-bench), usługę wyszukiwania (listing-search-bench),
+sędziego LLM (judge-worker) i~architekturę (Portcullis); Second Key weryfikuje zmigrowany
+system legacy względem nagranego zachowania. Przenosi się metoda i~dyscypliny, które
+uczyniły tamte zestawy wiarygodnymi, a~nie kod runtime. Ścieżki w~tabelach są względne
+wobec korzenia danego repozytorium w~podanym commicie.
+
+\subsubsection{agent-eval-bench → format i~silnik kontraktu (C3)}
+
+Commit \repopath{12b1bbd} (publiczne, MIT). W~tym commicie: 38 scenariuszy, 341 asercji, z~czego 68 to asercje nieobecności (19,9\%), liczone z~\path{evals/scenarios/**.yaml}.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Co (gdzie) & Jak ląduje w~Second Key \\
+\midrule
+\endfirsthead
+\toprule
+Co (gdzie) & Jak ląduje w~Second Key \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+Scenariusze to dane, nie kod, walidowane ścisłym schematem
+(\path{evals/schema/scenario.schema.json}, \texttt{additionalProperties} = \texttt{false}
+wszędzie) & \path{schemas/contract.schema.json} jest tak samo ścisły: literówka w~kluczu jest
+głośnym błędem, a~nie ignorowaną regułą \\
+Pola wzajemnie wykluczające się odrzuca schemat, nie przegląd (\texttt{\$defs.assertion}:
+\texttt{tool\_called} z~\texttt{times} i~\texttt{at\_least} naraz to „a~silent no-op”) &
+schemat kontraktu odrzuca odpowiedniki: predykat z~\texttt{value} i~\texttt{ref}, tolerancję z~\texttt{absolute} i~\texttt{relative} \\
+\texttt{why} przy każdym scenariuszu (\path{evals/README.md}, „Reading a~scenario”) & każda
+klauzula ma wymagane \texttt{why} \\
+Asercje nieobecności jako pełnoprawny element (\texttt{tool\_not\_called},
+\texttt{event\_not\_emitted}) & klauzule \texttt{kind: never} i~operator \texttt{absent};
+walidator raportuje udział nieobecności w~kontrakcie \\
+Reguła dwóch asercji: odmowa to odmowa \emph{i} nieobecność (\path{evals/README.md},
+\path{scripts/validate-scenarios.mjs}) & walidacja semantyczna poza schematem: kontrakt bez
+klauzuli \texttt{never} jest odrzucany \\
+Walidacja poza schematem: duplikaty identyfikatorów, nieznane referencje
+(\path{scripts/validate-scenarios.mjs}) & \texttt{ContractValidator}: duplikaty
+identyfikatorów klauzul, referencje do niezdefiniowanych ekstraktorów, regexy, które się nie
+kompilują \\
+Trzy dyscypliny ewaluacji
+(\path{tests/AbsenceConcierge.Evals/Assertions/AssertionEvaluator.cs}) & (1) nic nie
+dopasowuje prozy; (2) żadna asercja nie przechodzi pusto --- klauzula bez dopasowanego
+zakresu to \texttt{unexercised}, nigdy przejście; (3) nieznana asercja to błąd --- silnik nie
+ma gałęzi domyślnej, która przepuszcza \\
+Celowo zepsute warianty, każdy z~asercją, która musi go złapać
+(\path{tests/AbsenceConcierge.Evals/Mutations/BrokenAgents.cs}) & fixtures zepsutych
+kandydatów w~testach silnika i~komparatora (S8, S13); pełny silnik mutacji to C9 w~fazie 02;
+wariant, który przeżył, to brakująca klauzula, nie ciekawostka \\
+Pochodzenie scenariusza (\texttt{origin.kind}: designed, production-trace, manual-session,
+review, incident) & \texttt{provenance.origin} zachowuje te wartości i~dodaje \texttt{mined}
+(C2) oraz \texttt{llm-draft} \\
+Baseline przypięty do wersji specyfikacji; porównanie przez zmianę specyfikacji jest
+odrzucane (\path{evals/baselines/layer1.json},
+\path{tests/AbsenceConcierge.Evals/Reporting/Baseline.cs}) & \texttt{verdict.json} zapisuje
+nazwę, rewizję i~SHA-256 kontraktu; porównywanie werdyktów przez rewizje kontraktu będzie
+odrzucane (faza 02) \\
+\end{xltabular}
+}
+
+Nie przeniesiono: runtime agenta MCP, modelu trace/span, warstwy Layer 2 (sędzia LLM w~ścieżce werdyktu, zakazany zasadą 1) ani świata fixtures HR.
+
+\subsubsection{listing-search-bench, judge-worker i~ArchGate / Portcullis}
+
+\textbf{listing-search-bench} → kształt publicznego okazu. Commit \repopath{5751287}
+(publiczne, MIT): 28 scenariuszy, 128 asercji, z~czego 29 to wykluczenia i~nieobecności
+(około 22\%). To drugi okaz tej samej metody, co czyni metodę przenośną, a~nie szytą na
+miarę. Nic z~niego nie działa w~Second Key; jest wzorem dla
+\path{letsgolegacy.secondkey-nopcommerce-bench}: publicznego repozytorium, którego korpus
+ewaluacyjny, liczby i~znaleziska są dowodem produktu, publikowanym razem z~ograniczeniami.
+
+\textbf{judge-worker} → doradcza triage C8 (faza 02–03). Commit \repopath{96dce14}
+(publiczne, MIT, TypeScript). Przenosi się tylko logika kalibracji, przepisana na C\#
+(zasada 3):
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Co (gdzie) & Jak ląduje \\
+\midrule
+Nieważona kappa Cohena; zwraca \emph{undefined}, nigdy 1,0, gdy wszystkie pary wpadają do
+jednej kategorii (\path{src/calibration/cohenKappa.ts}) & ta sama funkcja, z~tą samą odmową
+raportowania zgodności, której nikt nie wykazał \\
+Bramka kalibracji: co najmniej 10 etykiet i~$\kappa \geq 0{,}6$, inaczej wyniki są
+raportowane i~niczego nie blokują (\path{src/calibration/calibrate.ts},
+\texttt{CALIBRATION\_GATE}) & triage C8 pozostaje doradcza, dopóki nie zostanie skalibrowana
+na etykietach przeglądających, a~nawet po kalibracji nigdy nie zmienia werdyktu (zasada 1) \\
+Zmutowani sędziowie, którzy dowodzą, że kalibracja może się nie udać
+(\path{src/mutations/mutantJudgeProviders.ts}) & zmutowani triażyści w~testach C8 \\
+\bottomrule
+\end{tabularx}
+}
+
+Nie przeniesiono: kolejki, ingestii, modułu pricing ani runtime workera.
+
+\textbf{ArchGate / Portcullis} → bramka C5 (osobne repozytorium). Prywatne repozytorium
+ArchGate w~commicie \repopath{4a375b9}, przemianowane wewnętrznie na Portcullis 13 września
+2026 i~kontynuowane publicznie jako \path{letsgolegacy.portcullis}. Bramki \emph{nie}
+przeniesiono do rdzenia: jest osobnym narzędziem z~własnym cyklem wydań, a~rdzeń czyta tylko
+jej wynik.
+
+{\footnotesize
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Co (gdzie) & Jak ląduje \\
+\midrule
+Bramka ograniczona do diffu: istniejące znaleziska są raportowane, blokują tylko znaleziska
+na zmienionych liniach (\path{docs/DIFF-GATE.md},
+\texttt{GateResult(Blocked, Scope, BlockingErrorCount)}) & sekcja bramki w~pakiecie
+dowodowym oddziela znaleziska blokujące od raportowanych \\
+SARIF 2.1 jako format wymiany (dodany w~tickecie R3 Portcullis) & \texttt{sk gate} czyta
+SARIF, C10 go osadza; nic więcej o~bramce nie jest zakładane \\
+Identyfikatory reguł \texttt{PORTCULLIS\_<...>}; reguły migracyjne
+\path{PORTCULLIS_MIG_SYSTEM_WEB}, \path{PORTCULLIS_MIG_HTTPCONTEXT_CURRENT},
+\path{PORTCULLIS_MIG_SYNC_OVER_ASYNC}, \path{PORTCULLIS_MIG_CONFIGURATION_MANAGER}
+(\path{src/Portcullis.Rules/RuleRegistry.cs}) & pokazywane po identyfikatorze w~pakiecie;
+mapowane na standardy w~C4 \\
+Testy mutacyjne jako nawyk, nie wydarzenie (\path{docs/MUTATIONS.md}) & CI rdzenia ma próg
+Stryker.NET od pierwszego commitu (S1) \\
+\bottomrule
+\end{tabularx}
+}
+
+\subsubsection{architecture-standards i~repozytoria celowo nieużywane}
+
+Rdzeń podlega \path{architecture-standards} (publiczne, MIT), zadeklarowanym w~\path{.claude/settings.json} (REPO-BASELINE §7), który rejestruje marketplace
+\texttt{architecture-standards} i~włącza plugin \texttt{architecture-core}.
+\path{00-REFERENCE-ARCHITECTURE.md} obejmuje wszystko, a~najmocniej gryzą tu P5 (sekrety) i~P13 (test w~warstwie, która ma logikę); REPO-BASELINE dotyczy S1 (pliki higieny, skan
+sekretów w~pre-commit \emph{i} CI, onboarding jednym poleceniem); TESTING-STRATEGY ---
+każdego projektu testów, a~jego §9 wymaga, by CI wykonywał każdy punkt wejścia testów;
+AI-EVALS --- szkiców LLM w~C2 i~triage C8; PRIVATE-CLOUD-DELIVERY --- C12;
+SECURITY-REVIEW --- capture C1 i~pakietu C10, bo nagrania mogą zawierać dane osobowe.
+Analiza fazy 01 przypisuje ponadto ticketom zasady P4 (persistence za granicą) i~P11
+(warstwa antykorupcyjna na krawędzi).
+
+Celowo nieużywane przez rdzeń: \texttt{context-pin} --- jego idea, wersja standardów
+przypięta per repozytorium i~wykrywanie dryfu w~CI, weszła do C4
+(\path{letsgolegacy.secondkey-standards}) jako pakiet NuGet, tag gita i~jeden krok CI, bez
+osobnej usługi; \texttt{authservice} --- tylko dla próbnej instancji portalu hostowanej
+samodzielnie (C11, faza 03), bo produkcja używa IdP klienta przez OIDC (zasada 6); Keploy
+(zewnętrzny) --- wczesny plan zbudowania na nim capture porzucono, bo eBPF działa tylko na
+Linuksie, a~legacy .NET Framework działa na Windows/IIS.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/reference-notes.md},
+\path{letsgolegacy.secondkey/.claude/settings.json},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Status ticketów S0–S16}\label{sec:rdzen-status}
+
+Identyfikatory ticketów są wspólne z~backlogiem wszystkich repozytoriów. Ticket to jeden PR,
+a~jego linia „done when” jest kryterium akceptacji, którego PR nie parafrazuje. Poniżej
+kryteria są przetłumaczone; wiążące jest brzmienie w~\path{docs/WORKPLAN.md}. Ścieżka
+krytyczna fazy 01:
+
+\begin{lstlisting}
+S0 → S1 → S3–S6 → S7–S14 → S15 → (bench P3) → (bench P4–P8) → (bench P9)
+\end{lstlisting}
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}p{2.2cm}@{}}
+\toprule
+Id & Rezultat & Gotowe, gdy & Status \\
+\midrule
+\endfirsthead
+\toprule
+Id & Rezultat & Gotowe, gdy & Status \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+S0 & Master prompt dla S1–S3 (bootstrap i~schematy) & przechodzi test samowystarczalności z~\path{GENERATE-MASTER-PROMPT.md} §6 & done (\#1) \\
+S1 & Bootstrap: baseline repozytorium (pliki higieny, skan sekretów, onboarding jednym
+poleceniem, \path{.claude/settings.json} deklarujący architecture-standards), puste
+solution, CI z~buildem, testami i~progiem Stryker.NET & CI jest zielone & done (\#1) \\
+S2 & \path{docs/reference-notes.md}: co przeniesiono z~agent-eval-bench, judge-worker i~ArchGate (obecnie Portcullis), ze ścieżkami plików & napisane, przed jakimkolwiek kodem &
+done (\#1) \\
+S3 & JSON Schema, próbka i~test walidatora dla \texttt{*.skcap} & próbka się waliduje, a~uszkodzona linia jest odrzucana & done (\#2) \\
+S4 & JSON Schema i~próbka dla \texttt{contract.yaml}: predykaty na odpowiedzi, deltach bazy
+i~wywołaniach wychodzących, asercje nieobecności, tolerancje, semantyka zbiorów, pochodzenie
+każdej klauzuli & próbka się waliduje & done (\#2) \\
+S5 & JSON Schema i~próbka dla \texttt{*.skrun} & próbka się waliduje & done (\#2) \\
+S6 & JSON Schema i~próbka dla \texttt{verdict.json} z~czterema klasami & próbka się waliduje
+& done (\#2) \\
+S7 & C0 CLI \texttt{sk}: System.CommandLine, \texttt{secondkey.yaml}, sześć podpoleceń jako
+stuby, udokumentowane kody wyjścia & \texttt{sk -{}-help} wymienia wszystkie sześć, a~każdy
+stub zwraca swój kod wyjścia w~teście & done (\#3) \\
+S8 & C3 silnik kontraktu: \texttt{contract.yaml} ewaluowany na \texttt{*.skrun} do werdyktów
+per klauzula & fixtures przechodzą, a~wynik mutacyjny jest raportowany & done (\#3) \\
+S9 & C1 capture HTTP: proxy nagrywające YARP zapisujące \texttt{*.skcap}, tylko ruch
+przychodzący & żądanie przez proxy do przykładowej aplikacji daje poprawną linię
+\texttt{.skcap} & done (\#4) \\
+S10 & C6 replay: \texttt{*.skcap} odtwarzany na dwóch adresach bazowych, zapisywany
+\texttt{*.skrun} & obie strony są zapisane dla próbki & done (\#4) \\
+S11 & C6 reset stanu: snapshot SQL Server przywracany przed każdym scenariuszem & test
+dowodzi, że dwa kolejne scenariusze startują z~tego samego stanu & done (\#4) \\
+S12 & C7 kanoniczny JSON i~normalizacja (ignorowane ścieżki, tolerancje, zbiory, znaczniki
+czasu, GUID-y) & testy normalizacji przechodzą & done (\#8) \\
+S13 & C7 diff i~werdykt czteroklasowy do \texttt{verdict.json} & fixtures dają zarówno
+regresję, jak i~kandydata na poprawkę & done (\#8) \\
+S14 & C10 niepodpisany pakiet dowodowy: samodzielny HTML z~\texttt{verdict.json}, SARIF i~kontraktu; PDF przez przeglądarkę headless & pakiet renderuje się z~fixtures & done (\#8) \\
+S15 & Job end-to-end: capture → replay → compare → evidence na przykładowej aplikacji, w~CI
+& jeden job CI produkuje pakiet & done (\#8) \\
+S16 & C6 stuby wywołań wychodzących z~WireMock.Net z~nagranego ruchu & faza 01 tylko wtedy,
+gdy okaz wywołuje usługi zewnętrzne (płatności, wysyłka); inaczej faza 02 & faza 02: ani
+sample shop, ani demonstracyjna konfiguracja nopCommerce nie wywołują usług zewnętrznych \\
+\end{xltabular}
+}
+
+Analiza zamyka pytanie S16 konkretnie: nopCommerce 3.90 z~danymi przykładowymi używa
+offline'owych metod płatności i~wysyłki, więc okaz nie wykonuje wywołań wychodzących.
+
+\paragraph{Faza 02 i~dalej} (zaczyna się po bramce fazy 01):
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.5cm} >{\raggedright\arraybackslash}X l@{}}
+\toprule
+Komponent & Praca & Faza \\
+\midrule
+\endfirsthead
+\toprule
+Komponent & Praca & Faza \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+C2 miner kontraktu (\texttt{sk mine}) & niezmienniki w~stylu Daikona z~nagrań; szkice LLM
+przez \texttt{IChatClient}; cykl życia klauzuli proposed → accepted jako PR do
+\texttt{contract.yaml}; pochodzenie i~wsparcie statystyczne per klauzula; milczenie przy
+małych próbach & 02 \\
+C9 silnik mutacji (\texttt{sk mutate}) & scenariusze jako projekt xUnit na
+\texttt{WebApplicationFactory}, żeby Stryker.NET mógł mutować zmigrowany kod; semantyczne
+mutanty LLM celowane w~klauzule; kill rate per klauzula; oznaczanie klauzul nietestowanych &
+02 \\
+C1 SQL, kolejki, PII & przenosi się do \path{letsgolegacy.secondkey-capture} (strona
+Windows/IIS, własny cykl wydań) & 02 \\
+C8 doradcza triage & port kalibracji judge-worker na C\# (kappa Cohena na etykietach
+przeglądających, żadnej liczby przy małej próbie); structured output przez
+\texttt{Microsoft.Extensions.AI}; nigdy nie zmienia werdyktu & 02–03 \\
+C10 podpisywanie & atestacje in-toto w~kopertach DSSE, cosign z~kluczem klienta w~KMS/HSM,
+bez publicznego rejestru przejrzystości, magazyn OCI (ORAS) albo WORM & 03 \\
+Biblioteka kontraktów & fragmenty kontraktów wielokrotnego użytku między systemami & 03 \\
+\end{xltabular}
+}
+
+\paragraph{Historia rewizji analizy.} Analiza fazy 01 ma nagłówek „Revision: 1
+(2026-09-26)”, a~jej dziennik rewizji ma dwa wpisy. Wpis 1: pierwsza tabela dla S1–S16,
+decyzje D-1–D-3, ryzyka A1–A3, nic blokującego. Wpis 2: replay dołącza do testów
+mutacyjnych, nowe testy tego, czego replay nie wysyła, \texttt{SK\_SKIP\_DOCKER} w~A1 i~nowy tryb mergowania w~A3; otwarte: reset i~sonda SQL Server tylko w~testach
+integracyjnych. Master prompt dla S1–S3 (\path{docs/analysis/S1-S3.master-prompt.md}) jest
+plikiem generowanym z~rewizji 1 analizy i~nie jest edytowany ręcznie; przy rozbieżności
+wygrywa analiza.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/docs/analysis/S1-S3.master-prompt.md}}

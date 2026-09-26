@@ -1,0 +1,1014 @@
+\section{legacy-risk-scan}\label{sec:risk-scan}
+
+Repozytorium \path{letsgolegacy.legacy-risk-scan} zawiera Legacy Risk Scan: publiczną,
+statyczną stronę, na którą wkleja się plik projektu albo listę zależności (\repopath{.csproj},
+\repopath{packages.config}, \repopath{composer.json} i~kilka innych formatów), a~w~odpowiedzi
+dostaje raport o~końcu wsparcia (end-of-life, EOL) i~znanych podatnościach frameworka oraz
+każdej zależności. Raport jest liczony w~przeglądarce. Interfejs strony jest po polsku. Strona
+jest publikowana przez GitHub Pages pod adresem
+\url{https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/}. Rozdział opisuje
+wyłącznie technikę: co strona czyta i~jak, skąd bierze dane, jak klasyfikuje wyniki, jak
+chroni plik użytkownika, jak jest testowana, budowana i~wdrażana.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md}}
+
+\subsection{Po co istnieje}\label{sec:risk-scan-cel}
+
+Właściciel systemu legacy potrzebuje odpowiedzi na dwa pytania: które elementy aplikacji
+straciły wsparcie producenta i~które mają znane luki bezpieczeństwa. Legacy Risk Scan
+odpowiada na nie z~jednego pliku, w~kilka sekund, bez instalowania czegokolwiek i~bez
+wysyłania pliku na serwer: plik jest parsowany w~przeglądarce, a~do publicznej bazy
+podatności OSV trafiają wyłącznie współrzędne pakietów (ekosystem, nazwa, wersja). Dane EOL
+są dołączone do strony i~datowane, więc raport mówi, jak świeże są jego dane.
+
+Plan pracy opisuje stronę jako ticket L18 backlogu między repozytoriami. Ograniczenia
+projektowe z~planu: nic z~wklejonego pliku nie opuszcza przeglądarki poza współrzędnymi
+pakietów; strona nie ma analityki ani pamięci przeglądarki i~mówi o~tym; dane EOL dla
+frameworków i~środowisk uruchomieniowych są dołączone i~datowane; hosting jest statyczny
+(GitHub Pages), bez własnego serwera.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md}}
+
+\subsection{Architektura i~przebieg skanu}\label{sec:risk-scan-architektura}
+
+Strona nie ma zależności runtime: to zwykłe moduły ES serwowane w~postaci, w~jakiej są
+napisane, bez bundlera, więc to, co jest przeglądane w~\path{src/}, jest dokładnie tym, co
+uruchamia odwiedzający. Jedyne pakiety npm to narzędzia testowe (Playwright, axe). Silnik
+(\path{src/lib/}) to czyste moduły ES, wspólne dla strony i~testów.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Plik & Rola \\
+\midrule
+\endfirsthead
+\toprule
+Plik & Rola \\
+\midrule
+\endhead
+\path{src/index.html}, \path{src/styles.css} & Strona i~style; polityka Content-Security-Policy w~znaczniku \repopath{meta} \\
+\path{src/app.js} & Okablowanie: formularz → skan → raport; wczytanie danych EOL, przykładu i~pliku z~dysku \\
+\path{src/render.js} & Raport → DOM, wyłącznie przez \repopath{textContent} i~\repopath{setAttribute} \\
+\path{src/lib/manifest.js} & Tekst → wykrycie formatu → parser → manifest albo kodowany \repopath{ScanError} \\
+\path{src/lib/parsers/} & \path{msbuild.js}, \path{packages-config.js}, \path{composer.js}, \path{package-json.js} \\
+\path{src/lib/xml.js} & Mały, ścisły czytnik XML dla plików MSBuild i~\repopath{packages.config} \\
+\path{src/lib/frameworks.js} & Target framework → środowisko, którego data końca wsparcia obowiązuje \\
+\path{src/lib/versions.js} & Arytmetyka wersji: cykle wydań i~najniższa wersja dopuszczana przez ograniczenie \\
+\path{src/lib/known-libraries.js} & Biblioteki JavaScript z~NuGet, pliki skryptów z~wersją w~nazwie, pakiety mapowane na produkty endoflife.date \\
+\path{src/lib/eol.js} & Dopasowanie cyklu wydań i~status EOL \\
+\path{src/lib/osv.js} & Klient OSV -- granica prywatności \\
+\path{src/lib/report.js} & Wiersze, flagi i~liczniki podsumowania \\
+\path{src/lib/servers.js} & Generacje SQL Server i~Windows Server dla formularza \\
+\path{src/lib/messages.js}, \path{src/lib/format.js} & Każde zdanie widoczne dla odwiedzającego, po polsku; daty, czas względny i~liczba mnoga \\
+\path{src/lib/scan.js} & Jeden skan: tekst → raport albo kodowany błąd \\
+\path{scripts/} & \path{build.mjs}, \path{serve.mjs}, \path{update-eol.mjs} (z~\path{lib/eol-source.mjs}), \path{smoke-osv.mjs}, \path{wait-for-deploy.mjs}, \path{setup.sh}, skan sekretów \\
+\path{data/eol.json} & Generowane dane EOL \\
+\path{samples/Sklep.Legacy.csproj} & Przykład, który strona oferuje („Wypróbuj na przykładzie”) \\
+\path{test/}, \path{e2e/} & Testy \repopath{node:test} z~fixture oraz Playwright \\
+\bottomrule
+\end{xltabular}
+
+Przebieg jednego skanu (\repopath{runScan} w~\path{src/lib/scan.js}):
+
+\begin{enumerate}
+  \item \textbf{Parsowanie.} \repopath{parseManifest} zamienia tekst na manifest
+        \texttt{\{ format, runtimes, packages, hints \}} albo rzuca \repopath{ScanError}
+        z~kodem i~parametrami (sekcja~\ref{sec:risk-scan-wejscie}). Błąd wejścia kończy skan
+        komunikatem; raport nie powstaje.
+  \item \textbf{Współrzędne.} \repopath{coordinatesFor} wybiera każdy pakiet, który da się
+        sprawdzić i~ma wersję, a~dla bibliotek JavaScript dostarczanych przez NuGet dodaje
+        drugą współrzędną w~ekosystemie npm; duplikaty są usuwane.
+  \item \textbf{OSV.} Jeśli są współrzędne, klient OSV pyta o~identyfikatory podatności,
+        a~potem pobiera ich rekordy (sekcja~\ref{sec:risk-scan-osv}). Plik bez pakietów do
+        sprawdzenia daje raport bez zapytania do OSV.
+  \item \textbf{Raport.} \repopath{buildReport} łączy manifest, dane EOL, wynik OSV, datę
+        dnia i~serwery wybrane w~formularzu (sekcja~\ref{sec:risk-scan-raport}).
+\end{enumerate}
+
+Degradacja zamiast porażki: gdy OSV jest nieosiągalne, raport i~tak powstaje z~danych EOL,
+każdy pakiet, którego podatności nie dało się sprawdzić, jest tak oznaczony, a~strona
+oferuje ponowienie. Tylko wejście, którego skan w~ogóle nie przeczyta, kończy się błędem,
+a~każdy błąd -- także błąd w~kodzie -- staje się komunikatem, nigdy awarią (błąd w~kodzie jest
+logowany lokalnie w~konsoli i~niczego nie wysyła). Nowy skan anuluje poprzedni
+(\repopath{AbortController}); wynik anulowanego skanu nie jest raportowany. Zmiana serwerów
+w~formularzu przebudowuje raport z~zapamiętanego manifestu i~wyniku OSV
+(\repopath{rebuildReport}), bez parsowania i~bez sieci.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/lib/scan.js},
+\path{letsgolegacy.legacy-risk-scan/src/app.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/report.js},
+\path{letsgolegacy.legacy-risk-scan/package.json}}
+
+\subsection{Dane wejściowe: co dokładnie skanuje}\label{sec:risk-scan-wejscie}
+
+\subsubsection{Wykrycie formatu}
+
+Wejście to wklejony tekst albo plik wybrany z~dysku (pole pliku przyjmuje rozszerzenia
+\repopath{.csproj}, \repopath{.vbproj}, \repopath{.fsproj}, \repopath{.props},
+\repopath{.config}, \repopath{.json}, \repopath{.lock}). Plik z~dysku jest czytany lokalnie
+(\repopath{file.text()}); plik większy niż czterokrotność limitu znaków, liczona w~bajtach,
+jest odrzucany przed odczytem. \repopath{parseManifest}:
+
+\begin{itemize}
+  \item pusty tekst daje \repopath{EMPTY\_INPUT}, a~tekst dłuższy niż limit
+        \path{MAX_INPUT_CHARS} (2~MB znaków, \texttt{2 * 1024 * 1024}) daje
+        \path{INPUT_TOO_LARGE};
+  \item usuwa BOM i~patrzy na pierwszy znak po białych znakach: \repopath{<} → XML,
+        \repopath{\{} lub \repopath{[} → JSON; tekst zaczynający się od
+        „Microsoft Visual Studio Solution File” → \repopath{SOLUTION\_FILE}; wszystko inne →
+        \repopath{UNKNOWN\_FORMAT};
+  \item XML: element główny \repopath{Project} → parser MSBuild; \repopath{packages} → parser
+        \repopath{packages.config}; \repopath{configuration} → \repopath{XML\_CONFIG\_FILE}
+        (wklejono \repopath{web.config} lub \repopath{app.config}); inny →
+        \path{XML_UNSUPPORTED_ROOT}; błąd składni → \repopath{XML\_MALFORMED} z~przyczyną,
+        wierszem i~kolumną;
+  \item JSON: błąd składni → \repopath{JSON\_MALFORMED} z~wierszem i~kolumną, gdy silnik
+        JavaScript podaje pozycję (obsługiwane są komunikaty V8, SpiderMonkey
+        i~JavaScriptCore); nie-obiekt → \repopath{JSON\_UNSUPPORTED}; pole
+        \repopath{lockfileVersion} → \path{PACKAGE_LOCK_UNSUPPORTED}
+        (\repopath{package-lock.json} nie jest obsługiwany); tablica \repopath{packages} albo
+        pole \repopath{content-hash} → \repopath{composer.lock}; \repopath{require} lub
+        \repopath{require-dev} → \repopath{composer.json}; \repopath{dependencies},
+        \repopath{devDependencies}, \path{optionalDependencies} lub \repopath{engines} →
+        \repopath{package.json}; inaczej \repopath{JSON\_UNSUPPORTED}.
+\end{itemize}
+
+Każdy kod błędu ma polskie zdanie w~\path{src/lib/messages.js} (test sprawdza, że każdy kod,
+który mogą zgłosić parsery, ma zdanie). Parsery zwracają tylko kody i~parametry, nigdy tekst
+do wyświetlenia.
+
+\subsubsection{Co jest czytane z~każdego formatu}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Plik & Co skan z~niego bierze \\
+\midrule
+\endfirsthead
+\toprule
+Plik & Co skan z~niego bierze \\
+\midrule
+\endhead
+\repopath{.csproj} / \repopath{.vbproj} w~formacie SDK & \repopath{TargetFramework} i~\repopath{TargetFrameworks}; \repopath{PackageReference} z~atrybutem \repopath{Version}, elementem \repopath{<Version>}, \repopath{VersionOverride} albo właściwością \repopath{\$(Nazwa)} zdefiniowaną w~tym samym pliku. Referencja bez wersji (central package management) jest raportowana jako „wersja nieznana” \\
+\repopath{.csproj} klasyczny (sprzed .NET Core) & \path{TargetFrameworkVersion}; identyfikator i~wersja NuGet wyprowadzone z~\repopath{HintPath} do \texttt{packages\textbackslash Nazwa.Wersja\textbackslash}; biblioteki DLL spoza katalogu pakietów i~referencje GAC spoza frameworka (raportowane, nie zgadywane); pliki skryptów z~wersją w~nazwie, np. \texttt{Scripts\textbackslash jquery-1.10.2.js} \\
+\path{Directory.Packages.props} & Elementy \repopath{PackageVersion} i~\path{GlobalPackageReference} \\
+\repopath{packages.config} & Każdy \repopath{package} z~dokładną wersją; najnowszy \repopath{targetFramework} jako prawdopodobna wersja .NET Framework \\
+\repopath{composer.json} & Ograniczenie \repopath{php} → \textbf{minimalna} dopuszczalna wersja PHP; każdy pakiet sprawdzany w~\textbf{najniższej wersji, na którą pozwala ograniczenie} (albo „nieznana”, gdy nie da się jej ustalić -- \repopath{dev-master}, \repopath{*}, \repopath{>4.0}) \\
+\repopath{composer.lock} & Dokładne wersje i~ograniczenie PHP platformy \\
+\repopath{package.json} & Zakresy zależności w~najniższej wersji; \repopath{engines.node} \\
+\bottomrule
+\end{xltabular}
+
+\subsubsection{Pliki MSBuild}
+
+Parser MSBuild (\path{src/lib/parsers/msbuild.js}) działa na drzewie z~\path{src/lib/xml.js};
+nazwy elementów i~atrybutów porównuje bez rozróżniania wielkości liter, bo ręcznie edytowane
+pliki projektu zawierają \repopath{include=} i~\repopath{<version>}.
+
+\begin{itemize}
+  \item \textbf{Format.} Projekt jest w~formacie SDK, gdy ma atrybut \repopath{Sdk}, element
+        \repopath{<Sdk>} albo \texttt{<Import Sdk=...>}. Klasyczny -- gdy ma
+        \path{TargetFrameworkVersion} albo przestrzeń nazw MSBuild~2003. Plik
+        z~\repopath{PackageVersion} to \path{Directory.Packages.props}. Kody formatu:
+        \repopath{msbuild-sdk}, \repopath{msbuild-legacy}, \repopath{cpm-props},
+        \repopath{msbuild}.
+  \item \textbf{Właściwości.} \repopath{\$(Nazwa)} jest rozwijane z~elementów
+        \repopath{PropertyGroup} tego samego pliku, do pięciu poziomów zagnieżdżenia.
+        Nierozwiązana właściwość w~wersji lub frameworku daje notatkę zamiast zgadywania.
+  \item \textbf{Frameworki.} Wartości \path{TargetFrameworkVersion},
+        \repopath{TargetFramework} i~\repopath{TargetFrameworks} (dzielone po średniku) są
+        mapowane przez \path{src/lib/frameworks.js}: \repopath{v4.5.1}, \repopath{net451},
+        \repopath{net40-client} i~\path{.NETFramework,Version=v4.8} → .NET Framework (produkt
+        \repopath{dotnetfx}); \repopath{netcoreapp3.1}, \repopath{net6.0},
+        \repopath{net8.0-windows} → .NET/.NET Core (\repopath{dotnet}; od wersji 5 etykieta
+        „.NET”); \repopath{netstandard2.0} → .NET Standard, specyfikacja API, a~nie środowisko
+        uruchomieniowe, więc bez własnej daty końca wsparcia. Wartość nierozpoznana albo
+        z~nierozwiązaną właściwością dostaje przyczynę.
+  \item \textbf{\repopath{PackageReference}} (\repopath{Include} albo \repopath{Update}):
+        wersja z~\repopath{VersionOverride} albo \repopath{Version}, jako atrybut lub element.
+        \repopath{PrivateAssets="all"} oznacza zależność deweloperską. Referencje bez wersji są
+        liczone i~dają wskazówkę, żeby wkleić \path{Directory.Packages.props}.
+  \item \textbf{\repopath{Reference} z~\repopath{HintPath}.} Jeśli ścieżka prowadzi przez
+        katalog \repopath{packages} (także \texttt{..\textbackslash ..\textbackslash packages}
+        i~\repopath{\$(SolutionDir)packages} z~nierozwiązaną właściwością), nazwa katalogu
+        pakietu jest dzielona na identyfikator i~wersję
+        (\path{Microsoft.AspNet.Mvc.5.2.2} → \path{Microsoft.AspNet.Mvc},
+        \repopath{5.2.2}); gdy możliwych podziałów jest kilka, wygrywa ten, którego
+        identyfikator równa się nazwie DLL. Wersja jest normalizowana do postaci NuGet. Ścieżka
+        poza katalogiem pakietów oznacza DLL dołączoną ręcznie: wiersz „do ręcznej weryfikacji”,
+        którego nie da się sprawdzić automatycznie.
+  \item \textbf{\repopath{Reference} bez \repopath{HintPath}.} Zestawy frameworka
+        (\repopath{System*}, \repopath{mscorlib}, \repopath{Microsoft.CSharp},
+        \repopath{WindowsBase}, \repopath{PresentationCore} itd.) i~referencje bez wersji są
+        pomijane i~liczone we wskazówce. Zestawy ASP.NET dostarczane poza frameworkiem
+        (\repopath{System.Web.Mvc}, \repopath{System.Web.WebPages}, \repopath{System.Web.Razor},
+        \repopath{System.Web.Helpers}, \repopath{System.Web.Http},
+        \path{System.Web.Optimization}, \path{System.Net.Http.Formatting}) wyglądają jak
+        frameworkowe, ale mają własne wersje, więc referencja GAC do nich jest raportowana.
+        Inny zestaw z~wersją to komponent GAC -- wiersz do ręcznej weryfikacji.
+  \item \textbf{\repopath{Content} i~\repopath{None}.} Plik skryptu z~wersją w~nazwie staje się
+        pakietem npm (sekcja~\ref{sec:risk-scan-biblioteki}); wpis \repopath{packages.config}
+        daje wskazówkę, że klasyczny \repopath{.csproj} wymienia tylko pakiety z~DLL, a~pełną
+        listę widać w~\repopath{packages.config}. Liczba \repopath{ProjectReference} daje
+        wskazówkę, żeby sprawdzić także pliki tych projektów.
+  \item \textbf{Deduplikacja.} Jeden wiersz na (ekosystem, nazwa bez wielkości liter, wersja,
+        możliwość sprawdzenia): kilka DLL jednego pakietu zwija się do jednego wiersza.
+\end{itemize}
+
+\subsubsection{packages.config, composer i~package.json}
+
+\begin{itemize}
+  \item \textbf{\repopath{packages.config}}: każdy \repopath{package} z~\repopath{id}
+        i~dokładną \repopath{version}; \path{developmentDependency="true"} oznacza
+        zależność deweloperską. Atrybuty \repopath{targetFramework} opisują framework z~chwili
+        instalacji pakietu -- to dolna granica, a~nie dowód (przeniesienie projektu nie
+        przepisuje pliku), więc najnowszy .NET Framework spośród nich jest prawdopodobną wersją,
+        a~raport dodaje wskazówkę. Inne frameworki (\repopath{netstandard}, \repopath{net6.0})
+        są wymieniane osobno.
+  \item \textbf{\repopath{composer.json}}: sekcje \repopath{require} i~\repopath{require-dev}
+        (ta druga -- zależności deweloperskie). Ograniczenie \repopath{php} z~\repopath{require}
+        staje się wierszem środowiska: minimalną wersją PHP, na której aplikacja deklaruje
+        działanie; \repopath{config.platform.php} daje dodatkowy wiersz. Wymagania platformy
+        (\repopath{php-64bit} i~podobne, \repopath{hhvm}, \repopath{composer*},
+        \repopath{ext-*}, \repopath{lib-*}) są pomijane i~wymienione we wskazówce. Każdy pakiet
+        jest sprawdzany w~najniższej wersji dopuszczanej przez ograniczenie.
+  \item \textbf{\repopath{composer.lock}}: \repopath{packages} i~\repopath{packages-dev}
+        z~dokładnymi wersjami (prefiks \repopath{v} jest usuwany); gałęzie rozwojowe
+        (\repopath{dev-*}, \repopath{*-dev}) mają wersję nieznaną; \repopath{platform.php}
+        i~\path{platform-overrides.php} są wierszami PHP.
+  \item \textbf{\repopath{package.json}}: \repopath{dependencies},
+        \path{optionalDependencies} i~\repopath{devDependencies} w~najniższej wersji
+        z~zakresu; \repopath{engines.node} jest wierszem środowiska Node.js. Specyfikacje spoza
+        rejestru (git, ścieżki, \repopath{github:}, \repopath{user/repo}) i~etykiety
+        dystrybucji (np. \repopath{latest}) mają wersję nieznaną.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/lib/manifest.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/parsers/msbuild.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/parsers/packages-config.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/parsers/composer.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/parsers/package-json.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/frameworks.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/messages.js},
+\path{letsgolegacy.legacy-risk-scan/src/index.html},
+\path{letsgolegacy.legacy-risk-scan/src/app.js}}
+
+\subsection{Wersje i~ograniczenia wersji}\label{sec:risk-scan-wersje}
+
+\path{src/lib/versions.js} odpowiada na dwa różne pytania, których nie wolno mylić: do
+którego cyklu wydań należy wersja (\repopath{numericParts}, \repopath{isPrefix}) i~jaka jest
+najniższa wersja, na którą pozwala ograniczenie (\repopath{lowestVersion},
+\repopath{nugetLowest}). Drugie pytanie istnieje, bo \repopath{composer.json}
+i~\repopath{package.json} zawierają ograniczenia, a~nie zainstalowane wersje. Gdy najniższej
+wersji nie da się ustalić uczciwie, odpowiedzią jest „nieznana” z~przyczyną, nigdy
+zgadywanie.
+
+\begin{itemize}
+  \item \textbf{Ograniczenia Composer i~npm} (\repopath{lowestVersion}): alternatywy
+        \repopath{||} (najniższa z~nich; alternatywa gałęzi rozwojowej nie ukrywa stabilnych),
+        zakres z~dywizem (\texttt{1.2 - 2.0}), operatory \repopath{>=}, \repopath{>},
+        \repopath{=}, \repopath{\textasciicircum}, \repopath{\textasciitilde}; symbole
+        wieloznaczne stają się zerami (\repopath{1.2.*} → \repopath{1.2.0}); \repopath{<},
+        \repopath{<=} i~\repopath{!=} nie wyznaczają dolnej granicy. Wynik ma rodzaj
+        \repopath{exact} (pojedyncza dokładna wersja) albo \repopath{lowest}. Przyczyny wersji
+        nieznanej: \repopath{no-lower-bound}, \path{exclusive-lower-bound} (np.
+        \repopath{>4.0}), \repopath{dev-branch}, \repopath{unparseable}, a~dla npm dodatkowo
+        \repopath{non-registry} i~\repopath{dist-tag}.
+  \item \textbf{Wersje NuGet} (\repopath{nugetLowest}): \repopath{6.0.4} -- dokładna;
+        \repopath{[1.0,2.0)} -- najniższa \repopath{1.0.0}; \repopath{[1.0]} -- dokładna;
+        \repopath{(1.0,)} -- nieznana (wykluczona dolna granica); \repopath{1.*} -- nieznana
+        (\repopath{floating}); \repopath{\$(...)} -- nieznana
+        (\repopath{unresolved-property}); brak wersji -- \repopath{not-specified}.
+        Normalizacja NuGet usuwa zera wiodące, uzupełnia do trzech części, zostawia czwartą
+        tylko niezerową i~usuwa metadane builda (\repopath{1.0.0.0} → \repopath{1.0.0},
+        \repopath{1.01} → \repopath{1.1.0}).
+  \item \textbf{Porównanie wersji}: najpierw części liczbowe, potem wersja pre-release przed
+        wydaniem.
+\end{itemize}
+
+Każda przyczyna ma notatkę w~raporcie, np. „Wersja pływająca (…) -- faktycznie użyta zależy
+od chwili budowania” albo „Ograniczenie … -- sprawdzono najniższą dopuszczalną wersję …”.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/src/lib/versions.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/messages.js}}
+
+\subsection{Biblioteki rozpoznawane po nazwie}\label{sec:risk-scan-biblioteki}
+
+\path{src/lib/known-libraries.js} trzyma w~jednym miejscu -- „żeby dało się ją przeczytać
+i~się z~nią spierać” -- całą wiedzę skanera o~konkretnych bibliotekach. Są to trzy tabele.
+
+\textbf{Biblioteki JavaScript dostarczane przez NuGet.} Stare projekty ASP.NET dostają jQuery,
+Bootstrap czy Modernizr jako pakiety NuGet, ale bazy podatności rejestrują większość ich luk
+pod npm, w~rejestrze macierzystym biblioteki. Kod jest ten sam, więc takie pakiety są
+sprawdzane pod obiema nazwami, a~wyniki są scalane:
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Identyfikator NuGet (bez wielkości liter) & Pakiet npm \\
+\midrule
+\repopath{jquery} & \repopath{jquery} \\
+\repopath{jquery.ui.combined}, \repopath{jquery.ui} & \repopath{jquery-ui} \\
+\repopath{jquery.validation} & \repopath{jquery-validation} \\
+\path{microsoft.jquery.unobtrusive.validation} & \path{jquery-validation-unobtrusive} \\
+\path{microsoft.jquery.unobtrusive.ajax} & \path{jquery-ajax-unobtrusive} \\
+\repopath{bootstrap}, \repopath{modernizr}, \repopath{lodash} & ta sama nazwa \\
+\repopath{knockoutjs} & \repopath{knockout} \\
+\repopath{angularjs}, \repopath{angularjs.core} & \repopath{angular} \\
+\repopath{moment.js}, \repopath{momentjs} & \repopath{moment} \\
+\repopath{underscore.js} & \repopath{underscore} \\
+\repopath{handlebars.js} & \repopath{handlebars} \\
+\bottomrule
+\end{tabularx}
+
+\textbf{Pliki skryptów z~wersją w~nazwie.} Klasyczny \repopath{.csproj} wymienia je jako
+\repopath{<Content>}, co często jest jedynym śladem biblioteki. Rozpoznawane nazwy (dłuższe
+i~bardziej szczegółowe najpierw): \repopath{jquery-ui}, \repopath{jquery-migrate},
+\path{jquery.validate.unobtrusive} (npm \path{jquery-validation-unobtrusive}),
+\repopath{jquery.validate} (npm \repopath{jquery-validation}), \repopath{jquery.signalr} (npm
+\repopath{signalr}), \repopath{jquery}, \repopath{modernizr}, \repopath{knockout},
+\repopath{angular}, \repopath{bootstrap}, \repopath{moment}, \repopath{lodash},
+\repopath{handlebars}. Po nazwie następuje \repopath{-} lub \repopath{.} i~wersja
+\repopath{x.y} albo \repopath{x.y.z}, opcjonalnie przyrostek \repopath{min}, \repopath{slim},
+\repopath{slim.min}, \repopath{debug}, \repopath{intellisense} lub \repopath{vsdoc}, na końcu
+\repopath{.js}. Wersja dwuczęściowa jest uzupełniana do \repopath{x.y.0}.
+
+\textbf{Pakiety mapowane na produkty endoflife.date}, gdy wersja pakietu wyznacza cykl
+wydań: npm i~NuGet \repopath{jquery} → \repopath{jquery}; npm i~NuGet \repopath{bootstrap} →
+\repopath{bootstrap}; npm \repopath{angular}, NuGet \repopath{angularjs}
+i~\repopath{angularjs.core} → \repopath{angularjs}; npm \repopath{@angular/core} →
+\repopath{angular}; Packagist \path{laravel/framework} → \repopath{laravel}; Packagist
+\path{symfony/symfony}, \path{symfony/framework-bundle}, \path{symfony/http-kernel} →
+\repopath{symfony}.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/src/lib/known-libraries.js}}
+
+\subsection{Dane EOL: źródło, format i~aktualizacja}\label{sec:risk-scan-eol}
+
+\path{data/eol.json} jest \textbf{generowany, nigdy nie edytowany ręcznie}, z~publicznego API
+endoflife.date (v1; dane na licencji MIT) przez \path{scripts/update-eol.mjs}. Każda
+informacja o~datach wsparcia przechodzi przez funkcje \repopath{normalize*}
+w~\path{scripts/lib/eol-source.mjs} -- warstwę tłumaczącą na brzegu (P11) -- więc zmiana
+kształtu API psuje testy tego modułu i~job aktualizacji, a~nie dociera do odwiedzającego jako
+po cichu błędna data. Plik zawiera datę pobrania (\repopath{generatedAt}); raport ją pokazuje
+(„Dane o~końcu wsparcia: endoflife.date, stan na …”).
+
+Produkty w~migawce z~2026-09-26 (wszystkie pobrane przez API v1, lista
+\repopath{unavailable} pusta):
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.2cm}@{}}
+\toprule
+Identyfikator & Etykieta & Wymagany & Cykle \\
+\midrule
+\repopath{dotnetfx} & .NET Framework & tak & 13 \\
+\repopath{dotnet} & .NET & tak & 13 \\
+\repopath{php} & PHP & tak & 18 \\
+\repopath{nodejs} & Node.js & tak & 26 \\
+\repopath{angular} & Angular & tak & 14 \\
+\repopath{angularjs} & AngularJS & tak & 9 \\
+\repopath{laravel} & Laravel & tak & 10 \\
+\repopath{symfony} & Symfony & tak & 30 \\
+\repopath{mssqlserver} & Microsoft SQL Server & tak & 36 \\
+\repopath{windows-server} & Windows Server & tak & 20 \\
+\repopath{jquery} & jQuery & nie & 4 \\
+\repopath{bootstrap} & Bootstrap & nie & 4 \\
+\bottomrule
+\end{tabularx}
+
+Początek pliku:
+
+\begin{lstlisting}
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-26",
+  "source": {
+    "name": "endoflife.date",
+    "url": "https://endoflife.date",
+    "api": "https://endoflife.date/api/v1/products/{product}",
+    "licence": "MIT"
+  },
+  "products": {
+    "dotnetfx": {
+      "label": ".NET Framework",
+      "link": "https://endoflife.date/dotnetfx",
+      "api": "v1",
+      "cycles": [
+        {
+          "name": "4.8.1",
+          "label": "4.8.1",
+          "releaseDate": "2022-08-09",
+          "lts": false,
+          "eoas": null,
+          "eol": false,
+          "eoes": null,
+          "latest": null
+        },
+\end{lstlisting}
+
+Pola cyklu: \repopath{name} i~\repopath{label} (nazwa cyklu i~etykieta, np.
+\repopath{16.0} i~„2022 'Dallas'” dla SQL Server), \repopath{releaseDate},
+\repopath{lts}, \repopath{eoas} (koniec aktywnego wsparcia), \repopath{eol} (koniec
+wsparcia), \repopath{eoes} (koniec wsparcia rozszerzonego, ESU), \repopath{latest}.
+\repopath{eol} jest datą ISO albo wartością logiczną; \repopath{eoas} i~\repopath{eoes} --
+datą, wartością logiczną albo \repopath{null}, gdy produkt nie ma tej fazy. Plik ma też
+\repopath{schemaVersion} (1), \repopath{source} i~listę \repopath{unavailable} produktów
+opcjonalnych, których nie udało się pobrać.
+
+\subsubsection{Generator danych}
+
+\begin{lstlisting}
+node scripts/update-eol.mjs                          fetch, validate, write
+node scripts/update-eol.mjs --keep-date-if-unchanged keep the old date when nothing
+                                                     but the date would change
+node scripts/update-eol.mjs --out <file> --date YYYY-MM-DD
+\end{lstlisting}
+
+\begin{itemize}
+  \item Domyślnie \repopath{-{}-out} to \path{data/eol.json}, a~\repopath{-{}-date} -- dzisiejsza
+        data UTC. Ręcznie: \texttt{npm run update-eol}; za proxy HTTP z~prefiksem
+        \path{NODE_USE_ENV_PROXY=1} (Node~22.21 lub nowszy).
+  \item Każdy produkt jest pobierany z~\path{https://endoflife.date/api/v1/products/<id>}
+        z~nagłówkami \texttt{Accept: application/json} i~\repopath{User-Agent}
+        identyfikującym odświeżanie danych, z~limitem 30~sekund. Odpowiedzi 429, 5xx i~błędy
+        sieci są ponawiane (do trzech prób, przerwy 2~s i~4~s); 404 oznacza, że produkt nie
+        istnieje.
+  \item Odpowiedź v1 o~nieoczekiwanym kształcie daje ostrzeżenie i~przejście na starsze API v0
+        (\path{https://endoflife.date/api/<id>.json}); plik zapisuje, które API użyto dla
+        każdego produktu. Normalizacja v0 odwraca flagi wsparcia („\texttt{support: true}”
+        znaczy, że aktywne wsparcie trwa, czyli \repopath{eoas} = \repopath{false}).
+  \item Plik jest zapisywany tylko wtedy, gdy pobrano każdy wymagany produkt i~wynik przeszedł
+        walidację -- częściowy albo zniekształcony zbiór nigdy nie zastępuje kompletnego. Brak
+        wymaganego produktu albo błąd walidacji kończy skrypt kodem 1 bez zmiany pliku;
+        niedostępny produkt opcjonalny trafia na listę \repopath{unavailable}.
+  \item Walidacja (\repopath{validateDataset}): każdy wymagany produkt jest obecny; każdy cykl
+        ma nazwę, \repopath{eol} jest wartością logiczną lub datą ISO, \repopath{eoas}
+        i~\repopath{eoes} -- \repopath{null}, wartością logiczną lub datą; sondy, czyli
+        wersje, które na pewno istnieją, muszą trafić w~cykl: .NET Framework 4.5.1, 4.6.2
+        i~4.8; .NET 3.1, 6.0 i~8.0; PHP 7.4.0 i~8.2.0; Node.js 14.0.0 i~20.0.0; Angular
+        12.0.0; Laravel 8.0.0; Symfony 4.4.0. SQL Server musi mieć cykl 2016, Windows Server
+        -- 2012, a~\repopath{generatedAt} musi być datą ISO.
+  \item \path{--keep-date-if-unchanged} zostawia starą datę, gdy poza datą nic się nie
+        zmieniło (porównanie treści pomija \repopath{generatedAt}).
+  \item Skrypt drukuje tabelę wybranych dat (m.in. .NET Framework 4.5.2--4.8, .NET 6, 8, 9,
+        10, SQL Server 2014--2019, Windows Server 2012--2019, PHP 7.4, 8.1, 8.2) do przejrzenia
+        w~pull requeście -- drukowaną, nigdy asertowaną, bo źródłem rozstrzygającym jest
+        endoflife.date -- także do podsumowania kroku w~GitHub Actions.
+\end{itemize}
+
+Odświeżanie danych automatyzuje workflow \path{update-eol.yml}
+(sekcja~\ref{sec:risk-scan-ci}): co miesiąc regeneruje plik, uruchamia na nim testy
+jednostkowe i~otwiera pull request; pull request zmieniający generator dostaje dane
+zregenerowane na własnej gałęzi, więc generator i~dane nie mogą się rozjechać.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/data/eol.json},
+\path{letsgolegacy.legacy-risk-scan/scripts/update-eol.mjs},
+\path{letsgolegacy.legacy-risk-scan/scripts/lib/eol-source.mjs}}
+
+\subsection{Reguły oceny: cykl wydań i~status EOL}\label{sec:risk-scan-reguly}
+
+\subsubsection{Dopasowanie cyklu wydań}
+
+Wersja jest dopasowywana do cyklu wydań po najdłuższym prefiksie liczbowym
+(\repopath{findCycle} w~\path{src/lib/eol.js}): \repopath{4.5.1} → cykl \repopath{4.5.1},
+\repopath{8.0} → \repopath{8}, \repopath{7.1.3} → \repopath{7.1}; \repopath{4.8.1} nie jest
+raportowane jako \repopath{4.8}. Krótka nazwa cyklu, która ma bardziej szczegółowe
+rodzeństwo, oznacza swoje wydanie \repopath{.0}: na liście .NET Framework \repopath{4} to 4.0
+(4.5 i~4.8 są osobnymi cyklami), więc niewymieniona wersja 4.7.2 nie zostanie zgłoszona jako
+4.0; bez rodzeństwa \repopath{8} oznacza całe 8.x.
+
+endoflife.date nie wymienia każdego wydania (np. Laravel 5.6 leży między wymienionymi 5.5
+i~5.8, a~stare wydania z~czasem znikają). Dla wersji niewymienionej zwracany jest najbliższy
+\emph{nowszy} wymieniony cykl jako punkt odniesienia: jeśli nawet on stracił wsparcie, ta
+starsza wersja też je straciła (status \repopath{eol} z~notatką „Tej wersji nie ma
+w~endoflife.date, ale nowsza wersja … straciła wsparcie …”); jeśli nie stracił -- odpowiedzią
+jest „brak danych”, a~nie zgadywanie. W~szczególności wersja starsza od wszystkich
+wymienionych cykli jest po końcu wsparcia, jeśli najstarszy wymieniony cykl już go nie ma.
+
+\subsubsection{Status cyklu}
+
+Status jest liczony z~dat w~dniu tworzenia raportu, a~nie zamrażany przy pobraniu danych:
+według komentarza w~kodzie koniec wsparcia .NET~8 przypadający na 2026-11-10 zmienia wiersz
+z~„koniec wsparcia w~ciągu 12 miesięcy” na „koniec wsparcia” tego dnia, nawet jeśli nikt nie
+odświeżył danych. Data danych jest pokazywana w~raporcie, więc ich świeżość nigdy nie jest
+domniemana.
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}p{2.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Warunek (\repopath{eol} cyklu) & Status & Etykieta w~raporcie \\
+\midrule
+data ≤ dziś (sam dzień końca się liczy) & \repopath{eol} & „Koniec wsparcia” \\
+data ≤ dziś + 12 miesięcy & \repopath{eol-soon} & „Koniec wsparcia w~ciągu roku” \\
+data późniejsza & \repopath{supported} & -- \\
+\repopath{true} (zakończone, bez daty) & \repopath{eol} & „Koniec wsparcia” \\
+\repopath{false} (nie ogłoszono końca) & \repopath{supported} & notatka „Producent nie ogłosił daty końca wsparcia.” \\
+wersja bez dopasowanego cyklu & \repopath{no-data} & notatka „Brak danych o~cyklu życia tej wersji w~endoflife.date.” \\
+\bottomrule
+\end{tabularx}
+
+Dodawanie miesięcy przycina dzień do ostatniego dnia miesiąca (2028-02-29 + 12 → 2029-02-28).
+Dodatkowe notatki: dla cyklu po końcu wsparcia z~datą \repopath{eoes} -- czy płatne
+rozszerzone aktualizacje bezpieczeństwa (ESU) są jeszcze dostępne i~do kiedy, czy już się
+skończyły; dla cyklu wspieranego, którego \repopath{eoas} minęło -- że od tej daty wydawane są
+już tylko poprawki bezpieczeństwa.
+
+\subsubsection{Środowiska i~serwery}
+
+\begin{itemize}
+  \item .NET Standard jest oceniony (\repopath{assessed}) bez daty EOL, z~notatką, że to
+        specyfikacja API, a~nie środowisko uruchomieniowe.
+  \item Środowisko wyznaczone ograniczeniem (\repopath{composer.json},
+        \repopath{engines.node}) jest pokazywane jako „co najmniej …” z~notatką, że na serwerze
+        może działać nowsza wersja; wersja PHP z~\repopath{config.platform} ma notatkę
+        o~konfiguracji platformy Composera.
+  \item SQL Server i~Windows Server nie pochodzą z~pliku: odwiedzający może wybrać je
+        w~formularzu. endoflife.date wymienia SQL Server per service pack
+        (\repopath{13.0-sp3}, etykieta „2016 SP3”), a~Windows Server per kanał, łącznie
+        z~krótko żyjącymi kanałami półrocznymi, więc formularz (\repopath{serverOptions}) oferuje
+        jedną pozycję na generację produktu, wskazującą cykl wspierany najdłużej -- ostatni
+        service pack. Pomijane są kanały \repopath{-sac}, \repopath{-ac}, \repopath{-acp}
+        i~pakiety „Azure Connect”; etykiety tracą nazwy kodowe, prefiks produktu i~oznaczenia
+        kanałów; generacje są sortowane od najnowszego pierwszego wydania. Wiersz serwera
+        w~raporcie ma notatkę, że terminy dotyczą ostatniego service packa, a~instalacje ze
+        starszym straciły wsparcie wcześniej.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/lib/eol.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/servers.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/report.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/messages.js}}
+
+\subsection{Podatności: klient OSV}\label{sec:risk-scan-osv}
+
+\path{src/lib/osv.js} jest jedynym kodem strony, który łączy się z~czymkolwiek poza własnym
+originem strony, a~funkcja \repopath{toQueries()} jest jedynym miejscem, które decyduje, co
+zostaje wysłane: współrzędne pakietów -- ekosystem, nazwa, wersja -- i~nic więcej. Rekordy OSV
+są tu redukowane do kilku pól, które pokazuje raport (tłumaczenie na brzegu, P11), więc zmiana
+schematu OSV psuje ten plik i~jego testy, a~nie interfejs.
+
+\begin{itemize}
+  \item \textbf{Zapytanie.} \texttt{POST https://api.osv.dev/v1/querybatch} z~ciałem
+        \texttt{\{"queries": [...]\}}, w~którym każde zapytanie ma postać
+        \texttt{\{ package: \{ ecosystem, name \}, version \}}.
+        Współrzędne są deduplikowane; paczka ma najwyżej 1000 zapytań (udokumentowany limit
+        OSV), a~wyniki z~\repopath{next\_page\_token} są dociągane kolejnymi zapytaniami, do
+        dziesięciu stron. Nazwy są wysyłane dokładnie tak, jak są zapisane: OSV dopasowuje
+        identyfikatory NuGet z~rozróżnianiem wielkości liter.
+  \item \textbf{Rekordy.} Dla każdego zwróconego identyfikatora jedno \texttt{GET
+        /v1/vulns/<id>}, najwyżej cztery równolegle. Rekord, którego nie udało się pobrać, jest
+        \repopath{null}: raport pokazuje wtedy identyfikator i~link bez opisu, zamiast przerywać
+        skan.
+  \item \textbf{Żądania} mają limit 20~sekund, \texttt{credentials: 'omit'},
+        \texttt{referrerPolicy: 'no-referrer'} i~\texttt{cache: 'no-store'}. Błędy są
+        klasyfikowane jako \repopath{network}, \repopath{timeout}, \repopath{http} (ze statusem)
+        i~\repopath{contract} (odpowiedź nie jest JSON albo liczba wyników nie zgadza się
+        z~liczbą zapytań). Anulowany skan kończy się przyczyną anulowania, a~nie błędem OSV.
+  \item \textbf{Streszczenie podatności.} Waga z~\path{database_specific.severity} rekordu
+        albo wpisu \repopath{affected} (LOW → niska, MODERATE i~MEDIUM → średnia, HIGH →
+        wysoka, CRITICAL → krytyczna); aliasy; \repopath{summary} albo pierwszy akapit
+        \repopath{details} (skracany do 200 znaków); wersje z~poprawką (\repopath{fixed}) tylko
+        z~wpisów \repopath{affected} dla tego pakietu i~tylko wyższe od używanej; link
+        \path{https://osv.dev/vulnerability/<id>}.
+  \item \textbf{Scalanie.} Podatności znalezione pod kilkoma nazwami (NuGet \repopath{jQuery}
+        i~npm \repopath{jquery}) są scalane: wycofane (\repopath{withdrawn}) odpadają,
+        duplikaty są zwijane po identyfikatorze i~wspólnym aliasie, kolejność -- od najwyższej
+        wagi.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/src/lib/osv.js},
+\path{letsgolegacy.legacy-risk-scan/README.md}}
+
+\subsection{Raport: wiersze, statusy i~podsumowanie}\label{sec:risk-scan-raport}
+
+\path{src/lib/report.js} jest czysty: bez DOM, bez sieci i~bez tekstu do wyświetlenia. Każdy
+wiersz niesie kody notatek, które \path{src/lib/messages.js} zamienia na polskie zdania, więc
+klasyfikację da się testować osobno.
+
+Wiersz ma rodzaj \repopath{runtime} (framework lub środowisko z~pliku),
+\repopath{infrastructure} (serwer z~formularza) albo \repopath{package}, oraz pola
+\repopath{name}, \repopath{version}, \repopath{spec}, \repopath{versionKind},
+\repopath{source} (skąd pochodzi wiersz, np. \repopath{HintPath}), \repopath{ecosystem},
+\repopath{eol}, \repopath{advisoryState}, \repopath{advisories}, \repopath{assessed},
+\repopath{notes}, \repopath{flags} i~\repopath{status}. Flagi: \repopath{eol} -- wsparcie
+cyklu się skończyło; \repopath{eolSoon} -- kończy się w~ciągu 12 miesięcy;
+\repopath{vulnerable} -- co najmniej jedna znana, niewycofana podatność. Wiersz jest
+\repopath{assessed}, gdy wiadomo dość, by powiedzieć „nic nie znaleziono”: pakiet ma wersję
+i~odpowiedź OSV, środowisko -- dopasowany cykl.
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.4cm} >{\raggedright\arraybackslash}p{5.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Status & Etykieta & Kiedy \\
+\midrule
+\repopath{eol} & „Koniec wsparcia” & flaga \repopath{eol} \\
+\repopath{vulnerable} & „Znane podatności” & flaga \repopath{vulnerable}, bez \repopath{eol} \\
+\repopath{eol-soon} & „Koniec wsparcia w~ciągu roku” & flaga \repopath{eolSoon}, bez poprzednich \\
+\repopath{unknown} & „Nieustalone” & brak flag, wiersz nieoceniony \\
+\repopath{ok} & „Bez zastrzeżeń” & brak flag, wiersz oceniony \\
+\bottomrule
+\end{tabularx}
+
+Status główny to najgorsza flaga, w~kolejności z~tabeli. Wiersz może liczyć się w~kilku
+kategoriach podsumowania (środowisko po końcu wsparcia ze znanymi podatnościami jest w~obu),
+co strona mówi wprost. Stan sprawdzenia podatności pakietu (\repopath{advisoryState}):
+\repopath{checked}, \repopath{not-checkable} (DLL dołączona ręcznie, komponent GAC --
+„nie da się sprawdzić automatycznie”), \repopath{unknown-version} („nie sprawdzono --
+nieznana wersja”), \repopath{error} („nie sprawdzono -- brak połączenia z~OSV”),
+\repopath{not-checked}; dla środowisk i~serwerów \repopath{not-applicable}.
+
+Wynik \repopath{buildReport} zawiera format pliku, datę raportu, datę danych EOL, stan OSV
+(i~rodzaj błędu), wskazówki do pliku, dwie listy -- \repopath{platform} (frameworki,
+środowiska, serwery) i~\repopath{dependencies} (pakiety), każda sortowana od najgorszego
+statusu, a~potem po nazwie z~polskim porządkiem -- oraz podsumowanie: liczba pozycji, po końcu
+wsparcia, z~końcem w~ciągu 12 miesięcy, ze znanymi podatnościami, bez zastrzeżeń,
+nieustalonych i~liczba różnych podatności.
+
+Strona renderuje raport (\path{src/render.js}) wyłącznie przez \repopath{textContent}
+i~\repopath{setAttribute}, nigdy \repopath{innerHTML}: streszczenia podatności są tekstem
+z~zewnątrz, a~wklejony plik należy do odwiedzającego, więc żadne z~nich nie może zostać
+zinterpretowane jako znaczniki. Wiersz pokazuje do trzech podatności, resztę za przyciskiem
+„Pokaż pozostałe (…)”. Raport ma krótkie objaśnienie każdego poziomu ryzyka, sekcje
+„Platforma”, „Zależności” i~„Uwagi do pliku”, informację o~źródłach i~datach danych oraz
+przycisk „Drukuj lub zapisz jako PDF” (\repopath{window.print()}). Gdy OSV jest nieosiągalne,
+raport pokazuje ostrzeżenie i~przycisk „Sprawdź podatności ponownie”.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/src/lib/report.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/messages.js},
+\path{letsgolegacy.legacy-risk-scan/src/render.js},
+\path{letsgolegacy.legacy-risk-scan/src/index.html}}
+
+\subsection{Prywatność i~bezpieczeństwo strony}\label{sec:risk-scan-prywatnosc}
+
+Prywatność jest właściwością konstrukcji, a~nie deklaracją:
+
+\begin{itemize}
+  \item Wklejony plik jest parsowany \textbf{w~przeglądarce}; nic nie jest wysyłane.
+  \item Połączenia wychodzące idą wyłącznie do publicznego API OSV.dev: zapytanie
+        \repopath{querybatch}, którego ciało buduje jedna funkcja (\repopath{toQueries()}),
+        a~potem po jednym \repopath{GET} na każdą podatność zwróconą przez OSV, po
+        identyfikatorze, który podało OSV. Poza tym strona pobiera tylko własne pliki
+        (\path{data/eol.json}, przykład).
+  \item Polityka Content-Security-Policy strony pozwala łączyć się tylko ze stroną
+        i~z~\repopath{api.osv.dev} i~nie pozwala ładować skryptów, stylów ani fontów skądinąd; strona
+        nie ma skryptów ani stylów inline, więc nie da się ich też wstrzyknąć. Ustawiona jest
+        też \repopath{referrer} \repopath{no-referrer}.
+  \item Brak analityki, ciasteczek i~pamięci przeglądarki.
+\end{itemize}
+
+\begin{lstlisting}
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' https://api.osv.dev; base-uri 'none'; form-action 'none'; manifest-src 'none'">
+<meta name="referrer" content="no-referrer">
+\end{lstlisting}
+
+Test e2e prywatności sprawdza to na zbudowanej stronie: że wszystkie żądania zewnętrzne idą
+wyłącznie do \path{https://api.osv.dev}; że ciało każdego \repopath{POST} ma tylko klucz
+\repopath{queries}, a~każde zapytanie tylko \repopath{package} (z~\repopath{ecosystem}
+i~\repopath{name}) i~\repopath{version}; że ciało nie zawiera nazwy projektu, nazwy ręcznie
+dołączonej biblioteki DLL ani ścieżek (znaku \repopath{\textbackslash}); że żądania nie mają
+nagłówka \repopath{Referer}; że \repopath{GET} idą tylko do \path{/v1/vulns/<id>}; że polityka
+CSP ma oczekiwane \repopath{connect-src} i~nie zgłosiła naruszeń (licząc także próby
+zablokowane, zanim powstało żądanie); że ciasteczka, \repopath{localStorage},
+\repopath{sessionStorage} i~IndexedDB są puste. Sekcja strony „Szczegóły techniczne” mówi też
+wprost, że GitHub Pages i~\repopath{api.osv.dev} -- jak każdy serwer -- widzą adres IP
+połączenia.
+
+Pozostałe zabezpieczenia: czytnik XML (\path{src/lib/xml.js}) nie obsługuje deklaracji encji
+-- dekoduje tylko pięć encji predefiniowanych i~odwołania numeryczne, więc nie ma rozwijania
+encji (bez XXE i~„billion laughs”), a~DOCTYPE jest pomijany bez interpretacji; napisano go
+ręcznie, bo parsery muszą być czystymi funkcjami działającymi identycznie w~przeglądarce
+i~pod \texttt{node -{}-test}, a~strona nie dostarcza kodu stron trzecich. Szablon pull requestu
+wymaga zaznaczenia, czy zmiana dotyka tego, co strona wysyła przez sieć, i~jeśli tak --
+potwierdzenia, że test prywatności nadal asertuje ciało żądania. Szablon zgłoszenia błędu
+prosi, żeby nie wklejać prawdziwego pliku projektu klienta, tylko zredukowany fragment bez
+nazw, ścieżek i~wewnętrznych feedów.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/index.html},
+\path{letsgolegacy.legacy-risk-scan/src/lib/osv.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/xml.js},
+\path{letsgolegacy.legacy-risk-scan/e2e/scan.spec.mjs},
+\path{letsgolegacy.legacy-risk-scan/.github/pull_request_template.md},
+\path{letsgolegacy.legacy-risk-scan/.github/ISSUE_TEMPLATE/bug.yml}}
+
+\subsection{Budowanie i~uruchamianie lokalne}\label{sec:risk-scan-lokalnie}
+
+Wymagany jest Node~22 lub nowszy (\repopath{engines.node} w~\path{package.json}: \texttt{>=22};
+test runner i~\repopath{fetch}). Polecenia z~README:
+
+\begin{lstlisting}[escapechar=!]
+./scripts/setup.sh           # checks Node, runs npm ci, installs the secret-scanning hook
+npm start                    # build dist/ and serve it at
+                             # http://127.0.0.1:4173/letsgolegacy.legacy-risk-scan/
+npm test                     # unit tests (node:test)
+npx playwright install chromium   # once, for the browser tests
+npm run e2e                  # build, then Playwright against dist/ with OSV mocked
+npm run smoke:osv            # the real OSV API: CORS for the published origin + contract
+npm run e2e:live             # the built page against the real OSV API
+BASE_URL=https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/ npm run e2e:live
+                             # !\ldots!or against the published page
+./scripts/scan-secrets.sh    # the same gitleaks scan CI runs
+\end{lstlisting}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.7cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Skrypt & Działanie \\
+\midrule
+\endfirsthead
+\toprule
+Skrypt & Działanie \\
+\midrule
+\endhead
+\path{scripts/build.mjs} (\texttt{npm run build}) & Składa statyczną stronę w~\path{dist/}: zawartość \path{src/}, \path{data/eol.json} i~\path{samples/Sklep.Legacy.csproj}, bez bundlowania i~transpilacji. Zapisuje \path{dist/build.json} z~commitem (\repopath{GITHUB\_SHA} albo \texttt{git rev-parse HEAD}, inaczej \repopath{unknown}) i~czasem budowy; kontrola po wdrożeniu czeka, aż opublikowana strona poda ten commit \\
+\path{scripts/serve.mjs} & Mały serwer statyczny dla \path{dist/} (używany przez \texttt{npm start} i~testy e2e): \texttt{node scripts/serve.mjs [-{}-dir dist] [-{}-port 4173] [-{}-base /letsgolegacy.legacy-risk-scan/]}. Domyślnie \path{dist}, port ze zmiennej \repopath{PORT} albo 4173, baza \repopath{/}; nasłuch na \repopath{127.0.0.1}. \repopath{-{}-base} montuje stronę pod ścieżką, tak jak GitHub Pages serwuje stronę projektu, więc bezwzględny URL, który zepsułby się po publikacji, psuje się najpierw lokalnie. Nagłówki \texttt{Cache-Control: no-store} i~\texttt{X-Content-Type-Options: nosniff}; adres bazy bez ukośnika → 301; poza bazą → 404; próba wyjścia poza katalog → 403; katalog → \path{index.html} \\
+\path{scripts/setup.sh} & Sprawdza Node (co najmniej 22), uruchamia \texttt{npm ci} (tylko narzędzia deweloperskie), instaluje hook pre-commit skanujący sekrety (bez gitleaks i~Dockera hook odmawia commitów -- celowo, P5) i~podaje, które opcjonalne narzędzie włącza którą warstwę testów \\
+\path{scripts/update-eol.mjs} (\texttt{npm run update-eol}) & Odświeżenie \path{data/eol.json} (sekcja~\ref{sec:risk-scan-eol}) \\
+\path{scripts/smoke-osv.mjs} (\texttt{npm run smoke:osv}) & Test dymny prawdziwego API OSV (sekcja~\ref{sec:risk-scan-testy}) \\
+\path{scripts/wait-for-deploy.mjs} & Czekanie, aż opublikowana strona poda dany commit (sekcja~\ref{sec:risk-scan-deploy}) \\
+\path{scripts/scan-secrets.sh} & Lokalne odbicie skanu sekretów z~CI: domyślnie pełna historia, \repopath{-{}-staged} (to, co skanuje hook), \repopath{-{}-dir} (drzewo robocze jako pliki) \\
+\bottomrule
+\end{xltabular}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/package.json},
+\path{letsgolegacy.legacy-risk-scan/scripts/build.mjs},
+\path{letsgolegacy.legacy-risk-scan/scripts/serve.mjs},
+\path{letsgolegacy.legacy-risk-scan/scripts/setup.sh},
+\path{letsgolegacy.legacy-risk-scan/scripts/scan-secrets.sh}}
+
+\subsection{Testy}\label{sec:risk-scan-testy}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.5cm}@{}}
+\toprule
+Warstwa & Co & Kiedy \\
+\midrule
+\endfirsthead
+\toprule
+Warstwa & Co & Kiedy \\
+\midrule
+\endhead
+Jednostkowe (\path{test/}) & Parsery, ograniczenia wersji, dopasowanie EOL, klient OSV, raport, polskie teksty; zatwierdzony \path{data/eol.json} & Każdy PR i~push; w~miesięcznym odświeżeniu danych przed otwarciem PR \\
+E2E z~makietą OSV (\path{e2e/scan.spec.mjs}) & Przykład daje raport z~wierszem EOL i~podatnością; prywatność; uszkodzone wejście; OSV niedostępne i~ponowienie; wybór serwerów; plik z~dysku; klawiatura; szerokość 390~px; axe w~trybie jasnym i~ciemnym & Każdy PR i~push; przed każdym wdrożeniem \\
+Dymne, prawdziwe OSV (\path{scripts/smoke-osv.mjs}, \path{e2e/live.spec.mjs}) & Preflight CORS i~POST dla opublikowanego originu; podatność przykładu; strona w~prawdziwej przeglądarce & Każdy PR i~push, co tydzień; błąd sieci jest ostrzeżeniem, zła odpowiedź -- porażką \\
+Po wdrożeniu (\path{deploy.yml} → \repopath{verify}) & Opublikowana strona, prawdziwe OSV, zrzut ekranu jako artefakt & Po każdym wdrożeniu \\
+\bottomrule
+\end{xltabular}
+
+\subsubsection{Testy jednostkowe}
+
+\texttt{npm test} uruchamia \texttt{node -{}-test -{}-test-reporter=spec "test/**/*.test.mjs"}.
+Pliki testów: \path{xml.test.mjs} (elementy, atrybuty, CDATA, komentarze, deklaracja
+i~DOCTYPE; brak rozwijania deklarowanych encji), \path{manifest.test.mjs} (wykrycie formatu,
+odrzucenie zbyt dużego wejścia, obcięty plik XML i~JSON z~pozycją błędu, pozycje błędów JSON
+różnych silników; „nigdy nie pada”: każde obcięcie każdego obsługiwanego pliku albo się
+parsuje, albo kończy się \repopath{ScanError}), \path{msbuild.test.mjs} (klasyczny
+\repopath{.csproj} przykładu, \repopath{HintPath}, zwijanie DLL jednego pakietu, DLL ręczne
+i~GAC, pliki skryptów, zestawy frameworka i~spoza frameworka, projekt SDK, central package
+management, \path{Directory.Packages.props}), \path{other-parsers.test.mjs}
+(\repopath{packages.config}, \repopath{composer.json}, \repopath{composer.lock},
+\repopath{package.json}), \path{frameworks.test.mjs}, \path{versions.test.mjs},
+\path{eol.test.mjs} (reguły dopasowania cyklu i~statusu, ESU, arytmetyka kalendarza),
+\path{eol-source.test.mjs} (normalizacja v1 i~v0, walidacja zbioru, porównanie treści),
+\path{eol-data.test.mjs}, \path{osv.test.mjs} (dokładne ciało zapytania, deduplikacja, brak
+poświadczeń i~referrera, podział na paczki, stronicowanie, klasyfikacja błędów, anulowanie,
+brakujące rekordy, streszczenia, scalanie), \path{report.test.mjs}, \path{scan.test.mjs},
+\path{servers.test.mjs}, \path{messages.test.mjs} (każdy kod błędu, przyczyny wersji
+i~notatki ma polskie zdanie; liczba mnoga; daty). Fixture: \path{test/fixtures/manifests/},
+nagrane rekordy OSV w~\path{test/fixtures/osv/} (\repopath{GHSA-5crp-9r3c-p9vr},
+\repopath{GHSA-gxr4-xjj5-5px2}, \repopath{GHSA-rmxg-73gg-4p98}) i~odpowiedzi endoflife.date
+w~\path{test/fixtures/endoflife/}.
+
+\path{eol-data.test.mjs} sprawdza zatwierdzony \path{data/eol.json} na każdym pull requeście
+\emph{i}~w~miesięcznym odświeżeniu, zanim powstanie jego pull request, więc zmiana po stronie
+endoflife.date, która zepsułaby to, na czym polega strona (przemianowany cykl, brakujący
+produkt, zniekształcona data), zatrzymuje odświeżenie, zamiast dotrzeć do odwiedzających.
+Sprawdza: walidację generatora; że każdy rozpoznawany moniker frameworka (\repopath{v3.5},
+\repopath{net40}--\repopath{net481}, \repopath{netcoreapp1.0}--\repopath{netcoreapp3.1},
+\repopath{net5.0}--\repopath{net10.0}) trafia w~wymieniony cykl; że dla przykładu .NET
+Framework 4.5.1 i~jQuery 1.x są po końcu wsparcia; że formularz ma serwery SQL Server 2012,
+2014, 2016, 2017, 2019, 2022 i~Windows Server 2012 R2, 2016, 2019, 2022.
+
+\subsubsection{Testy e2e (Playwright)}
+
+\path{playwright.config.mjs}: katalog \path{e2e/}, lokalny \repopath{baseURL}
+\path{http://127.0.0.1:4173/letsgolegacy.legacy-risk-scan/} (albo \repopath{BASE\_URL}),
+\repopath{locale} \repopath{pl-PL}, strefa \path{Europe/Warsaw}, ślad zachowywany przy porażce,
+zrzut ekranu tylko przy porażce; w~CI \repopath{forbidOnly} i~raport HTML. Dwa projekty:
+\repopath{chromium} (zestaw akceptacyjny z~makietą OSV, bez \path{live.spec}, bez ponowień --
+zero tolerancji dla niestabilności) i~\repopath{live} (\path{live.spec}, prawdziwe OSV, dwa
+ponowienia na wypadek chwilowego błędu sieci). Bez \repopath{BASE\_URL} Playwright uruchamia
+\path{scripts/serve.mjs} na porcie 4173 z~bazą \path{/letsgolegacy.legacy-risk-scan/}.
+
+Makieta (\path{e2e/helpers.mjs}) odpowiada za \repopath{api.osv.dev} z~tych samych nagranych
+rekordów co testy jednostkowe (NuGet \repopath{Newtonsoft.Json} 6.0.4 →
+\repopath{GHSA-5crp-9r3c-p9vr}; npm \repopath{jquery} 1.10.2 → \repopath{GHSA-gxr4-xjj5-5px2},
+\repopath{GHSA-rmxg-73gg-4p98}); każde żądanie do innego hosta niż origin strony
+i~\repopath{api.osv.dev} jest przerywane i~zapisywane, więc test prywatności na nim zawodzi.
+Scenariusze \path{e2e/scan.spec.mjs}:
+
+\begin{itemize}
+  \item przykład daje raport z~pozycją po końcu wsparcia i~podatnością z~linkiem;
+  \item strona nie pokazuje wymyślonych danych kontaktowych (brak linków \repopath{mailto:}
+        i~\repopath{tel:});
+  \item prywatność: tylko współrzędne pakietów opuszczają przeglądarkę i~nic nie jest
+        zapisywane (sekcja~\ref{sec:risk-scan-prywatnosc});
+  \item uszkodzony plik dostaje jasny komunikat po polsku i~żadnego raportu; pusty formularz
+        prosi o~plik; plik, który nie jest manifestem, jest nazwany tym, czym jest;
+  \item OSV nieosiągalne: wyniki EOL nadal widoczne, z~ostrzeżeniem i~działającym ponowieniem;
+  \item serwery wybrane w~formularzu dołączają do raportu bez ponownego pytania OSV;
+  \item plik wybrany z~dysku jest czytany lokalnie i~skanowany;
+  \item sama klawiatura: Tab dochodzi do „Wypróbuj na przykładzie”, Enter uruchamia skan,
+        fokus przechodzi do raportu;
+  \item ekran o~szerokości 390~px: bez przewijania w~poziomie, wiersze stają się kartami;
+  \item brak poważnych i~krytycznych naruszeń dostępności (axe) przed raportem i~po nim,
+        w~trybie jasnym i~ciemnym.
+\end{itemize}
+
+\path{e2e/live.spec.mjs} (projekt \repopath{live}) otwiera stronę, uruchamia przykład na
+prawdziwym OSV i~sprawdza: brak ostrzeżenia o~OSV, wiersz .NET Framework z~odznaką „Koniec
+wsparcia”, link \repopath{GHSA-5crp-9r3c-p9vr} do \path{https://osv.dev/vulnerability/GHSA-5crp-9r3c-p9vr},
+że jedynym zewnętrznym originem jest \path{https://api.osv.dev} i~że podatności jest co
+najmniej jedna; zapisuje zrzut całej strony (\repopath{LIVE\_SCREENSHOT}).
+
+\subsubsection{Test dymny OSV}
+
+\path{scripts/smoke-osv.mjs} jest jedynym testem, który dowodzi, że jedyna zewnętrzna
+zależność strony nadal zachowuje się tak, jak strona zakłada. Sprawdza po kolei: (1) CORS --
+preflight \repopath{OPTIONS} dla \repopath{POST} z~originu opublikowanej strony
+(\repopath{SMOKE\_ORIGIN}, domyślnie \path{https://konradcinkusz.github.io}) dostaje 2xx
+i~nagłówki \path{Access-Control-Allow-*} dla originu, metody \repopath{POST} i~nagłówka
+\repopath{Content-Type}, a~sam \repopath{POST} -- \path{Access-Control-Allow-Origin};
+(2) kontrakt, przez kod klienta strony -- \repopath{querybatch} znajduje dla NuGet
+\repopath{Newtonsoft.Json} 6.0.4 podatność \repopath{GHSA-5crp-9r3c-p9vr}, na której opiera się
+przykład, npm \repopath{jquery} 1.10.2 ma co najmniej jedną podatność, a~\path{/v1/vulns}
+zwraca rekord ze streszczeniem, wersją z~poprawką i~wagą. Wynik dla
+\repopath{newtonsoft.json} pisanego małymi literami jest tylko zapisywany (to na nim opiera się
+twierdzenie o~rozróżnianiu wielkości liter). Kody wyjścia: 0 -- sukces albo API zupełnie
+nieosiągalne (brak połączenia, limit czasu, 5xx, 429: ostrzeżenie i~\repopath{reachable=false}
+w~\repopath{\$GITHUB\_OUTPUT}, żeby dalsze kroki się pominęły); 1 -- OSV odpowiedziało, ale nie
+tak, jak strona potrzebuje. Tylko to drugie jest porażką założeń repozytorium.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/package.json},
+\path{letsgolegacy.legacy-risk-scan/test/},
+\path{letsgolegacy.legacy-risk-scan/test/eol-data.test.mjs},
+\path{letsgolegacy.legacy-risk-scan/playwright.config.mjs},
+\path{letsgolegacy.legacy-risk-scan/e2e/helpers.mjs},
+\path{letsgolegacy.legacy-risk-scan/e2e/scan.spec.mjs},
+\path{letsgolegacy.legacy-risk-scan/e2e/live.spec.mjs},
+\path{letsgolegacy.legacy-risk-scan/scripts/smoke-osv.mjs}}
+
+\subsection{Wdrożenie}\label{sec:risk-scan-deploy}
+
+Stronę publikuje GitHub Pages; buduje i~wdraża ją \path{.github/workflows/deploy.yml} przy
+każdym pushu do \repopath{main} (i~ręcznie). Grupa współbieżności \repopath{pages} bez
+anulowania: w~połowie opublikowana strona jest gorsza niż opóźniona.
+
+\begin{enumerate}
+  \item \textbf{\repopath{build}} (limit 20 minut): \texttt{npm ci}, testy jednostkowe,
+        instalacja Chromium, \texttt{npm run e2e} (build, potem zestaw e2e z~makietą OSV na
+        zbudowanej stronie), \path{actions/configure-pages@v6},
+        \path{actions/upload-pages-artifact@v5} z~\path{dist}. Nic nieprzetestowanego nie
+        jest publikowane.
+  \item \textbf{\repopath{deploy}}: \path{actions/deploy-pages@v5} do środowiska
+        \repopath{github-pages}, z~uprawnieniami \texttt{pages: write}
+        i~\texttt{id-token: write}; wyjście \repopath{page\_url}.
+  \item \textbf{\repopath{verify}} (limit 20 minut): najpierw
+        \path{scripts/wait-for-deploy.mjs} czeka, aż strona poda ten commit -- odpytuje
+        \path{<page-url>build.json} co 10~sekund (parametr \repopath{t} omija cache, limit
+        żądania 15~sekund, domyślny limit całkowity 600~sekund; kod 2 przy złych argumentach,
+        1 po przekroczeniu czasu) -- więc kontrola nigdy nie przechodzi ani nie zawodzi na
+        poprzednim wdrożeniu. Potem \texttt{npm run e2e:live} z~\repopath{BASE\_URL}
+        opublikowanej strony: przykład musi dać raport z~wierszem EOL i~prawdziwą podatnością.
+        Zrzut całej strony i~wyniki trafiają do artefaktu \repopath{live-verification}
+        (przechowywanego 30 dni). To jest „done when” ticketu L18: publiczna strona zwraca
+        raport dla przykładowego pliku.
+\end{enumerate}
+
+\textbf{Jednorazowy krok ręczny:} \emph{Settings → Pages → Build and deployment → Source →
+GitHub Actions}. Bez niego pierwsze wdrożenie zawodzi na \repopath{configure-pages} z~błędem
+404, czego nic w~workflow nie może naprawić.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
+\path{letsgolegacy.legacy-risk-scan/scripts/wait-for-deploy.mjs},
+\path{letsgolegacy.legacy-risk-scan/scripts/build.mjs},
+\path{letsgolegacy.legacy-risk-scan/README.md}}
+
+\subsection{CI i~automatyzacja}\label{sec:risk-scan-ci}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.1cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Workflow & Wyzwalacze i~joby \\
+\midrule
+\endfirsthead
+\toprule
+Workflow & Wyzwalacze i~joby \\
+\midrule
+\endhead
+\path{ci.yml} & Każdy pull request, push do \repopath{main}, co tydzień (cron \texttt{40 6 * * 1} -- OSV może się zmienić pod niezmienionym repozytorium), ręcznie. \repopath{unit}: Node~22, \texttt{npm ci}, \texttt{npm test}. \repopath{e2e}: instalacja Chromium z~zależnościami, \texttt{npm run e2e}; przy porażce artefakt \repopath{e2e-report} (14 dni). \repopath{smoke-osv}: \path{scripts/smoke-osv.mjs}; jeśli OSV jest osiągalne -- \texttt{npm ci}, Chromium, build i~\texttt{npm run e2e:live} na lokalnym buildzie (co dowodzi też CORS z~prawdziwej przeglądarki), artefakt \repopath{smoke-report} (14 dni). Blokujący, z~wyjątkiem całkowitej nieosiągalności OSV \\
+\path{deploy.yml} & Push do \repopath{main}, ręcznie; \repopath{build} → \repopath{deploy} → \repopath{verify} (sekcja~\ref{sec:risk-scan-deploy}) \\
+\path{update-eol.yml} & Co miesiąc (cron \texttt{17 5 1 * *}), ręcznie oraz na pull requeście zmieniającym \path{scripts/update-eol.mjs}, \path{scripts/lib/eol-source.mjs}, \path{data/eol.json} lub sam workflow. Job \repopath{refresh} (poza pull requestami): regeneruje dane, uruchamia testy jednostkowe na nowych danych i~-- jeśli plik się zmienił -- wypycha gałąź \path{automation/update-eol-data} (commit \texttt{chore(data): refresh end-of-life data from endoflife.date (<data>)}) i~otwiera albo aktualizuje pull request „Odświeżenie danych EOL (endoflife.date, <data>)”, którego opis linkuje przebieg z~testami (pull request otwarty przez \repopath{GITHUB\_TOKEN} nie uruchamia innych workflowów, więc testy biegną tu, zanim PR powstanie). Job \repopath{sync-pr} (na pull requeście): regeneruje z~\path{--keep-date-if-unchanged}, testuje i~commituje wynik na gałąź PR, jeśli treść się różni; na gałęzi z~forka, do której nie da się pisać, zawodzi, gdy dane są nieaktualne. Jedyny zapisujący \path{data/eol.json} \\
+\path{codeql.yml} & Pull requesty, push do \repopath{main}, co tydzień (cron \texttt{0 4 * * 1}), ręcznie. Języki \path{javascript-typescript} i~\repopath{actions}, zapytania \path{security-and-quality}, bez kroku build. Uzasadnienie: strona renderuje tekst z~zewnątrz (streszczenia OSV) i~z~pliku odwiedzającego -- dokładnie powierzchnię wstrzyknięć DOM, którą obejmują zapytania JavaScript; workflowy pushują commity i~otwierają pull requesty, co obejmują zapytania dla Actions \\
+\path{secret-scan.yml} & Pull requesty, push do \repopath{main}, co tydzień (cron \texttt{30 5 * * 1}), ręcznie; gitleaks na pełnej historii z~obrazu \repopath{:latest} (celowo). Połowa CI dwuczęściowej kontroli; drugą jest hook pre-commit \\
+\bottomrule
+\end{xltabular}
+
+Job \repopath{refresh} potrzebuje raz ustawienia \emph{Settings → Actions → General →
+Workflow permissions → Allow GitHub Actions to create and approve pull requests}; bez niego
+gałąź jest wypychana, a~przebieg zawodzi z~komunikatem, jak otworzyć pull request ręcznie.
+Commit wypchnięty przez \repopath{GITHUB\_TOKEN} w~\repopath{sync-pr} nie uruchamia ponownie
+CI; zrobi to następny push do gałęzi.
+
+Dependabot co tydzień (poniedziałek 06:00) grupuje aktualizacje narzędzi npm (grupa
+\repopath{dev-tooling}) i~GitHub Actions. Szablon pull requestu
+(\path{.github/pull_request_template.md}) wymaga identyfikatora ticketu z~„done when”
+(dosłownie) i~opisu zmiany -- dla tego, co widzi odwiedzający, z~cytatem polskiego tekstu --
+oraz dwóch list kontrolnych. Kontrola prywatności (strona obiecuje, że przeglądarkę opuszczają
+tylko współrzędne pakietów; zaznacza się jedno):
+
+\begin{checklista}
+  \item This change does not touch what the page sends over the network
+  \item This change touches it, and the e2e privacy test (\path{e2e/}) still asserts the
+        request body
+\end{checklista}
+
+Weryfikacja:
+
+\begin{checklista}
+  \item \texttt{npm test} (unit)
+  \item \texttt{npm run e2e} (Playwright, OSV mocked)
+  \item \texttt{./scripts/scan-secrets.sh} clean
+  \item If \path{data/eol.json} changed: the diff was read, not only regenerated
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/.github/workflows/ci.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/update-eol.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/codeql.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/dependabot.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/pull_request_template.md}}
+
+\subsection{Znane ograniczenia}\label{sec:risk-scan-ograniczenia}
+
+Według README:
+
+\begin{itemize}
+  \item \textbf{OSV dopasowuje identyfikatory NuGet z~rozróżnianiem wielkości liter}
+        (sprawdzone na żywym API: test dymny zgłasza \repopath{Newtonsoft.Json} → 1
+        podatność, \repopath{newtonsoft.json} → 0). Identyfikatory są wysyłane dokładnie tak,
+        jak są zapisane; narzędzia NuGet zapisują kanoniczną wielkość liter, ręcznie
+        edytowany \repopath{PackageReference} może jej nie mieć.
+  \item Klasyczny \repopath{.csproj} wymienia tylko pakiety, które dostarczają DLL; pakiety
+        wyłącznie z~treścią (Bootstrap, większość wtyczek jQuery) widać tylko
+        w~\repopath{packages.config} -- raport to mówi.
+  \item Ograniczenia (\repopath{composer.json}, \repopath{package.json}, zakresy NuGet) są
+        sprawdzane w~najniższej dopuszczalnej wersji; zainstalowana może być nowsza. Pliki lock
+        dają dokładne wyniki.
+  \item Ręcznie skopiowanych DLL i~komponentów GAC nie da się sprawdzić automatycznie; są
+        wymienione jako wymagające ręcznej weryfikacji, a~nie zgadywane.
+\end{itemize}
+
+Z~kodu: \repopath{package-lock.json} nie jest obsługiwany (strona prosi o~\repopath{package.json});
+właściwość MSBuild zdefiniowana poza wklejonym plikiem nie jest rozwiązywana (np. wersje
+z~\path{Directory.Packages.props} trzeba wkleić osobno); raport widzi tylko to, co zapisano
+w~jednym pliku.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/lib/manifest.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/parsers/msbuild.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/messages.js}}
+
+\subsection{Status według WORKPLAN}\label{sec:risk-scan-status}
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4.0cm}@{}}
+\toprule
+Ticket & Rezultat & Zrobione, gdy & Status \\
+\midrule
+L18 & Wklejenie \repopath{.csproj} / \repopath{packages.config} / \repopath{composer.json} → raport EOL i~CVE & Publiczna strona zwraca raport dla przykładowego pliku & scalone (\#1, \#2); zrobione, gdy przejdzie job \repopath{verify} w~\path{deploy.yml} -- czeka na krok 1 poniżej \\
+\bottomrule
+\end{tabularx}
+
+L18 zrealizowano w~dwóch piętrowych pull requestach: \#1 (silnik, pipeline danych EOL,
+baseline repozytorium) i~\#2 (strona, wdrożenie, testy e2e). Przed przeglądem sprawdzono
+w~CI, że przykład daje w~prawdziwej przeglądarce raport z~wierszami EOL i~prawdziwą
+podatnością z~OSV oraz że OSV odpowiada na CORS dla opublikowanego originu. Niesprawdzona
+pozostaje sama opublikowana strona, która nie istnieje przed wykonaniem kroków:
+
+\begin{enumerate}
+  \item \emph{Settings → Pages → Build and deployment → Source → GitHub Actions} (jednorazowo).
+  \item Scalenie \#1, potem \#2 -- wykonane 26~IX~2026. Pierwszy przebieg \path{deploy.yml} na
+        \repopath{main} zawiódł na \repopath{configure-pages} z~błędem 404, czego oczekiwano
+        przed krokiem 1.
+  \item Push do \repopath{main} uruchamia \path{deploy.yml}; jego job \repopath{verify} ładuje
+        \textbf{opublikowaną} stronę, uruchamia przykład na prawdziwym OSV i~zachowuje zrzut
+        całej strony (artefakt \repopath{live-verification}). Gdy przejdzie, warunek „done when”
+        jest spełniony i~L18 można oznaczyć jako zrobiony.
+  \item Dla miesięcznego pull requestu z~danymi EOL: \emph{Settings → Actions → General → Allow
+        GitHub Actions to create and approve pull requests}.
+  \item Gdy ticket L17 dostarczy domenę i~adres kontaktowy, zastąpić placeholder
+        \repopath{TODO(L17)} w~\path{src/index.html} (do tego czasu strona nie pokazuje
+        wymyślonego adresu).
+\end{enumerate}
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
+\path{letsgolegacy.legacy-risk-scan/README.md}}
