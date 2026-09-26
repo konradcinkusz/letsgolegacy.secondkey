@@ -104,6 +104,23 @@ extract:
     culture: pl-PL                # how numbers in the page are written; default invariant
 ```
 
+An extractor takes the first match. With **`all: true`** it collects every match into a
+list: `extract.cartLineTotals` is then the whole list, and `extract.cartLineTotals[*]` its
+values. Count the list, search it, or test its values one by one:
+
+```yaml
+- { select: extract.cartLineTotals, op: countAtLeast, value: 1 }    # how many
+- { select: extract.cartLineTotals, op: contains, value: 19.99 }    # is one of them
+- { select: "extract.cartLineTotals[*]", op: gt, value: 0 }         # each, under the quantifier
+```
+
+An operator that tests one value — `lt` `lte` `gt` `gte` `between` `approx` `matches`
+`notMatches` — decides nothing about the list itself: a list is never a number, so a
+comparison with it never holds, and it is never text, so `matches` never holds and
+`notMatches` always does. A clause built on one would pass or fail whatever the values
+were, so `sk validate` refuses it — in `select` and in `ref` — and names the `[*]` path to
+use instead.
+
 With `compare.html: extracts` (the default) an HTML page is compared between the two
 versions **only through its extracted values** — markup is not behaviour. Use
 `compare.html: text` to compare pages as text.

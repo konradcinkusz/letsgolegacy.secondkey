@@ -91,6 +91,7 @@ public static class ContractRules
         void Error(string location, string message) => errors.Add(new ArtifactError(null, location, message));
 
         var extractors = new HashSet<string>(StringComparer.Ordinal);
+        var lists = new HashSet<string>((contract.Extract ?? []).Where(e => e.All == true).Select(e => e.Name), StringComparer.Ordinal);
         foreach (var (extractor, i) in (contract.Extract ?? []).Select((e, i) => (e, i)))
         {
             var at = $"/extract/{i}";
@@ -173,9 +174,11 @@ public static class ContractRules
             {
                 var pat = $"{at}/assert/{p}";
                 CheckPath(predicate.Select, $"{pat}/select", extractors, Error);
+                CheckWholeList(predicate.Select, predicate.Op, $"{pat}/select", lists, Error);
                 if (predicate.Ref is { } reference)
                 {
                     CheckPath(reference, $"{pat}/ref", extractors, Error);
+                    CheckWholeList(reference, predicate.Op, $"{pat}/ref", lists, Error);
                 }
 
                 if (predicate.Op is PredicateOp.Matches or PredicateOp.NotMatches && predicate.Value?.GetValueKind() == JsonValueKind.String)
@@ -196,6 +199,49 @@ public static class ContractRules
         }
 
         return errors;
+    }
+
+    /// <summary>
+    /// The operators that test one value, a number or a text. Handed a whole list they decide
+    /// nothing about its values: a comparison is never true, and notMatches always is.
+    /// </summary>
+    private static readonly Dictionary<PredicateOp, string> SingleValueOperators = new()
+    {
+        [PredicateOp.Lt] = "lt",
+        [PredicateOp.Lte] = "lte",
+        [PredicateOp.Gt] = "gt",
+        [PredicateOp.Gte] = "gte",
+        [PredicateOp.Between] = "between",
+        [PredicateOp.Approx] = "approx",
+        [PredicateOp.Matches] = "matches",
+        [PredicateOp.NotMatches] = "notMatches",
+    };
+
+    /// <summary>
+    /// An extractor with <c>all: true</c> collects a list. A path that names it and stops there
+    /// selects the list itself, which a single-value operator cannot test: a never clause built
+    /// on it never fires, whatever the values. Each value is tested with <c>[*]</c>.
+    /// </summary>
+    private static void CheckWholeList(string text, PredicateOp op, string at, HashSet<string> lists, Action<string, string> error)
+    {
+        var operatorName = SingleValueOperators.GetValueOrDefault(op);
+        if (operatorName is null)
+        {
+            return;
+        }
+
+        if (!SelectorPath.TryParse(text, out var path, out _))
+        {
+            return;
+        }
+
+        var extractor = path!.Root == "extract" && path.Segments.Count == 2 ? path.Segments[1] as PropertySegment : null;
+        if (extractor is null || !lists.Contains(extractor.Name))
+        {
+            return;
+        }
+
+        error(at, $"'{text}' is the whole list that extractor '{extractor.Name}' collects (all: true), but '{operatorName}' tests one value, so the assertion would never look at the values. Test each value with '{text}[*]' and a quantifier, or count them with countEquals, countAtLeast or countAtMost.");
     }
 
     private static void CheckMatch(RequestMatch? match, string at, Action<string, string> error)
