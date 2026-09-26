@@ -42,6 +42,33 @@ jobs:
           name: test-results
           path: TestResults/
 
+  build-test-windows:
+    # The legacy side of an engagement is Windows and IIS, and `sk capture` and `sk replay`
+    # run next to it (bench ticket P4), so the suite runs on Windows too. The SQL Server
+    # container tests stay on Linux: Windows runners cannot start Linux containers.
+    name: build and test (windows)
+    runs-on: windows-latest
+    env:
+      SK_REQUIRE_DOCKER: "0"
+      SK_SKIP_DOCKER: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+      - name: Restore
+        run: dotnet restore SecondKey.slnx
+      - name: Build
+        run: dotnet build SecondKey.slnx --no-restore --configuration Release
+      - name: Test
+        run: dotnet test SecondKey.slnx --no-build --configuration Release --logger "trx" --results-directory TestResults
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-windows
+          path: TestResults/
+
   mutation:
     # One job per mutation-tested project, in parallel: the verdict path and the replay are
     # five projects, and one after another they would outlast the rest of CI several times over.

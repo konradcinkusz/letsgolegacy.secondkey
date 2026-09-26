@@ -16,10 +16,14 @@ public class ResetTests
     }
 
     [Theory]
-    [InlineData("exit 0", true)]
-    [InlineData("echo broken >&2; exit 3", false)]
-    public async Task A_command_reset_succeeds_on_exit_code_zero(string command, bool succeeds)
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_command_reset_succeeds_on_exit_code_zero(bool succeeds)
     {
+        // The command runs in the platform's shell: sh -c, or cmd.exe /c on Windows.
+        var command = succeeds ? "exit 0"
+            : OperatingSystem.IsWindows() ? "echo broken 1>&2 & exit 3"
+            : "echo broken >&2; exit 3";
         var reset = new CommandReset(command, workingDirectory: null);
 
         var result = await reset.ResetAsync(CancellationToken.None);
@@ -40,8 +44,9 @@ public class ResetTests
         {
             await File.WriteAllTextAsync(Path.Combine(directory, "restore.marker"), "x");
 
-            var inDirectory = await new CommandReset("test -f restore.marker", directory).ResetAsync(CancellationToken.None);
-            var elsewhere = await new CommandReset("test -f restore.marker", workingDirectory: null).ResetAsync(CancellationToken.None);
+            var check = OperatingSystem.IsWindows() ? "if exist restore.marker (exit 0) else (exit 1)" : "test -f restore.marker";
+            var inDirectory = await new CommandReset(check, directory).ResetAsync(CancellationToken.None);
+            var elsewhere = await new CommandReset(check, workingDirectory: null).ResetAsync(CancellationToken.None);
 
             Assert.True(inDirectory.Succeeded, inDirectory.Detail);
             Assert.Null(inDirectory.Detail);
