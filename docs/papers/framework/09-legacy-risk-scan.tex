@@ -643,9 +643,10 @@ Prywatność jest właściwością konstrukcji, a~nie deklaracją:
 
 \begin{itemize}
   \item Wklejony plik jest parsowany \textbf{w~przeglądarce}; nic nie jest wysyłane.
-  \item Połączenia wychodzące idą wyłącznie do publicznego API OSV.dev: zapytanie
-        \repopath{querybatch}, którego ciało buduje jedna funkcja (\repopath{toQueries()}),
-        a~potem po jednym \repopath{GET} na każdą podatność zwróconą przez OSV, po
+  \item Połączenia wychodzące idą wyłącznie do publicznego API OSV.dev: zapytania
+        \repopath{querybatch} po najwyżej 1000 pakietów, których ciało buduje jedna funkcja
+        (\repopath{toQueries()}), przy stronicowanej odpowiedzi ponowione z~tokenem strony od
+        OSV, a~potem po jednym \repopath{GET} na każdą podatność zwróconą przez OSV, po
         identyfikatorze, który podało OSV. Poza tym strona pobiera tylko własne pliki
         (\path{data/eol.json}, przykład).
   \item Polityka Content-Security-Policy strony pozwala łączyć się tylko ze stroną

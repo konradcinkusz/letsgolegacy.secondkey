@@ -125,9 +125,9 @@ produkuje artefaktu, który czytają dalsze kroki.
         \repopath{npm start}; serwer udostępnia ją pod
         \url{http://127.0.0.1:4173/letsgolegacy.legacy-risk-scan/}.
   \item Wklej plik. Parsowanie odbywa się w przeglądarce; na zewnątrz trafiają tylko
-        współrzędne pakietów (nazwa, ekosystem, wersja) --- jedno zapytanie
-        \repopath{querybatch} do OSV.dev, potem po jednym \repopath{GET} na każde zwrócone
-        advisory.
+        współrzędne pakietów (nazwa, ekosystem, wersja) --- zapytania
+        \repopath{querybatch} do OSV.dev, najwyżej 1000 pakietów w~każdym (zwykle więc
+        jedno), potem po jednym \repopath{GET} na każde zwrócone advisory.
   \item Przeczytaj raport: status wydania (zakończone, kończy się w ciągu 12 miesięcy,
         wspierane) liczony z dat w dniu raportu, advisories z OSV oraz datę, z której
         pochodzą dane EOL (\repopath{generatedAt}).
