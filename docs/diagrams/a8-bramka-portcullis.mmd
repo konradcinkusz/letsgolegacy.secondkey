@@ -1,0 +1,9 @@
+flowchart LR
+  PR["pull request<br/>kandydata"] --> SCAN["portcullis scan<br/>--provenance-range base..head"]
+  SCAN --> RES["wynik JSON<br/>summary: wszystko znalezione"]
+  RES --> G{"błąd na linii zmienionej w PR,<br/>nie w baseline,<br/>nie wyciszony?"}
+  G -- tak --> BLK["gate.blocked = true<br/>exit 1"]
+  G -- nie --> OK["exit 0"]
+  SCAN -- "--sarif" --> SARIF[("SARIF 2.1.0")]
+  SARIF --> SKG["sk gate<br/>(podsumowanie per reguła)"]
+  SKG --> PACK["pakiet dowodowy"]

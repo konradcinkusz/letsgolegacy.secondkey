@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant K as Klient (przeglądarka, skrypt)
+  participant P as sk capture (proxy YARP)
+  participant L as System legacy
+  participant F as traffic.skcap
+  K->>P: request, np. GET /cart
+  P->>L: ten sam request (prośba o odpowiedź bez kompresji)
+  L-->>P: response
+  P-->>K: ta sama odpowiedź, bez zmian
+  P->>F: wymiana: request + response, nagłówki zredagowane, sesja z session key
+  Note over P,F: Legacy nie odpowiada: klient dostaje 502/504 od proxy,<br/>wymiana jest pominięta (skipped) i nie trafia do pliku

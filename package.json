@@ -1,0 +1,12 @@
+{
+  "name": "letsgolegacy-secondkey-docs",
+  "private": true,
+  "description": "Tooling for the documentation PDF only: the pinned Mermaid renderer and the papers check. The product is .NET; nothing here ships.",
+  "scripts": {
+    "render-diagrams": "node scripts/render-diagrams.mjs",
+    "check-papers": "node scripts/check-papers.mjs"
+  },
+  "devDependencies": {
+    "@mermaid-js/mermaid-cli": "12.0.0"
+  }
+}

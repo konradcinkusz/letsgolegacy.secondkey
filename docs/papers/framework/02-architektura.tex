@@ -1,0 +1,233 @@
+\section{Architektura frameworku}\label{sec:architektura}
+
+Ten rozdział pokazuje całość: jakie kroki składają się na weryfikację migracji, jakie
+pliki przechodzą między krokami, które komponenty je produkują, w których repozytoriach
+mieszkają i jakie zasady projektowe obowiązują wszystkie z nich. Szczegóły każdego
+komponentu są w rozdziałach~\ref{sec:rdzen}--\ref{sec:bench}.
+
+\subsection{Łańcuch weryfikacji}\label{sec:architektura-lancuch}
+
+Łańcuch ma siedem kroków. Każdy kończy się plikiem, który czyta następny krok.
+
+\begin{tabularx}{\linewidth}{@{}p{2.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.3cm}@{}}
+\toprule
+Krok & Komponent & Wynik \\
+\midrule
+1 Capture & C1 --- proxy nagrywające przed systemem legacy, bez zmiany kodu & \repopath{*.skcap} \\
+2 Contract & C2 (miner, faza 02) i człowiek; C3 --- silnik kontraktu & \repopath{contract.yaml} \\
+3 Standards & C4 --- standardy dostarczane agentowi migracyjnemu jako skills & pull request agenta \\
+4 Gate & C5 --- analyzery Roslyn na zmienionych liniach (Portcullis) & \repopath{*.sarif} \\
+5 Replay & C6 --- obie wersje w identycznych warunkach; C7 porównuje pole po polu względem kontraktu & \repopath{*.skrun}, \repopath{verdict.json} \\
+6 Mutations & C9 --- wstrzyknięte defekty, które kontrakt musi wykryć & kill rate per klauzula \\
+7 Evidence & C10 --- jeden pakiet na pull request & \repopath{evidence/} \\
+\bottomrule
+\end{tabularx}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{\dgm{a2-lancuch-weryfikacji}}
+  \caption{Łańcuch weryfikacji i artefakty między krokami.}
+  \label{fig:lancuch}
+\end{figure}
+
+Strona legacy i kandydat są uruchamiane, ale nie są modyfikowane przez łańcuch: capture
+stoi przed systemem legacy jako proxy, a replay wysyła nagrane żądania do obu wersji.
+Wszystko, co następuje po replay, działa na plikach.
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+
+\subsection{Artefakty są interfejsem}\label{sec:architektura-artefakty}
+
+\finding{Każdy komponent czyta i pisze pliki, nigdy wnętrza innego komponentu.} Dowolny
+komponent można wymienić, dopóki czyta i pisze te same artefakty. Dlatego formaty są
+wersjonowane, opisane schematami JSON i pilnowane testami na próbkach
+(rozdział~\ref{sec:formaty}).
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
+\toprule
+Artefakt & Format & Produkuje & Czyta \\
+\midrule
+\endfirsthead
+\toprule
+Artefakt & Format & Produkuje & Czyta \\
+\midrule
+\endhead
+\repopath{*.skcap} & JSONL, jedno zdarzenie na linię, korelowane identyfikatorem żądania & C1 capture & C2 miner, C6 replay \\
+\repopath{contract.yaml} & YAML walidowany JSON Schema & C2 miner i człowiek & C3 silnik, C7 komparator, C9 mutacje \\
+\repopath{standards/} & Markdown → skills i NuGet & C4 (\path{letsgolegacy.secondkey-standards}) & agent migracyjny, C5 bramka \\
+\repopath{*.sarif} & SARIF 2.1 & C5 bramka (\path{letsgolegacy.portcullis}) & C10 evidence \\
+\repopath{*.skrun} & JSONL, wyniki obu stron dla każdego scenariusza & C6 replay & C7 komparator \\
+\repopath{verdict.json} & JSON & C7 komparator, C9 mutacje & C10 evidence, C11 portal \\
+\repopath{evidence.dsse} & in-toto / DSSE & C10 evidence (podpis od fazy 03) & C11 portal, audytor \\
+\bottomrule
+\end{xltabular}
+
+Konsekwencja widoczna w benchu: granica między maszynami może przebiegać wszędzie tam,
+gdzie da się skopiować plik. Tylko capture i replay muszą mieć dostęp HTTP do działającego
+systemu; kontrakt, porównanie i pakiet dowodowy to „plik na wejściu, plik na wyjściu”
+(sekcja~\ref{sec:architektura-topologia}).
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/adr/0001-artifacts-are-the-interface.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md}}
+
+\subsection{Komponenty C0--C12 i repozytoria}\label{sec:architektura-komponenty}
+
+\begin{xltabular}{\linewidth}{@{}l >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{5.2cm} l@{}}
+\toprule
+Id & Komponent & Repozytorium & Faza \\
+\midrule
+\endfirsthead
+\toprule
+Id & Komponent & Repozytorium & Faza \\
+\midrule
+\endhead
+C0 & CLI \repopath{sk} & \path{letsgolegacy.secondkey} & 01 \\
+C1 & capture HTTP (proxy YARP, tylko ruch przychodzący) & \path{letsgolegacy.secondkey} & 01 \\
+C1 & capture SQL, kolejek, tokenizacja PII & \path{letsgolegacy.secondkey-capture} & 02 \\
+C2 & miner kontraktu (\repopath{sk mine}) & \path{letsgolegacy.secondkey} & 02 \\
+C3 & silnik kontraktu & \path{letsgolegacy.secondkey} & 01 \\
+C4 & pakiet standardów & \path{letsgolegacy.secondkey-standards} & 01 \\
+C5 & bramka na PR (Portcullis) & \path{letsgolegacy.portcullis} & 01 \\
+C6 & replay i reset stanu & \path{letsgolegacy.secondkey} & 01 \\
+C7 & komparator i werdykt & \path{letsgolegacy.secondkey} & 01 \\
+C8 & doradcza triage różnic (nigdy nie zmienia werdyktu) & \path{letsgolegacy.secondkey} & 02--03 \\
+C9 & silnik mutacji (\repopath{sk mutate}) & \path{letsgolegacy.secondkey} & 02 \\
+C10 & pakiet dowodowy (bez podpisu w fazie 01, podpis w fazie 03) & \path{letsgolegacy.secondkey} & 01, 03 \\
+C11 & portal dowodów & \path{letsgolegacy.secondkey-portal} & 03 \\
+C12 & pakowanie w granicy klienta (sandbox) & \path{letsgolegacy.secondkey-sandbox} & 02 \\
+\bottomrule
+\end{xltabular}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{\dgm{a1-mapa-repozytoriow}}
+  \caption{Repozytoria frameworku letsgolegacy i to, co przepływa między nimi.}
+  \label{fig:mapa}
+\end{figure}
+
+W fazie 01 \repopath{sk mine} i \repopath{sk mutate} istnieją jako stuby, które kończą
+się kodem 70 (\repopath{NotImplemented}); kontrakt pisze człowiek.
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
+
+\subsection{Zasady projektowe}\label{sec:architektura-zasady}
+
+Rdzeń egzekwuje siedem zasad projektowych. Pozostałe repozytoria się na nie powołują.
+
+\begin{enumerate}
+  \item \textbf{Werdykt jest deterministyczny.} O pass/fail decyduje wyłącznie kod bez
+        modelu językowego. Model może szkicować klauzule kontraktu albo porządkować
+        różnice do przeglądu, ale nigdy nie decyduje. Nic w \repopath{SecondKey.Contract}
+        ani \repopath{SecondKey.Compare} nie woła modelu językowego; ten sam kontrakt i
+        ten sam przebieg dają zawsze ten sam werdykt (poza polem \repopath{createdAt}).
+  \item \textbf{Wszystko działa w granicy klienta; domyślnie zero ruchu wychodzącego.}
+        Repozytorium \path{letsgolegacy.secondkey-sandbox} pakuje łańcuch dla różnych
+        rodzajów takiej granicy.
+  \item \textbf{Tylko technologie, które odbiorca już ma}: .NET, SQL Server, Entra ID,
+        GitHub albo Azure DevOps, Kubernetes.
+  \item \textbf{System legacy jest nietykalny}: capture nie wymaga zmiany kodu ani
+        rekompilacji. Czas i losowość w kodzie legacy (\repopath{DateTime.Now},
+        \repopath{Guid.NewGuid()}) obsługuje normalizacja w komparatorze, a nie zmiana
+        systemu legacy.
+  \item \textbf{Dowód jest artefaktem kryptograficznym, nie dashboardem}: pakiet zawiera
+        skróty SHA-256 wszystkich plików i niepodpisany statement in-toto; podpis dochodzi
+        w fazie 03 bez zmiany formatu.
+  \item \textbf{Brak własnej usługi tożsamości}; używany jest IdP klienta.
+  \item \textbf{Każdy krok działa z CLI w pipeline}; portal jest oknem na dowody, a nie
+        interfejsem.
+\end{enumerate}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/CLAUDE.md},
+\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
+
+\subsection{Fazy i bramka fazy 01}\label{sec:architektura-fazy}
+
+Praca jest podzielona na fazy. Faza 01 to demonstracja; jej bramką jest publiczny pakiet
+dowodowy na nopCommerce 3.x, czyli ticket P9 benchu. Ścieżka krytyczna fazy 01:
+S0 → S1 → S3--S6 → S7--S14 → S15 → (bench P3) → (bench P4--P8) → (bench P9). Faza 02
+zaczyna się dopiero po bramce fazy 01.
+
+\begin{xltabular}{\linewidth}{@{}l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Faza & Zakres według planów pracy repozytoriów \\
+\midrule
+\endfirsthead
+\toprule
+Faza & Zakres według planów pracy repozytoriów \\
+\midrule
+\endhead
+01 & Rdzeń: CLI, capture HTTP, silnik kontraktu, replay z resetem snapshotem SQL Server,
+komparator, niepodpisany pakiet dowodowy, job end-to-end (S0--S16). Portcullis: import,
+zmiana nazwy, reguły migracyjne, SARIF z filtrem zmienionych linii i baseline (R0--R3).
+Standardy: format, generator, drift check, skill dla modernize-dotnet (C4-a--c, R4).
+Bench: P1--P10. legacy-risk-scan: L18. \\
+02 & \repopath{sk mine} (miner kontraktu), \repopath{sk mutate} (silnik mutacji), capture
+SQL, kolejek i PII w \path{secondkey-capture}, triage doradcza C8, pakowanie sandbox (Helm,
+Hyper-V, Bicep, bundle air-gapped), reguły warstw ArchUnitNET w Portcullis, standardy
+klienta jako skills, outbound stubs (S16). \\
+03 & Podpis pakietu (in-toto w kopertach DSSE, cosign z kluczem klienta), biblioteka
+fragmentów kontraktów, portal dowodów C11, paczki reguł per estate, pakiet Azure Managed
+Application. \\
+04 & Java: capture usług Java, analyzery Java w Portcullis (modernize-java). \\
+\bottomrule
+\end{xltabular}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.portcullis/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
+
+\subsection{Topologia: Windows dla legacy, Linux dla reszty}\label{sec:architektura-topologia}
+
+System legacy na .NET Framework potrzebuje Windows: nopCommerce 3.90 to ASP.NET MVC 5
+serwowany przez IIS z bazą SQL Server. Łańcuch Second Key jest napisany na .NET 10 i
+działa wszędzie. Demonstracyjna topologia (decyzja D7, w stanie „proposed”) umieszcza więc
+stronę legacy na jednym hoście Windows, a resztę łańcucha na Linuksie. Tylko dwa kroki
+muszą sięgać do działającego sklepu przez HTTP: capture i replay. Działają obok IIS na
+hoście Windows, a ich wyniki (\repopath{*.skcap}, \repopath{*.skrun}) wychodzą jako
+artefakty CI do jobu linuksowego, który liczy werdykt i pakiet. Hostowane runnery GitHub
+nie współdzielą sieci, więc job linuksowy i tak nie mógłby sięgnąć do IIS na runnerze
+Windows.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth]{\dgm{a7-topologia-bench}}
+  \caption{Topologia benchu: host Windows ze stroną legacy, capture i replay; Linux
+           dla werdyktu i pakietu.}
+  \label{fig:topologia}
+\end{figure}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md}}
+
+\subsection{Znane trudne problemy}\label{sec:architektura-problemy}
+
+Plan pracy rdzenia wymienia problemy, które są śledzone, a nie ukrywane:
+
+\begin{itemize}
+  \item \textbf{C1:} przypisanie instrukcji SQL do żądania HTTP bez zmian w kodzie to
+        heurystyka z jawnie raportowanym marginesem niepewności.
+  \item \textbf{C2:} fałszywe niezmienniki z małych prób; miner raportuje wsparcie
+        statystyczne dla każdej klauzuli i milczy przy zbyt małej liczbie danych.
+  \item \textbf{C6:} czas i losowość w kodzie legacy bez wstrzykiwania zależności są
+        obsługiwane normalizacją w C7, a nie ingerencją w system legacy.
+  \item \textbf{C9/C5:} czas działania na dużych solution; mutacje i analiza tylko kodu
+        zmienionego w PR.
+  \item \textbf{C10:} postać raportu, którą zaakceptuje audytor, jest ustalana z
+        pierwszymi partnerami, a nie zgadywana.
+\end{itemize}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}

@@ -1,0 +1,15 @@
+flowchart LR
+  subgraph WIN["Host Windows: runner windows-2022 albo VM / stacja z IIS"]
+    direction TB
+    GEN["skrypty ruchu P4"] --> PROXY["proxy nagrywające sk capture<br/>http://127.0.0.1:8000/"]
+    PROXY --> IIS["IIS: nopcommerce-legacy<br/>http://localhost:8080/"]
+    IIS --> SQL[("SQL Server 2022 Express<br/>baza nopcommerce_legacy<br/>+ snapshot nopcommerce_legacy_snapshot")]
+    REPLAY["sk replay<br/>(A/A w P5, kandydat w P7)"] --> IIS
+    REPLAY --> CAND["kandydat (P7, planowany)<br/>http://localhost:8090/"]
+  end
+  subgraph LNX["Linux: runner ubuntu albo WSL2 / VM"]
+    direction TB
+    COMPARE["sk compare: werdykt"] --> EVID["sk evidence: pakiet dowodowy"]
+  end
+  PROXY -- "*.skcap" --> REPLAY
+  REPLAY -- "*.skrun (artefakt CI)" --> COMPARE

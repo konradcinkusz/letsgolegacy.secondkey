@@ -1,0 +1,93 @@
+\section{Status i plan}\label{sec:status}
+
+Stan na commitach z sekcji~\ref{sec:wprowadzenie-wersja}, według planów pracy
+repozytoriów. Status zmienia się z każdym scalonym pull requestem; aktualny jest w
+\path{docs/WORKPLAN.md} danego repozytorium.
+
+\subsection{Faza 01}\label{sec:status-faza01}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Repozytorium & Stan ticketów fazy 01 \\
+\midrule
+\endfirsthead
+\toprule
+Repozytorium & Stan ticketów fazy 01 \\
+\midrule
+\endhead
+rdzeń & S0--S15 zrobione; S16 (outbound stubs) przeniesione do fazy 02, bo ani sklep
+przykładowy, ani demonstracyjna konfiguracja nopCommerce nie wykonują wywołań
+wychodzących. Nic nie jest wydane. \\
+Portcullis & R0 (import), R1 (zmiana nazwy, pilnowana w CI), R2 (reguły migracyjne z
+testami mutacyjnymi), R3 (SARIF z filtrem zmienionych linii i baseline) zrobione;
+wsparcie P8 zaplanowane. Pakiety i obraz kontenera zbudowane i sprawdzone lokalnie,
+publikacja przy pierwszym tagu \repopath{v*}. \\
+standardy & C4-a (standardy w Markdown z metadanymi), C4-b (generator z trybem
+\repopath{--check}), C4-c (drift check) zrobione; R4 (skill dla modernize-dotnet)
+scalony, zrobiony wtedy, gdy P6 potwierdzi, że agent go podjął. Żadna wersja nie jest
+jeszcze otagowana. \\
+bench nopCommerce & P1--P5 zrobione; P6 (praca człowieka z GitHub Copilot), P7, P8, P9
+(bramka fazy 01), P10 zaplanowane. \\
+legacy-risk-scan & L18 scalony; zrobiony, gdy job \repopath{verify} w
+\path{deploy.yml} przejdzie po włączeniu źródła GitHub Pages „GitHub Actions” w
+ustawieniach repozytorium. \\
+capture, sandbox, portal & tylko plany; decyzja o topologii demonstracyjnej (D7) w stanie
+„proposed”. \\
+\bottomrule
+\end{xltabular}
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.portcullis/docs/WORKPLAN.md},
+\path{letsgolegacy.portcullis/docs/TUTORIAL.md},
+\path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md}}
+
+\subsection{Liczby, które już są}\label{sec:status-liczby}
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Co & Wynik zapisany przez CI \\
+\midrule
+\endfirsthead
+\toprule
+Co & Wynik zapisany przez CI \\
+\midrule
+\endhead
+P3 --- rozgrzewka na eShopLegacyMVC & pakiet dowodowy wyprodukowany przez cały łańcuch (capture, A/A replay, werdykt, bramka, pakiet) \\
+P4 --- zestaw ruchu nopCommerce & 38 scenariuszy (30 zaplanowanych, niektóre jako kilka sesji), 290 wymian \\
+P5 --- kontrakt i dowód A/A & werdykt \repopath{pass}: 76 z 76 zaakceptowanych klauzul utrzymanych, 0 niesprawdzonych; 15 klauzul \repopath{never} (udział nieobecności 19,7\,\%); 290 wymian w 38 scenariuszach: 272 \repopath{equal}, 18 \repopath{equal-under-contract}, 0 regresji, 0 fix candidates \\
+Testy mutacyjne rdzenia & \repopath{SecondKey.Replay} (bez kodu SQL Server) wzrosło z 60,7\,\% do 89,5\,\% w drugiej rewizji analizy fazy 01 \\
+\bottomrule
+\end{xltabular}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Droga do bramki fazy 01}\label{sec:status-droga}
+
+Pozostała ścieżka krytyczna przechodzi przez bench: P6 (migracja przez agenta, praca
+człowieka) → P7 (replay legacy kontra kandydat; \repopath{verdict.json} istnieje, a różnica
+NLS → ICU jest znaleziona albo jej brak udokumentowany) → P8 (reguły Portcullis na PR
+kandydata; SARIF w pakiecie) → P9 (publikacja pakietu, kontraktu i liczb: scenariusze,
+różnice, regresje, zabite mutanty). P10 zbiera godziny wdrożenia dla P4--P7. Runbook P6
+jest napisany przed pierwszym uruchomieniem; zapis pierwszego przebiegu stanie się jego
+przykładem.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+
+\subsection{Później}\label{sec:status-pozniej}
+
+Zakres faz 02--04 jest w sekcji~\ref{sec:architektura-fazy}; szczegóły repozytoriów fazy
+02 i 03 w rozdziale~\ref{sec:faza02}. Wszystkie te prace zaczynają się dopiero po bramce
+fazy 01.
+
+\zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}

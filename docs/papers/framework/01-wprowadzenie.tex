@@ -1,0 +1,161 @@
+\section{Wprowadzenie}\label{sec:wprowadzenie}
+
+Ten dokument opisuje framework letsgolegacy w całości: problem, który rozwiązuje,
+architekturę, każdy komponent i każde repozytorium, formaty plików, polecenia oraz
+procedurę pracy krok po kroku. Jest przeznaczony dla inżyniera, który ma z frameworkiem
+pracować, rozwijać go albo ocenić jego wynik. Opisuje stan repozytoriów na konkretnych
+commitach (sekcja~\ref{sec:wprowadzenie-wersja}) i niczego do nich nie dodaje.
+
+\subsection{Problem}\label{sec:wprowadzenie-problem}
+
+Systemy biznesowe na .NET Framework są przenoszone na współczesny .NET coraz częściej
+przez agentów migracyjnych, takich jak modernize-dotnet (GitHub Copilot app
+modernization for .NET). Kryterium odbioru, którym posługuje się samo narzędzie, to:
+kandydat się buduje, a istniejące testy przechodzą. To kryterium nie mówi, czy system po
+migracji zachowuje się tak samo wobec użytkownika. Migracja z .NET Framework na .NET
+zmienia na przykład bibliotekę globalizacji z NLS na ICU, więc porównywanie i sortowanie
+napisów zależne od kultury może dać inny wynik, choć build i testy są zielone. Tę
+pułapkę bench nopCommerce traktuje jako główny kandydat na moment, wokół którego zbudowana
+jest demonstracja: agent migruje, build i testy przechodzą, a weryfikacja i tak znajduje
+realną różnicę zachowania.
+
+Rdzeń opisuje swoje zadanie jednym zdaniem: niezależny, deterministyczny dowód, że system
+.NET zmigrowany przez agenta AI nadal dotrzymuje kontraktu biznesowego. Nazwa Second Key
+pochodzi z obrazu dwóch kluczy. Agent migracyjny przekręca pierwszy klucz: migruje kod.
+Second Key przekręca drugi: nagrywa, jak obecny system naprawdę się zachowuje, odtwarza to
+zachowanie na wersji zmigrowanej, sprawdza każdą różnicę względem spisanego kontraktu
+tego, co musi się dziać i czego nie wolno, i daje osobie zatwierdzającej evidence pack
+(pakiet dowodowy) dla każdej zmiany. \finding{Second Key weryfikuje; niczego nie
+przepisuje.}
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md}}
+
+\subsection{Czym jest framework letsgolegacy}\label{sec:wprowadzenie-framework}
+
+Framework letsgolegacy to metoda weryfikowalnej modernizacji systemów legacy .NET razem z
+narzędziami, które ją realizują. Narzędzia mieszkają w repozytoriach o prefiksie
+\repopath{letsgolegacy.}:
+
+\begin{itemize}
+  \item \textbf{Second Key} --- łańcuch weryfikacji: nagranie ruchu (capture), kontrakt,
+        odtworzenie (replay) na obu wersjach, porównanie (compare), werdykt i pakiet
+        dowodowy. Rdzeń w \path{letsgolegacy.secondkey}, rozszerzenia fazy 02 i 03 w
+        \path{secondkey-capture}, \path{secondkey-sandbox} i \path{secondkey-portal}.
+  \item \textbf{Portcullis} --- bramka na pull request: deterministyczne analyzery Roslyn
+        uruchamiane na zmienionych liniach, z wynikiem w SARIF i plikiem baseline
+        (\path{letsgolegacy.portcullis}).
+  \item \textbf{secondkey-standards} --- standardy architektury i migracji spisane raz w
+        Markdown i dostarczane z jednego źródła agentowi migracyjnemu (jako skill) oraz
+        bramce (jako konfiguracja analyzerów).
+  \item \textbf{legacy-risk-scan} --- strona, która z pliku projektu (\repopath{.csproj},
+        \repopath{packages.config}, \repopath{composer.json}) liczy w przeglądarce raport
+        końca wsparcia (EOL) i znanych podatności.
+  \item \textbf{bench nopCommerce} --- publiczny okaz: nopCommerce 3.90 na .NET Framework,
+        na którym cały łańcuch jest uruchamiany w CI i na którym będzie oceniona migracja
+        wykonana przez agenta.
+\end{itemize}
+
+Komponenty wymieniają się wyłącznie plikami: nagraniem \repopath{*.skcap}, kontraktem
+\repopath{contract.yaml}, przebiegiem \repopath{*.skrun}, werdyktem
+\repopath{verdict.json}, logami bramki \repopath{*.sarif} i pakietem dowodowym. Żaden
+komponent nie sięga do wnętrza innego, więc każdy da się wymienić, jeśli czyta i pisze te
+same artefakty (rozdział~\ref{sec:architektura}).
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.portcullis/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/README.md}}
+
+\subsection{Nazewnictwo}\label{sec:wprowadzenie-nazwy}
+
+Źródła nazywają cały łańcuch „Second Key” i numerują jego komponenty od C0 do C12 ---
+także te, które mieszkają poza rdzeniem: standardy to komponent C4, a Portcullis to
+komponent C5, „bramka Second Key”. Ten dokument przyjmuje nazwę nadrzędną
+\textbf{letsgolegacy} dla całego frameworku: metody i wszystkich repozytoriów
+\repopath{letsgolegacy.*}, łącznie z legacy-risk-scan i benchem, które nie są
+komponentami łańcucha. Nazwa \textbf{Second Key} oznacza tu łańcuch weryfikacji i jego
+rdzeń (CLI \repopath{sk}, formaty artefaktów), a \textbf{Portcullis} --- bramkę.
+
+Nazwy w kodzie i w formatach się nie zmieniają: przestrzenie nazw \repopath{SecondKey.*},
+polecenie \repopath{sk}, plik konfiguracji \repopath{secondkey.yaml}, wersja formatu
+kontraktu \path{apiVersion: secondkey/v1}, nazwy repozytoriów i pakietów. Gdy
+dokument cytuje źródło, które mówi „Second Key” w szerszym sensie, zaznacza to w
+kontekście.
+
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.portcullis/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/README.md}}
+
+\subsection{Zakres, wersja i źródła}\label{sec:wprowadzenie-wersja}
+
+Dokument prezentuje publiczne repozytoria frameworku w stanie z tabeli poniżej (gałąź
+\repopath{main}). Każda podsekcja kończy się listą plików, z których pochodzi jej treść.
+Źródłem prawdy są te pliki: dokumentacja w Markdown, schematy, skrypty, workflowy i kod.
+\finding{Gdy ten dokument i źródło się różnią, rację ma źródło}, a dokument należy
+poprawić. Nic mechanicznie nie pilnuje, że zmiana w źródle trafi do tego dokumentu --- to
+przyjęty koszt ręcznie redagowanej prezentacji; listy źródeł pozwalają sprawdzić każde
+twierdzenie osobno.
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.2cm} l l X@{}}
+\toprule
+Repozytorium & Commit & Data & Rola \\
+\midrule
+\path{letsgolegacy.secondkey} & \texttt{dfe3982} & 2026-09-26 & rdzeń Second Key \\
+\path{letsgolegacy.portcullis} & \texttt{6a018a2} & 2026-09-26 & bramka C5 \\
+\path{letsgolegacy.secondkey-standards} & \texttt{07520bd} & 2026-09-26 & standardy C4 \\
+\path{letsgolegacy.secondkey-nopcommerce-bench} & \texttt{e6d4fe9} & 2026-09-26 & publiczny okaz \\
+\path{letsgolegacy.legacy-risk-scan} & \texttt{49f8a4c} & 2026-09-26 & raport EOL i CVE \\
+\path{letsgolegacy.secondkey-capture} & \texttt{e56068e} & 2026-09-25 & C1, faza 02 \\
+\path{letsgolegacy.secondkey-sandbox} & \texttt{75042c6} & 2026-09-25 & C12, faza 02 \\
+\path{letsgolegacy.secondkey-portal} & \texttt{e73546f} & 2026-09-25 & C11, faza 03 \\
+\bottomrule
+\end{tabularx}
+
+Poza zakresem są sprawy nietechniczne i wszystko, czego nie ma w publicznych
+repozytoriach. Dokument nie opisuje też pracy w toku na gałęziach, które nie trafiły do
+\repopath{main} na wymienionych commitach.
+
+Wersję samego dokumentu --- commit, z którego zbudowano PDF --- podaje nagłówek każdej
+strony. PDF buduje workflow \path{.github/workflows/build-docs-pdf.yml} repozytorium
+rdzenia przy każdym pushu do \repopath{main}; źródła dokumentu są w
+\path{docs/papers/} i \path{docs/diagrams/} (dodatek~\ref{app:ci}).
+
+\zrodla{\path{letsgolegacy.*} na podanych commitach;
+\path{architecture-standards/docs/research/00-RESEARCH-DOCUMENTATION.md}}
+
+\subsection{Jak czytać ten dokument}\label{sec:wprowadzenie-czytanie}
+
+\begin{tabularx}{\linewidth}{@{}p{1.9cm} X@{}}
+\toprule
+Rozdział & Zawartość \\
+\midrule
+\ref{sec:architektura} & Architektura: łańcuch, artefakty, komponenty C0--C12, zasady projektowe, fazy \\
+\ref{sec:rdzen} & Rdzeń Second Key: projekty, decyzje, testy, CI \\
+\ref{sec:formaty} & Formaty artefaktów, w tym pełny język kontraktu i klasy werdyktu \\
+\ref{sec:cli} & CLI \texttt{sk}: polecenia, opcje, \texttt{secondkey.yaml}, kody wyjścia \\
+\ref{sec:portcullis} & Portcullis: reguły, diff gate, baseline, SARIF, dystrybucja \\
+\ref{sec:standardy} & Standardy migracji: 20 reguł, generator, skill, drift check \\
+\ref{sec:risk-scan} & legacy-risk-scan \\
+\ref{sec:faza02} & Repozytoria fazy 02 i 03: capture, sandbox, portal \\
+\ref{sec:bench} & Bench nopCommerce: topologia, skrypty, nagranie, kontrakt, wyniki \\
+\ref{sec:procedura} & \textbf{Procedura pracy krok po kroku} \\
+\ref{sec:bezpieczenstwo} & Bezpieczeństwo i higiena repozytoriów \\
+\ref{sec:status} & Status i plan \\
+\ref{sec:slownik} & Słownik pojęć \\
+\ref{app:klauzule}, \ref{app:ci} & Dodatki: klauzule kontraktu benchu; workflowy CI \\
+\bottomrule
+\end{tabularx}
+
+Kto chce zacząć pracę, może przeczytać rozdziały~\ref{sec:architektura}
+i~\ref{sec:procedura}, a resztę traktować jako referencję, do której procedura odsyła.
+
+Konwencje: nazwy techniczne zostają po angielsku, gdy są nazwami własnymi,
+identyfikatorami albo ustalonymi terminami (framework, pipeline, pull request, replay,
+snapshot); identyfikatory, polecenia i pliki są zapisane krojem kodu, np.
+\repopath{sk compare}; wartości z kodu i logów są przepisane bez zmian.
+
+\zrodla{ten dokument}

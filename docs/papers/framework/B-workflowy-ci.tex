@@ -1,0 +1,56 @@
+\section{Workflowy CI we wszystkich repozytoriach}\label{app:ci}
+
+Wszystkie workflowy GitHub Actions repozytoriów frameworku na przypiętych commitach, plus
+workflow, który buduje ten dokument. Trigger \repopath{push} dotyczy gałęzi
+\repopath{main}, chyba że zaznaczono inaczej; „(paths)” oznacza filtr ścieżek.
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.1cm} >{\raggedright\arraybackslash}p{4.1cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Plik & Triggery & Joby \\
+\midrule
+\endfirsthead
+\toprule
+Plik & Triggery & Joby \\
+\midrule
+\endhead
+\multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey}}} \\
+\path{ci.yml} & pull request, push, ręcznie & build i testy (Linux), build i testy (Windows), testy mutacyjne (macierz projektów) \\
+\path{e2e.yml} & pull request, push, ręcznie & capture, replay, compare, evidence na sklepie przykładowym; pakiet jako artefakt \repopath{evidence-pack} \\
+\path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
+\path{secret-scan.yml} & pull request, push & gitleaks \\
+\path{build-docs-pdf.yml} & push, pull request (paths), ręcznie & ten dokument: render diagramów, kontrola dokumentów, LaTeX, PDF jako artefakt \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.portcullis}}} \\
+\path{ci.yml} & push, pull request & brak dawnej nazwy w drzewie; build i testy; pakiet analyzerów na SDK .NET 8 (podłoga Roslyn) \\
+\path{mutation.yml} & pull request (paths), push (paths) & Stryker dla reguł migracyjnych \\
+\path{portcullis-pr-check.yml} & pull request & skan Portcullis na własnym PR \\
+\path{portcullis-sarif.yml} & pull request & przefiltrowany SARIF \\
+\path{release.yml} & tag \repopath{v*}, ręcznie & build, testy, pakowanie; publikacja NuGet; kontener do GHCR; release na GitHub; przesunięcie tagu wersji głównej \\
+\path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
+\path{secret-scan.yml} & pull request, push & gitleaks \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey-standards}}} \\
+\path{ci.yml} & pull request, push (także tagi \repopath{v*}), ręcznie & build, testy i kontrola drzewa generowanego; pakowanie i weryfikacja pakietów NuGet; drift check na konsumentach-fixture'ach; release guard \\
+\path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
+\path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks (cała historia) \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey-nopcommerce-bench}}} \\
+\path{legacy-build.yml} & pull request, push, ręcznie & lint PSScriptAnalyzer; build nopCommerce (MSBuild); narzędzia łańcucha; legacy pod IIS z SQL Server (instalacja, smoke, konfiguracja, nagranie, replay A/A); werdykt i pakiet \\
+\path{warmup-eshop.yml} & pull request, push, ręcznie & narzędzia łańcucha; eShopLegacyMVC pod IIS (nagranie, replay A/A); werdykt, bramka i pakiet \\
+\path{chain-tools.yml} & wywoływany z innych workflowów & \repopath{sk} i Portcullis z przypiętych commitów \\
+\path{secret-scan.yml} & pull request, push & gitleaks (cała historia, wersja przypięta skrótem) \\
+\midrule
+\multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.legacy-risk-scan}}} \\
+\path{ci.yml} & pull request, push, co tydzień, ręcznie & testy jednostkowe (Node 22); e2e (Playwright, OSV zamockowane); smoke z prawdziwym API OSV (błąd sieci nie blokuje) \\
+\path{deploy.yml} & push, ręcznie & testy i build strony; wdrożenie na GitHub Pages; weryfikacja opublikowanej strony z prawdziwym OSV \\
+\path{update-eol.yml} & co miesiąc, ręcznie, pull request (paths) & odświeżenie danych EOL z endoflife.date i pull request; regeneracja danych w PR generatora \\
+\path{codeql.yml} & pull request, push, co tydzień, ręcznie & analiza \\
+\path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks (cała historia) \\
+\bottomrule
+\end{xltabular}
+
+Repozytoria \path{secondkey-capture}, \path{secondkey-sandbox} i \path{secondkey-portal}
+nie mają jeszcze workflowów.
+
+\zrodla{\path{.github/workflows/*.yml} we wszystkich repozytoriach na przypiętych
+commitach}

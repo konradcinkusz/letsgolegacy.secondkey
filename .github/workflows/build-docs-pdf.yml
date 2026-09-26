@@ -1,0 +1,84 @@
+name: Documentation PDF
+
+# Builds docs/papers/letsgolegacy-framework.tex — the technical documentation of the
+# letsgolegacy framework as a whole, in Polish — into a PDF, in the shape
+# architecture-standards prescribes (docs/research/00-RESEARCH-DOCUMENTATION.md, "Building
+# the PDF in CI"): the papers check, then the diagrams rendered from their one source, then
+# xu-cheng/latex-action, then a renamed PDF as a run artifact. Nothing generated is
+# committed.
+#
+# Triggers answer two questions. What produces the deliverable: every push to main — a
+# deliberate departure from the standard's workflow_dispatch-only default for a document
+# with no release cadence, because the owner asked for the PDF to be rebuilt on every
+# build of main; each run's artifact is named after its commit. What catches a break: pull
+# requests, filtered to the document's own sources, so a LaTeX or diagram error fails
+# before it merges without a LaTeX build on every code change. workflow_dispatch stays for
+# a PDF on demand.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - 'docs/papers/**'
+      - 'docs/diagrams/**'
+      - 'scripts/render-diagrams.mjs'
+      - 'scripts/check-papers.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/build-docs-pdf.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-pdf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pdf:
+    name: documentation PDF
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install the pinned diagram renderer
+        run: npm ci
+        env:
+          # The runner has Google Chrome; do not download a second browser.
+          PUPPETEER_SKIP_DOWNLOAD: "true"
+
+      - name: Check the papers (house preamble, its contract and digest)
+        run: node scripts/check-papers.mjs
+
+      - name: Render the diagrams
+        run: node scripts/render-diagrams.mjs
+        env:
+          PUPPETEER_EXECUTABLE_PATH: /usr/bin/google-chrome
+
+      - name: Stamp the document with its commit
+        run: |
+          printf '\\def\\docversion{commit %s, %s}\n' "$(git rev-parse --short HEAD)" "$(git log -1 --format=%cs)" > docs/papers/version.tex
+          cat docs/papers/version.tex
+
+      - name: Build the PDF
+        uses: xu-cheng/latex-action@v4
+        with:
+          root_file: letsgolegacy-framework.tex
+          working_directory: docs/papers
+
+      - name: Name the PDF after its commit
+        run: mv docs/papers/letsgolegacy-framework.pdf "docs/papers/letsgolegacy-framework-$(git rev-parse --short HEAD).pdf"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: letsgolegacy-framework-pdf
+          path: docs/papers/letsgolegacy-framework-*.pdf
+          if-no-files-found: error

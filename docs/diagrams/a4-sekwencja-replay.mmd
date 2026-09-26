@@ -1,0 +1,16 @@
+sequenceDiagram
+  participant R as sk replay
+  participant D as SQL Server (snapshot)
+  participant L as Legacy
+  participant C as Kandydat
+  participant F as run.skrun
+  loop każdy scenariusz z nagrania
+    R->>D: reset strony legacy (restore snapshotu)
+    R->>L: wymiany scenariusza po kolei, świeży cookie jar, korelacja tokenów
+    L-->>R: odpowiedzi
+    R->>F: wyniki strony legacy
+    R->>D: reset strony kandydata
+    R->>C: te same wymiany
+    C-->>R: odpowiedzi
+    R->>F: wyniki strony kandydata
+  end

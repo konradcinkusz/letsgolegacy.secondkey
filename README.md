@@ -54,6 +54,15 @@ how to read a verdict and a pack is in [`docs/formats/`](docs/formats/README.md)
 | [`letsgolegacy.secondkey-portal`](https://github.com/konradcinkusz/letsgolegacy.secondkey-portal) | C11 evidence portal |
 | [`letsgolegacy.secondkey-nopcommerce-bench`](https://github.com/konradcinkusz/letsgolegacy.secondkey-nopcommerce-bench) | Public specimen: nopCommerce 3.x |
 
+## Documentation
+
+The technical documentation of the letsgolegacy framework as a whole — every
+`letsgolegacy.*` repository, the formats and commands of the chain, and the step-by-step
+procedure for working with it — is
+[`docs/papers/letsgolegacy-framework.tex`](docs/papers/letsgolegacy-framework.tex), written
+in Polish. CI builds it into a PDF on every push to `main`: the `letsgolegacy-framework-pdf`
+artifact of the [Documentation PDF](.github/workflows/build-docs-pdf.yml) workflow.
+
 ## Licence
 
 All rights reserved; see [`LICENSE`](LICENSE). The licensing model is an open decision.

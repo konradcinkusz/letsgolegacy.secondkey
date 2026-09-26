@@ -1,0 +1,12 @@
+flowchart TD
+  S["wymiana: odpowiedzi legacy i kandydata<br/>po zredukowaniu do zachowania"] --> A{"strona bez odpowiedzi?<br/>timeout, połączenie, reset"}
+  A -- tak --> R1["regression<br/>missing-result"]
+  A -- nie --> B{"zaakceptowana klauzula:<br/>legacy pass, kandydat fail?"}
+  B -- tak --> R2["regression<br/>clause-regression"]
+  B -- nie --> C{"legacy fail,<br/>kandydat pass?"}
+  C -- tak --> FC["fix-candidate<br/>clause-fixed"]
+  C -- nie --> D{"brak różnic?"}
+  D -- tak --> E["equal<br/>identical"]
+  D -- nie --> N{"każdą różnicę tłumaczy<br/>reguła normalizacji?"}
+  N -- tak --> EU["equal-under-contract<br/>normalized"]
+  N -- nie --> R3["regression<br/>uncovered-difference"]
