@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/konradcinkusz/letsgolegacy.secondkey/schemas/verdict.schema.json",
+  "title": "Second Key verdict",
+  "description": "verdict.json — the deterministic outcome of comparing a legacy system and a candidate against a contract. Computed only by code with no language model in it (design rule 1). Every exchange lands in exactly one of four classes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["kind", "v", "createdAt", "tool", "inputs", "outcome", "summary", "exchanges", "clauses"],
+  "properties": {
+    "kind": { "const": "secondkey.verdict" },
+    "v": { "const": 1 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "commit": { "type": ["string", "null"] }
+      }
+    },
+    "inputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract", "run"],
+      "properties": {
+        "contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "revision", "sha256"],
+          "properties": {
+            "name": { "type": "string" },
+            "revision": { "type": "integer", "minimum": 1 },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "path": { "type": "string" }
+          }
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["runId", "sha256"],
+          "properties": {
+            "runId": { "type": "string" },
+            "sha256": { "$ref": "#/$defs/sha256" },
+            "path": { "type": "string" }
+          }
+        }
+      }
+    },
+    "outcome": {
+      "description": "fail: at least one regression. review: no regression, but at least one fix candidate a person must accept or reject. pass: neither.",
+      "enum": ["pass", "fail", "review"]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exchanges", "equal", "equalUnderContract", "regression", "fixCandidate", "clauses"],
+      "properties": {
+        "scenarios": { "type": "integer", "minimum": 0 },
+        "exchanges": { "type": "integer", "minimum": 0 },
+        "equal": { "type": "integer", "minimum": 0 },
+        "equalUnderContract": { "type": "integer", "minimum": 0 },
+        "regression": { "type": "integer", "minimum": 0 },
+        "fixCandidate": { "type": "integer", "minimum": 0 },
+        "clauses": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["total", "accepted", "exercised", "unexercised"],
+          "properties": {
+            "total": { "type": "integer", "minimum": 0 },
+            "accepted": { "type": "integer", "minimum": 0 },
+            "exercised": { "type": "integer", "minimum": 0 },
+            "unexercised": { "type": "integer", "minimum": 0 },
+            "absenceShare": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        }
+      }
+    },
+    "exchanges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/exchange" }
+    },
+    "clauses": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/clauseSummary" }
+    },
+    "mutation": {
+      "description": "Filled by the mutation engine (C9, phase 02): how many deliberately injected defects the contract caught.",
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "mutants": { "type": "integer", "minimum": 0 },
+        "killed": { "type": "integer", "minimum": 0 },
+        "perClause": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "class": {
+      "description": "equal: identical after canonicalization alone. equal-under-contract: identical once the contract's normalization rules are applied. regression: the candidate breaks a clause the legacy system keeps, or differs in a way no clause explains (fail closed). fix-candidate: the candidate keeps a clause the legacy system broke — always decided by a person.",
+      "enum": ["equal", "equal-under-contract", "regression", "fix-candidate"]
+    },
+    "clauseOutcome": { "enum": ["pass", "fail", "error", "not-applicable"] },
+    "exchange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exchange", "scenario", "request", "class", "reasons", "diffs", "clauses"],
+      "properties": {
+        "exchange": { "type": "string" },
+        "scenario": { "type": "string" },
+        "request": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["method", "path"],
+          "properties": {
+            "method": { "type": "string" },
+            "path": { "type": "string" },
+            "query": { "type": "string" }
+          }
+        },
+        "class": { "$ref": "#/$defs/class" },
+        "reasons": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(clause-regression|clause-fixed|uncovered-difference|missing-result|normalized|identical):?.*$" }
+        },
+        "diffs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "kind"],
+            "properties": {
+              "path": { "type": "string" },
+              "kind": { "enum": ["added", "removed", "changed"] },
+              "legacy": true,
+              "candidate": true,
+              "normalizedBy": { "type": "string" }
+            }
+          }
+        },
+        "clauses": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "legacy", "candidate"],
+            "properties": {
+              "id": { "type": "string" },
+              "legacy": { "$ref": "#/$defs/clauseOutcome" },
+              "candidate": { "$ref": "#/$defs/clauseOutcome" },
+              "detail": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "clauseSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "title", "text", "status", "accepted", "exercised", "legacy", "candidate"],
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "enum": ["must", "never"] },
+        "title": { "type": "string" },
+        "text": { "description": "The clause rendered in natural language, for the people who sign off.", "type": "string" },
+        "accepted": { "type": "boolean" },
+        "exercised": { "type": "integer", "minimum": 0 },
+        "legacy": { "$ref": "#/$defs/tally" },
+        "candidate": { "$ref": "#/$defs/tally" },
+        "status": {
+          "description": "held: kept on both sides. regressed: kept by legacy, broken by the candidate. fixed: broken by legacy, kept by the candidate. violated-both: broken on both sides (a pre-existing defect the migration preserved). unexercised: no request in the run was in the clause's scope.",
+          "enum": ["held", "regressed", "fixed", "violated-both", "unexercised"]
+        }
+      }
+    },
+    "tally": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass", "fail", "error"],
+      "properties": {
+        "pass": { "type": "integer", "minimum": 0 },
+        "fail": { "type": "integer", "minimum": 0 },
+        "error": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

@@ -1,0 +1,377 @@
+{
+  "kind": "secondkey.verdict",
+  "v": 1,
+  "createdAt": "2026-09-26T10:05:00Z",
+  "tool": {
+    "name": "secondkey",
+    "version": "0.1.0",
+    "commit": null
+  },
+  "inputs": {
+    "contract": {
+      "name": "sample-shop",
+      "revision": 1,
+      "sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "path": "contract.yaml"
+    },
+    "run": {
+      "runId": "run-20260926-sample",
+      "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "path": "sample.skrun"
+    }
+  },
+  "outcome": "fail",
+  "summary": {
+    "scenarios": 2,
+    "exchanges": 5,
+    "equal": 2,
+    "equalUnderContract": 1,
+    "regression": 1,
+    "fixCandidate": 1,
+    "clauses": {
+      "total": 6,
+      "accepted": 5,
+      "exercised": 5,
+      "unexercised": 0,
+      "absenceShare": 0.6
+    }
+  },
+  "exchanges": [
+    {
+      "exchange": "ex-000001",
+      "scenario": "s-7c1e0a",
+      "request": {
+        "method": "GET",
+        "path": "/products",
+        "query": "?sort=name"
+      },
+      "class": "regression",
+      "reasons": [
+        "uncovered-difference"
+      ],
+      "diffs": [
+        {
+          "path": "response.body.json.items[0].name",
+          "kind": "changed",
+          "legacy": "Zebra mug",
+          "candidate": "apple pie"
+        },
+        {
+          "path": "response.body.json.items[1].name",
+          "kind": "changed",
+          "legacy": "apple pie",
+          "candidate": "éclair box"
+        },
+        {
+          "path": "response.body.json.items[2].name",
+          "kind": "changed",
+          "legacy": "éclair box",
+          "candidate": "Zebra mug"
+        }
+      ],
+      "clauses": [
+        {
+          "id": "TOTAL-NEVER-NEGATIVE",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "NO-CARD-NUMBER-IN-RESPONSES",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "PRODUCTS-PRICED",
+          "legacy": "pass",
+          "candidate": "pass"
+        }
+      ]
+    },
+    {
+      "exchange": "ex-000002",
+      "scenario": "s-7c1e0a",
+      "request": {
+        "method": "POST",
+        "path": "/cart/items"
+      },
+      "class": "equal",
+      "reasons": [
+        "identical"
+      ],
+      "diffs": [],
+      "clauses": [
+        {
+          "id": "TOTAL-NEVER-NEGATIVE",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "NO-CARD-NUMBER-IN-RESPONSES",
+          "legacy": "pass",
+          "candidate": "pass"
+        }
+      ]
+    },
+    {
+      "exchange": "ex-000003",
+      "scenario": "s-7c1e0a",
+      "request": {
+        "method": "GET",
+        "path": "/cart"
+      },
+      "class": "equal",
+      "reasons": [
+        "identical"
+      ],
+      "diffs": [],
+      "clauses": [
+        {
+          "id": "CART-TOTAL-MATCHES-LINES",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "TOTAL-NEVER-NEGATIVE",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "NO-CARD-NUMBER-IN-RESPONSES",
+          "legacy": "pass",
+          "candidate": "pass"
+        }
+      ]
+    },
+    {
+      "exchange": "ex-000004",
+      "scenario": "s-7c1e0a",
+      "request": {
+        "method": "POST",
+        "path": "/checkout"
+      },
+      "class": "equal-under-contract",
+      "reasons": [
+        "normalized: masks.guids",
+        "normalized: masks.timestamps"
+      ],
+      "diffs": [
+        {
+          "path": "response.body.json.orderId",
+          "kind": "changed",
+          "legacy": "6f1c2b9e-4a53-4c8e-9d3a-2b7f5e8a1c40",
+          "candidate": "0b8e4f7a-1d2c-4e5f-8a9b-3c4d5e6f7a8b",
+          "normalizedBy": "masks.guids"
+        },
+        {
+          "path": "response.body.json.createdAt",
+          "kind": "changed",
+          "legacy": "2026-09-26T09:00:04.505Z",
+          "candidate": "2026-09-26T10:00:09.012Z",
+          "normalizedBy": "masks.timestamps"
+        },
+        {
+          "path": "response.headers.location[0]",
+          "kind": "changed",
+          "legacy": "/orders/6f1c2b9e-4a53-4c8e-9d3a-2b7f5e8a1c40",
+          "candidate": "/orders/0b8e4f7a-1d2c-4e5f-8a9b-3c4d5e6f7a8b",
+          "normalizedBy": "masks.guids"
+        }
+      ],
+      "clauses": [
+        {
+          "id": "CHECKOUT-NEVER-5XX",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "ORDER-HAS-LOCATION",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "TOTAL-NEVER-NEGATIVE",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "NO-CARD-NUMBER-IN-RESPONSES",
+          "legacy": "pass",
+          "candidate": "pass"
+        }
+      ]
+    },
+    {
+      "exchange": "ex-000005",
+      "scenario": "s-19b2f4",
+      "request": {
+        "method": "POST",
+        "path": "/checkout"
+      },
+      "class": "fix-candidate",
+      "reasons": [
+        "clause-fixed: CHECKOUT-NEVER-5XX"
+      ],
+      "diffs": [
+        {
+          "path": "response.status",
+          "kind": "changed",
+          "legacy": 500,
+          "candidate": 400
+        },
+        {
+          "path": "response.body.json",
+          "kind": "added",
+          "candidate": {
+            "error": "cart-empty"
+          }
+        },
+        {
+          "path": "response.body.text",
+          "kind": "removed",
+          "legacy": "Object reference not set to an instance of an object."
+        }
+      ],
+      "clauses": [
+        {
+          "id": "CHECKOUT-NEVER-5XX",
+          "legacy": "fail",
+          "candidate": "pass",
+          "detail": "legacy: response.status = 500, which is >= 500"
+        },
+        {
+          "id": "ORDER-HAS-LOCATION",
+          "legacy": "fail",
+          "candidate": "fail",
+          "detail": "both: response.status is not 201"
+        },
+        {
+          "id": "TOTAL-NEVER-NEGATIVE",
+          "legacy": "pass",
+          "candidate": "pass"
+        },
+        {
+          "id": "NO-CARD-NUMBER-IN-RESPONSES",
+          "legacy": "pass",
+          "candidate": "pass"
+        }
+      ]
+    }
+  ],
+  "clauses": [
+    {
+      "id": "TOTAL-NEVER-NEGATIVE",
+      "kind": "never",
+      "title": "A cart or order total is never negative",
+      "text": "For every request: response.body.json.total is never less than 0.",
+      "accepted": true,
+      "exercised": 5,
+      "legacy": {
+        "pass": 5,
+        "fail": 0,
+        "error": 0
+      },
+      "candidate": {
+        "pass": 5,
+        "fail": 0,
+        "error": 0
+      },
+      "status": "held"
+    },
+    {
+      "id": "CART-TOTAL-MATCHES-LINES",
+      "kind": "must",
+      "title": "The cart page total equals the sum of its lines",
+      "text": "For GET /cart: extract.cartTotal exists, and extract.cartLineTotals has at least 1 value.",
+      "accepted": true,
+      "exercised": 1,
+      "legacy": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0
+      },
+      "candidate": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0
+      },
+      "status": "held"
+    },
+    {
+      "id": "CHECKOUT-NEVER-5XX",
+      "kind": "never",
+      "title": "Checkout never answers with a server error",
+      "text": "For POST /checkout: response.status is never 500 or more.",
+      "accepted": true,
+      "exercised": 2,
+      "legacy": {
+        "pass": 1,
+        "fail": 1,
+        "error": 0
+      },
+      "candidate": {
+        "pass": 2,
+        "fail": 0,
+        "error": 0
+      },
+      "status": "fixed"
+    },
+    {
+      "id": "ORDER-HAS-LOCATION",
+      "kind": "must",
+      "title": "A created order says where it lives",
+      "text": "For POST /checkout: response.status equals 201, and response.headers.location[0] matches ^/orders/[0-9a-f-]{36}$.",
+      "accepted": true,
+      "exercised": 2,
+      "legacy": {
+        "pass": 1,
+        "fail": 1,
+        "error": 0
+      },
+      "candidate": {
+        "pass": 1,
+        "fail": 1,
+        "error": 0
+      },
+      "status": "violated-both"
+    },
+    {
+      "id": "NO-CARD-NUMBER-IN-RESPONSES",
+      "kind": "never",
+      "title": "No response ever carries a card number field",
+      "text": "For every request: response.body.json.**.cardNumber never exists.",
+      "accepted": true,
+      "exercised": 5,
+      "legacy": {
+        "pass": 5,
+        "fail": 0,
+        "error": 0
+      },
+      "candidate": {
+        "pass": 5,
+        "fail": 0,
+        "error": 0
+      },
+      "status": "held"
+    },
+    {
+      "id": "PRODUCTS-PRICED",
+      "kind": "must",
+      "title": "Every listed product has a positive price",
+      "text": "For GET /products: every response.body.json.items[*].price is greater than 0.",
+      "accepted": false,
+      "exercised": 1,
+      "legacy": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0
+      },
+      "candidate": {
+        "pass": 1,
+        "fail": 0,
+        "error": 0
+      },
+      "status": "held"
+    }
+  ],
+  "mutation": null
+}

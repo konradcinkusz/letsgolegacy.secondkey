@@ -1,0 +1,95 @@
+# yaml-language-server: $schema=../contract.schema.json
+# A sample contract for the sample shop. It exercises every part of the format:
+# extractors over HTML, normalization rules, "must" and "never" clauses.
+apiVersion: secondkey/v1
+kind: Contract
+metadata:
+  name: sample-shop
+  title: Sample shop — catalogue, cart and checkout
+  system: SampleShop (legacy)
+  revision: 1
+  owners: [second-line-risk]
+
+compare:
+  headers: [content-type, location]
+  html: extracts
+
+extract:
+  - name: cartTotal
+    when: { method: GET, path: "^/cart$" }
+    from: html
+    selector: ".order-total"
+    as: decimal
+  - name: cartLineTotals
+    when: { method: GET, path: "^/cart$" }
+    from: html
+    selector: "table.lines td.line-total"
+    as: decimal
+    all: true
+
+normalize:
+  ignore:
+    - response.body.json.generatedAt
+  tolerances:
+    - path: response.body.json.total
+      absolute: 0.01
+    - path: response.body.json.items[*].lineTotal
+      absolute: 0.01
+  masks:
+    timestamps: true
+    guids: true
+
+clauses:
+  - id: TOTAL-NEVER-NEGATIVE
+    kind: never
+    title: A cart or order total is never negative
+    why: A negative total means a discount stacked past the price — the shop pays the customer to take goods.
+    assert:
+      - { select: response.body.json.total, op: lt, value: 0 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CART-TOTAL-MATCHES-LINES
+    kind: must
+    title: The cart page total equals the sum of its lines
+    why: A total that disagrees with the lines the customer sees is a pricing defect and a consumer-law complaint.
+    when: { method: GET, path: "^/cart$" }
+    assert:
+      - { select: extract.cartTotal, op: exists }
+      - { select: extract.cartLineTotals, op: countAtLeast, value: 1 }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: CHECKOUT-NEVER-5XX
+    kind: never
+    title: Checkout never answers with a server error
+    why: A 5xx at checkout loses the sale and says nothing the customer can act on.
+    when: { method: POST, path: "^/checkout$" }
+    assert:
+      - { select: response.status, op: gte, value: 500 }
+    provenance: { origin: incident, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: ORDER-HAS-LOCATION
+    kind: must
+    title: A created order says where it lives
+    why: Clients follow the Location header to the order; without it the order is created but unreachable.
+    when: { method: POST, path: "^/checkout$" }
+    assert:
+      - { select: response.status, op: equals, value: 201 }
+      - { select: "response.headers.location[0]", op: matches, value: "^/orders/[0-9a-f-]{36}$" }
+    provenance: { origin: designed, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: NO-CARD-NUMBER-IN-RESPONSES
+    kind: never
+    title: No response ever carries a card number field
+    why: A card number in a response is a PCI DSS breach, whatever else the page does.
+    assert:
+      - { select: response.body.json.**.cardNumber, op: exists }
+    provenance: { origin: review, status: accepted, author: sample, date: 2026-09-26 }
+
+  - id: PRODUCTS-PRICED
+    kind: must
+    title: Every listed product has a positive price
+    why: A zero or missing price lets a product be ordered for free.
+    when: { method: GET, path: "^/products$" }
+    assert:
+      - { select: "response.body.json.items[*].price", op: gt, value: 0 }
+    provenance: { origin: mined, status: proposed, support: { observations: 42, violations: 0 } }
