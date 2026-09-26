@@ -37,7 +37,7 @@ jobs:
         run: dotnet test SecondKey.slnx --no-build --configuration Release --logger "trx" --results-directory TestResults
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results
           path: TestResults/
@@ -61,7 +61,7 @@ jobs:
         run: ./scripts/mutation.sh ${{ matrix.project }}
       - name: Upload mutation report
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: mutation-report-${{ matrix.project }}
           path: StrykerOutput/
