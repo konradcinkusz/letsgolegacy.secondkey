@@ -42,6 +42,10 @@ nie są tłumaczone.
   \item[maska] Reguła normalizacji, po której dwa napisy są równe (\repopath{timestamps},
         \repopath{guids}, nazwane wzorce).
   \item[modernize-dotnet] Agent migracyjny GitHub Copilot app modernization for .NET.
+  \item[mutant (P9)] Kod legacy z jednym celowo wprowadzonym defektem, zarejestrowanym
+        z góry razem z klauzulami, które mają go złapać. Jest \emph{zabity}, gdy
+        \repopath{sk compare} legacy kontra mutant daje \repopath{fail}; M00 (bez zmian)
+        kalibruje metodę i musi dać \repopath{pass}.
   \item[NLS / ICU] Biblioteki globalizacji .NET Framework (NLS) i współczesnego .NET
         (ICU); ich różnice w porównywaniu i formatowaniu to główny kandydat na różnicę
         zachowania po migracji.

@@ -55,6 +55,12 @@
 }
 \lstset{style=kod}
 
+% Blok kodu nie zaczyna się w ostatnich wierszach strony. listings łamie ramkę między
+% stronami, więc bez tego na dole strony zostaje pusty górny brzeg ramki, a cała treść
+% bloku przechodzi na następną.
+\usepackage{needspace}
+\AddToHook{env/lstlisting/before}{\par\needspace{4\baselineskip}}
+
 % Ścieżka źródłowa na końcu podsekcji: skąd pochodzi to, co napisano wyżej.
 % Dokument niczego nie dodaje do źródeł, więc każda podsekcja je nazywa.
 \newcommand{\zrodla}[1]{\par\smallskip{\small\raggedright\color{darkgray}\textit{Źródła:} #1\par}\medskip}

@@ -632,25 +632,27 @@ nie przechodzi na legacy, nie jest regresją, gdy nie przechodzi na kandydacie; 
 przechodzi na legacy i nie przechodzi na kandydacie --- jest.
 
 \textbf{5.5 Uruchomienie agenta.} Otwórz \repopath{nop-p6} na gałęzi kandydata. Przed
-czymkolwiek innym zapytaj agenta, jakie skille załadował z repozytorium, i wklej odpowiedź
-do zapisu przebiegu; jeśli skilli Second Key brak, zatrzymaj się i popraw krok 5.3 (to jest
-dokładnie kryterium R4: agent podejmuje skill). Punkt startu zależy od klienta (Visual
-Studio: menu kontekstowe solution albo Copilot Chat w trybie agenta; VS Code: Copilot Chat
-w trybie Agent; Copilot CLI: \repopath{copilot} w katalogu repozytorium). Źródła podają
-dwa brzmienia pierwszego promptu:
+czymkolwiek innym zapytaj agenta, jakich skilli używa --- tym samym pytaniem, którym
+sprawdza to przewodnik standardów (\path{USING-WITH-MODERNIZE-DOTNET.md}, §6):
 
-\begin{itemize}
-  \item \textbf{runbook P6 benchu} (wysłać dosłownie):
 \begin{lstlisting}
-Modernize the solution in src/NopCommerce.sln from .NET Framework 4.5.1 to .NET 10.
-Migrate the ASP.NET MVC 5 web application (Nop.Web, the Administration area and the
-plugins) to ASP.NET Core on .NET 10. Keep the SQL Server database schema, the public
-URLs and the observable behaviour of the storefront unchanged. Keep the existing unit
-test projects and make them build and run on .NET 10. Follow the standards in
-.github/skills. Commit your work on the current branch in logical steps.
+Which custom skills from .github/skills are you applying?
 \end{lstlisting}
-  \item \textbf{przewodnik standardów} (pierwszy prompt, potem instrukcja stała, którą
-        agent zapisuje w \path{.github/upgrades/<scenarioId>/scenario-instructions.md}):
+
+W Copilot CLI: \repopath{/skills list}, potem
+\repopath{/skills info applying-dotnet-migration-standards}. Odpowiedź wklej do zapisu
+przebiegu; jeśli \repopath{applying-dotnet-migration-standards} brak, zatrzymaj się
+i popraw krok 5.3 (to jest dokładnie kryterium R4: agent podejmuje skill). Punkt startu
+zależy od klienta (Visual Studio: menu kontekstowe solution albo Copilot Chat w trybie
+agenta; VS Code: Copilot Chat w trybie Agent; Copilot CLI: \repopath{copilot} w katalogu
+repozytorium).
+
+Prompty wysyła się dosłownie, w tej kolejności. Dwa pierwsze należą do przewodnika
+standardów (§5, kroki 3 i 4), który jest ich jedynym źródłem: obowiązuje brzmienie
+z wersji standardów zainstalowanej w kroku 5.3, a runbook benchu cytuje je w wersji 0.1.0.
+Drugi to instrukcja stała, którą agent zapisuje w
+\path{.github/upgrades/<scenarioId>/scenario-instructions.md}:
+
 \begin{lstlisting}
 Upgrade this solution to .NET 10. Apply the applying-dotnet-migration-standards skill from
 .github/skills to every task: preserve behaviour, and record every behaviour flag in
@@ -658,12 +660,21 @@ docs/migration/behaviour-flags.md instead of fixing it.
 
 From now on, for all tasks in this upgrade, follow the applying-dotnet-migration-standards skill.
 \end{lstlisting}
-\end{itemize}
 
-Oba źródła zgadzają się co do istoty: agent ma stosować standardy ze
-\path{.github/skills} i zachować obserwowalne zachowanie. Przewodnik standardów dodaje
-rejestr flag zachowania: podejrzany defekt agent oznacza, zamiast go naprawiać (standard
-SK-MIG-011). Etapy agenta --- assessment (\repopath{assessment.md}), planning
+Trzeci prompt to zakres okazu, z runbooka P6 benchu:
+
+\begin{lstlisting}
+The solution is src/NopCommerce.sln, on .NET Framework 4.5.1. Migrate the ASP.NET MVC 5
+web application (Nop.Web, the Administration area and the plugins) to ASP.NET Core on
+.NET 10. Keep the SQL Server database schema, the public URLs and the observable
+behaviour of the storefront unchanged. Keep the existing unit test projects and make them
+build and run on .NET 10. Commit your work on the current branch in logical steps.
+\end{lstlisting}
+
+Podział jest celowy: prompty ogólne mają jedno źródło, więc runbook i przewodnik nie mogą
+prosić o różne rzeczy, a runbook dokłada tylko to, co dotyczy konkretnego okazu. Przewodnik
+wprowadza rejestr flag zachowania: podejrzany defekt agent oznacza, zamiast go naprawiać
+(standard SK-MIG-011). Etapy agenta --- assessment (\repopath{assessment.md}), planning
 (\repopath{plan.md}), execution (\repopath{tasks.md}) --- przegląda się przed każdym
 „kontynuuj”; w assessment musi być bazowa linia legacy, o którą prosi skill (źródło
 kultury, klucze konfiguracji, lazy loading EF6, endpointy JSON, testy niezaliczone).
@@ -1032,14 +1043,19 @@ złożył. Podpis (koperta DSSE, klucz właściciela) dochodzi w fazie 03.
 \subsection{Krok 10: publikacja i liczby}\label{sec:procedura-krok10}
 
 Bramką fazy 01 jest ticket P9 benchu: opublikować pakiet dowodowy, kontrakt i liczby ---
-scenariusze, różnice, regresje, zabite mutanty. Na przypiętych commitach P9 ma status
-„planned”. Liczby scenariuszy i klauzul istnieją już dla legacy (P4: 38 scenariuszy, 290
-wymian; P5: 76 klauzul, w tym 15 \repopath{never}); różnice i regresje przyniesie P7.
-Komponent mutacji C9 (\repopath{sk mutate}) należy do fazy 02 --- w fazie 01 kończy się
-kodem 70. Pakiet cytuje pull request kandydata, jego head commit, wersję standardów i zapis
-przebiegu P6.
+scenariusze, różnice, regresje, zabite mutanty. P9 jest w toku. Zabite mutanty są gotowe
+(\#8): 11 z 11, przy przechodzącym M00, który kalibruje metodę
+(podrozdział~\ref{sec:bench-p9}). Właściwy komponent mutacji C9 (\repopath{sk mutate})
+należy do fazy 02 --- w fazie 01 kończy się kodem 70; zastępuje go prerejestrowany zestaw
+łatek benchu, porównywany tymi samymi \repopath{sk replay} i \repopath{sk compare} co
+kandydat. Liczby scenariuszy i klauzul istnieją dla legacy (P4: 38 scenariuszy, 290
+wymian; P5: 76 klauzul, w tym 15 \repopath{never}); pakiet dowodowy kandydata, różnice
+i regresje przyniosą P6--P8. Pakiet cytuje pull request kandydata, jego head commit,
+wersję standardów i zapis przebiegu P6.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P9-MUTANTS.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/cli.md}}
@@ -1060,7 +1076,7 @@ Repozytoria frameworku rozwija się według tych samych reguł:
   \item \textbf{Przygotuj klon.} \repopath{./scripts/setup.sh} sprawdza narzędzia i instaluje
         hook skanu sekretów (w rdzeniu, standardach i legacy-risk-scan; w Portcullis
         \path{./scripts/install-hooks.sh}; w benchu
-        \path{git config core.hooksPath .githooks}). Hook bez gitleaks odmawia commitu.
+        \repopath{git config core.hooksPath .githooks}). Hook bez gitleaks odmawia commitu.
   \item \textbf{Zbuduj i przetestuj lokalnie} tak jak CI; w standardach generator z
         \repopath{generate --check}, w benchu PSScriptAnalyzer z ustawieniami repozytorium,
         w rdzeniu:

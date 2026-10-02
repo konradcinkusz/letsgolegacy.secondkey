@@ -9,13 +9,14 @@ tego, co sklep musi robić i~czego nie może robić nigdy. Second Key niczego ni
 tylko sprawdza.
 
 Rozdział opisuje migawkę repozytorium w~stanie \texttt{origin/main} (commit
-\texttt{e6d4fe9}). W~tym stanie zadania P1--P5 są zrobione (build, host legacy, rozgrzewka
-łańcucha, nagranie ruchu, kontrakt z~dowodem A/A), a~P6--P10 są zaplanowane. README
+\texttt{5bf3cfc}). W~tym stanie zadania P1--P5 są zrobione (build, host legacy, rozgrzewka
+łańcucha, nagranie ruchu, kontrakt z~dowodem A/A), w~P9 zrobiona jest część „zabite
+mutanty” (11 z~11), dziennik P10 jest prowadzony, a~P6--P8 i~reszta P9 są zaplanowane. README
 zaznacza, że repozytorium jest w~budowie i~że żaden evidence pack (pakiet dowodowy) nie
 został jeszcze opublikowany; pakiety powstające w~każdym przebiegu CI są artefaktami
-workflowów, a~nie publikacją. Kolejne podsekcje idą od decyzji (ADR 0001--0006) przez
-nagranie ruchu, kontrakt, skrypty i~workflowy do wyników P3--P5, runbooka P6 i~planów
-P7--P10.
+workflowów, a~nie publikacją. Kolejne podsekcje idą od decyzji (ADR 0001--0007) przez
+nagranie ruchu, kontrakt, skrypty i~workflowy do wyników P3--P5, zabitych mutantów P9,
+runbooka P6 i~planów P7--P10.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
@@ -66,11 +67,14 @@ zawiera repozytorium.
 \path{warmup/eshop/} & kontrakt i~konfiguracja rozgrzewki P3
   (sekcja~\ref{sec:bench-rozgrzewka}) \\
 \path{docs/} & \path{WORKPLAN.md}, \path{TOPOLOGY.md}, \path{P4-TRAFFIC-PLAN.md},
-  \path{P6-RUNBOOK.md}, \path{P10-ONBOARDING-HOURS.md}, \path{adr/} (ADR 0001--0006) \\
-\path{results/p3/}, \path{p4/}, \path{p5/} & to, co zapisały przebiegi CI zamykające
-  zadania P3--P5 (sekcja~\ref{sec:bench-wyniki}) \\
+  \path{P6-RUNBOOK.md}, \path{P9-MUTANTS.md}, \path{P10-ONBOARDING-HOURS.md}, \path{adr/}
+  (ADR 0001--0007) \\
+\path{mutants/} & mutanty P9: katalog \path{mutants.json} i~łatki M01--M11, a~w~\path{scripts/mutants/}
+  ich skrypty (sekcja~\ref{sec:bench-p9}) \\
+\path{results/p3/}, \path{p4/}, \path{p5/}, \path{p9/} & to, co zapisały przebiegi CI zamykające
+  zadania P3--P5 i~część mutantów P9 (sekcje~\ref{sec:bench-wyniki} i~\ref{sec:bench-p9}) \\
 \path{.github/} & workflowy \path{legacy-build.yml}, \path{chain-tools.yml},
-  \path{warmup-eshop.yml}, \path{secret-scan.yml}; \path{CODEOWNERS};
+  \path{warmup-eshop.yml}, \path{mutants.yml}, \path{secret-scan.yml}; \path{CODEOWNERS};
   \path{dependabot.yml} (sekcja~\ref{sec:bench-ci}) \\
 \path{.githooks/}, \path{.gitleaks.toml} & skan sekretów przed commitem i~w~CI
   (sekcja~\ref{sec:bench-higiena}) \\
@@ -229,10 +233,11 @@ Klucz & Wartość \\
 
 \subsection{Topologia demonstracyjna (decyzja D7)}\label{sec:bench-topologia}
 
-\repopath{docs/TOPOLOGY.md} zapisuje decyzję D7 ze statusem „proposed”. Strona legacy jest
-zbudowana i~działa w~CI (P1, P2); części oznaczone jako planowane opisują, jak miały się
-podłączyć zadania P4--P7, które mogą je doprecyzować i~powinny wtedy zaktualizować tę
-stronę.
+\repopath{docs/TOPOLOGY.md} zapisuje decyzję D7 ze statusem „proposed” --- sama decyzja
+należy do właściciela. To, co opisuje, działa w~CI: strona legacy (P1, P2), capture
+i~replay A/A na runnerze Windows (P4, P5), werdykt i~pakiet na Linuksie oraz mutanty P9
+jako druga witryna obok sklepu legacy. Planowany pozostaje tylko kandydat (P7), którego
+zadanie ma zaktualizować tę stronę.
 
 \paragraph{Decyzja: jeden host Windows obsługuje stronę legacy, Linux -- resztę łańcucha.}
 \begin{itemize}
@@ -1244,7 +1249,9 @@ Odtworzenia rozjeżdżają się od pierwszego scenariusza & odtworzenie nie wyst
   snapshotu S11 albo nagranie ominęło proxy \\
 Reguła \texttt{never} przechodzi, niczego nie sprawdzając & scenariusz nie dotarł do tego,
   czego reguła pilnuje (np. T30 bez prawdziwego numeru zamówienia): każda reguła
-  \texttt{never} potrzebuje pozytywnego bliźniaka w~tym samym scenariuszu -- R44 z~R43,
+  \texttt{never} potrzebuje pozytywnego bliźniaka w~tym samym scenariuszu -- R44 z~własnym
+  przekierowaniem T30 na \path{/login} (klauzula \path{OTHERS-ORDER-SENDS-TO-LOGIN}; R43 to
+  T29, inny scenariusz),
   R24 z~zarejestrowaną połową T18, R39 z~poprawną kartą w~T28 \\
 Numery zamówień rozjeżdżają się między legacy a~kandydatem & scenariusze biegły
   z~różnych snapshotów albo dodatkowe żądanie utworzyło zamówienie \\
@@ -1260,8 +1267,9 @@ Numery zamówień rozjeżdżają się między legacy a~kandydatem & scenariusze 
     strony tam, gdzie są sprawdzane.
   \item Każda reguła z~sekcji~5 jest ćwiczona przez nagrany scenariusz, a~każda reguła
     \texttt{never} ma pozytywnego bliźniaka.
-  \item Liczba scenariuszy i~skrót manifestu witryny legacy (\path{state\build.json}) są
-    zapisane razem z~\path{*.skcap}.
+  \item Liczba scenariuszy i~skrót manifestu witryny legacy są zapisane razem
+    z~\path{*.skcap} (krok~2 zapisuje skrót w~\path{state\build.json}, krok~4 przenosi ten sam
+    skrót \path{state\legacy-site.sha256} do \path{state\deploy.json}, skąd czyta go krok~7).
   \item Sondy NLS $\rightarrow$ ICU z~sekcji~6 są w~nagraniu.
 \end{checklista}
 
@@ -1570,8 +1578,7 @@ wyjątek, więc kod ostatniego polecenia natywnego nie decyduje o~wyniku. W~GitH
 skrypty grupują log (\texttt{::group::}), dopisują tabele do podsumowania joba
 i~maskują sekrety. Przy blokadzie polityki wykonywania: \texttt{powershell
 -ExecutionPolicy Bypass -File}. Każda wartość ma domyślną
-(tabela~\ref{tab:bench-parametry}; gwiazdka oznacza parametry, których nie wymienia README
-skryptów).
+(tabela~\ref{tab:bench-parametry}).
 
 {\footnotesize
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.9cm} l >{\raggedright\arraybackslash}p{4.1cm} >{\raggedright\arraybackslash}X@{}}
@@ -1608,8 +1615,8 @@ Nazwa & Krok & Domyślnie & Znaczenie \\
 \texttt{-DatabaseName} & 4 & \texttt{nopcommerce\_legacy} & usuwana i~tworzona przy
   każdym przebiegu \\
 \texttt{-AdminEmail} & 4 & \texttt{admin@nopbench.invalid} & e-mail administratora \\
-\texttt{-Install\-TimeoutSeconds}* & 4 & \texttt{1200} & limit klienta HTTP instalatora \\
-\texttt{-Warmup\-TimeoutSeconds}* & 4; 5 & \texttt{900}; \texttt{600} & czas na pierwszą
+\texttt{-Install\-TimeoutSeconds} & 4 & \texttt{1200} & limit klienta HTTP instalatora \\
+\texttt{-Warmup\-TimeoutSeconds} & 4; 5 & \texttt{900}; \texttt{600} & czas na pierwszą
   odpowiedź sklepu \\
 \path{NOPBENCH_ADMIN_PASSWORD} & 4 & generowane & znane hasło administratora
   (poza plikami repozytorium) \\
@@ -1620,7 +1627,7 @@ Nazwa & Krok & Domyślnie & Znaczenie \\
 \texttt{-Only} & 7 & wszystkie & wybrane scenariusze; nagranie częściowe, nie zestaw ruchu \\
 \texttt{-Capture}; \texttt{-Candidate} & 8 & nagranie z~\path{traffic.json}; sklep legacy
   (A/A) & co odtworzyć; adres drugiej strony (P7) \\
-\texttt{-Out}* & 8 & \path{<work>\replay\run.skrun} & przebieg \\
+\texttt{-Out} & 8 & \path{<work>\replay\run.skrun} & przebieg \\
 \texttt{-Run}, \texttt{-OutDir} & 9 & \path{<work>\replay\run.skrun}, \path{<work>\replay} &
   przebieg do oceny; miejsce werdyktu i~pakietu \\
 \texttt{-Pdf} & 9 & \texttt{auto} & \texttt{sk evidence -{}-pdf}: \texttt{auto},
@@ -1739,8 +1746,9 @@ UseCustomCollation=true  Collation=SQL_Latin1_General_CP1_CI_AS
 Sukcesem jest tylko 302 na \texttt{/}; inaczej krok drukuje błędy walidacji formularza
 i~kończy się błędem. Potem strona główna musi zawierać „nopCommerce”, a~plik
 \path{App_Data\Settings.txt} istnieć; krok odczytuje liczbę tabel, produktów
-(\texttt{Deleted = 0}) i~kolację bazy do \path{deploy.json}, zapisuje plik danych
-administratora (sekcja~\ref{sec:bench-stan}) i~podsumowanie.
+(\texttt{Deleted = 0}) i~kolację bazy do \path{deploy.json} i~kończy się błędem, jeśli
+produktów nie ma (instalator nie utworzył danych przykładowych, ADR 0003 §4); potem zapisuje
+plik danych administratora (sekcja~\ref{sec:bench-stan}) i~podsumowanie.
 
 \paragraph{\texttt{5-smoke.ps1}} (dowolna maszyna, która sięga sklepu; bez uprawnień).
 Jeden gość, jeden słoik ciasteczek; najpierw oczekiwanie na stronę główną (pierwsze
@@ -2028,6 +2036,13 @@ wejścia). Joby: \texttt{tools}; \texttt{legacy} (windows-2022, 45~min) -- narz�
 \path{3-install-iis-sql.ps1} z~\texttt{-SkipSql}, kroki 2--5; \texttt{verdict}
 (ubuntu-24.04, 15~min) -- krok~6 z~\texttt{-Pdf required}.
 
+\paragraph{\texttt{mutants.yml}.} Triggery: \texttt{pull\_request} dotykający
+\path{mutants/**}, \path{scripts/mutants/**} albo samego workflowu, oraz ręcznie. Joby:
+\texttt{plan} (Linux), \texttt{build} (Windows), \texttt{tools} (\path{chain-tools.yml}),
+dwanaście jobów \texttt{mutant} (windows-2022) i~dwanaście \texttt{verdict} (Linux) oraz
+\texttt{summary}
+(sekcja~\ref{sec:bench-p9}).
+
 \paragraph{\texttt{secret-scan.yml}.} Triggery \texttt{pull\_request} i~\texttt{push} na
 \texttt{main}; job \texttt{gitleaks} (ubuntu-latest) pobiera całą historię
 (\texttt{fetch-depth: 0} -- poświadczenie dodane i~usunięte później i~tak zostało
@@ -2230,6 +2245,132 @@ Pakiet & \path{contract.yaml}, \path{index.html}, \path{report.pdf} (Google Chro
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md}}
 
+\subsection{P9: zabite mutanty (ADR 0007)}\label{sec:bench-p9}
+
+Jedną z~liczb, które publikuje P9, są \emph{zabite mutanty}: defekty celowo wprowadzone do
+sklepu legacy, które mają pokazać, że kontrakt zauważa zmianę zachowania. Właściwe testy
+mutacyjne łańcucha --- \repopath{sk mutate}, komponent C9 --- należą do fazy 02. Zastępstwem
+w~fazie 01 jest mały, ręcznie napisany zestaw defektów w~źródłach nopCommerce 3.90, każdy
+wymierzony w~nazwane klauzule kontraktu P5, odtworzony przeciw sklepowi legacy i~porównany
+dokładnie tak, jak będzie porównany kandydat P7. \finding{W~\repopath{sk} nie ma tu nic
+nowego: mutant przechodzi przez te same \repopath{sk replay} i~\repopath{sk compare} co
+migracja.}
+
+\paragraph{Prerejestracja.} \path{docs/P9-MUTANTS.md}, katalog \path{mutants/mutants.json}
+i~każda łatka \path{mutants/*.patch} trafiły do repozytorium jednym commitem
+(\texttt{47e2e36}), zanim uruchomiono pierwszego mutanta. To, co każdy mutant ma zepsuć
+i~które klauzule mają go złapać, zapisano, zanim którykolwiek się wykonał. Zasady:
+
+\begin{enumerate}
+  \item \textbf{Jeden mutant to jedna łatka} --- unified diff względem \texttt{release-3.90}
+    (\texttt{12d1f01}) dokładnie w~postaci, jaką dostarcza krok~1; większość źródeł kończy
+    wiersze CRLF, więc łatki też (\path{.gitattributes} trzyma je bajt w~bajt). Wpis
+    w~katalogu podaje plik i~element, zmianę, powód, dla którego to wiarygodny defekt
+    migracji, i~klauzule, które powinny go złapać.
+  \item \textbf{Małe, wiarygodne, behawioralne}: granica, pominięte sprawdzenie, porównanie,
+    które traci regułę wielkości liter, zły adres dla podatku, brak limitu --- nigdy zmiana,
+    która kładzie stronę: mutant musi odpowiadać na ruch.
+  \item \textbf{Zabity} znaczy, że wynik \repopath{sk compare} to \repopath{fail}: co
+    najmniej jedna wymiana jest \repopath{regression} (klauzula utrzymana na legacy nie
+    trzyma na mutancie, różnica bez wyjaśnienia w~kontrakcie albo brak odpowiedzi).
+    \repopath{pass} albo \repopath{review} (same fix candidates) znaczy, że mutant
+    \emph{przeżył}.
+  \item \textbf{Najpierw zapis, potem bez zmian}: oczekiwanych klauzul nie zmienia się po
+    zobaczeniu wyniku; łatkę, która się nie nakłada albo nie buduje, poprawia osobny,
+    opisany commit.
+  \item \textbf{Wyniki raportuje się takimi, jakie są}; ocalałego mutanta nie zabija się
+    zmianą kontraktu w~tym zadaniu --- to znalezisko dla następnej rewizji kontraktu.
+  \item \textbf{M00 kalibruje metodę}: przypięte źródło bez zmian, zbudowane drugi raz
+    i~wdrożone jak każdy mutant. Jego replay musi dać \repopath{pass}; przebieg, w~którym
+    M00 nie przechodzi, nie liczy żadnego wyniku mutantów.
+  \item \textbf{Nagłówek liczy M01--M11}: „N z~11 zabitych”.
+\end{enumerate}
+
+\paragraph{Mutant jako druga witryna na bazie legacy.} Replay musi przed każdym
+scenariuszem zresetować obie strony do tego samego stanu, a~\path{contract/secondkey.yaml}
+robi to jednym snapshotem bazy. Dlatego mutant działa \emph{obok} sklepu legacy, na jego
+bazie (\path{scripts/mutants/2-deploy-mutant.ps1}): własny katalog
+\path{C:\inetpub\nopcommerce-mutant} sprawdzony z~manifestem jego buildu; skopiowane
+z~instalacji legacy \path{App_Data\Settings.txt} i~\path{App_Data\InstalledPlugins.txt},
+więc otwiera bazę utworzoną przez instalator legacy i~skonfigurowaną przez krok~6 --- bez
+drugiej instalacji; własna witryna i~pula aplikacji IIS \texttt{nopcommerce-mutant} na
+\url{http://localhost:8091/} (8081 należy do rozgrzewki P3, 8090 do kandydata P7);
+własny login Windows z~\texttt{db\_owner} w~\texttt{nopcommerce\_legacy}, utworzony
+\emph{przed} snapshotem kroku~7, więc każde przywrócenie go zachowuje. Obie strony są
+przywracane z~tego samego \texttt{nopcommerce\_legacy\_snapshot}, \path{secondkey.yaml}
+działa bez zmian, a~\repopath{8-replay.ps1 -Candidate http://localhost:8091/} odtwarza
+legacy przeciw mutantowi. Różne porty i~hosty w~bezwzględnych URL-ach nopCommerce nie są
+różnicą: \repopath{sk replay} wysyła każdej stronie jej własny host, a~\repopath{sk compare}
+zastępuje bazowy URL każdej strony przez \repopath{<base-url>}. Krok~2 buduje mutanta
+z~\repopath{-Patch}: checkout musi być czystym przypiętym drzewem, łatka jest nakładana,
+drzewo sprawdzane przed buildem i~po nim, a~pliki przywracane na koniec; bez
+\repopath{-Patch} krok~2 działa jak wcześniej.
+
+\paragraph{Workflow \texttt{mutants.yml}.} Uruchamia się przy pull requestach, które
+dotykają \path{mutants/}, \path{scripts/mutants/} albo samego workflowu, oraz ręcznie:
+\texttt{plan} (Linux) sprawdza katalog i~każdą łatkę na przypiętym drzewie
+(\path{1-check-mutants.ps1}) i~buduje macierz; \texttt{build} (Windows) buduje witrynę
+legacy raz dla wszystkich; \texttt{tools} buduje \repopath{sk} z~przypiętego commitu
+(\path{chain-tools.yml}); dwanaście jobów \texttt{mutant} na \texttt{windows-2022} ---
+build mutanta, instalacja i~konfiguracja legacy (kroki 3--6), wdrożenie mutanta obok,
+nagranie ruchu na legacy (krok~7) i~replay legacy kontra mutant (krok~8); dwanaście jobów
+\texttt{verdict} na Linuksie --- \repopath{sk compare}, pakiet i~wynik „zabity albo
+przeżył” (\path{3-mutant-outcome.ps1}); \texttt{summary} zbiera wyniki w~\path{mutants.json}
+(\path{4-collect-mutants.ps1}) i~kończy się błędem, jeśli M00 nie przeszedł.
+
+\paragraph{Wynik: 11 z~11 zabitych.} Przebieg zapisany w~\path{results/p9} (workflow
+\texttt{mutants}, commit \texttt{5f90227}, \repopath{sk} na \texttt{967c49c}, 18,5~minuty;
+dwanaście jobów Windows po 914--956~s równolegle) dał: M00 --- \repopath{pass} (290 wymian:
+269 \repopath{equal}, 21 \repopath{equal-under-contract} przez maski P5, 0 regresji;
+76 z~76 klauzul sprawdzonych), a~każdy z~M01--M11 --- \repopath{fail}. \finding{Każda
+klauzula zarejestrowana z~góry dla mutanta zregresowała na nim}; w~żadnym z~dwunastu
+replayów nie zabrakło odpowiedzi i~żaden mutant nie dał fix candidate. Head pull requestu
+(\#8) przeszedł cały zestaw jeszcze raz, z~tym samym wynikiem.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.1cm}@{}}
+\toprule
+Mutant & Klauzule zarejestrowane z~góry & Regresje (bez wyjaśnienia) \\
+\midrule
+\endfirsthead
+\toprule
+Mutant & Klauzule zarejestrowane z~góry & Regresje (bez wyjaśnienia) \\
+\midrule
+\endhead
+M01 darmowa wysyłka już od samego progu & \path{NO-FREE-SHIPPING-AT-EXACTLY-1000} & 7 (6) \\
+M02 kod kuponu porównywany z~uwzględnieniem wielkości liter & \path{COUPON-TRIMMED-AND-CASE-INSENSITIVE} (i~8 kolejnych zregresowanych) & 14 (2) \\
+M03 pominięta maksymalna kwota rabatu & \path{PCT20MAX100-STOPS-AT-MAXIMUM} & 1 (0) \\
+M04 suma zamówienia bez ograniczenia przez zamówienie & \path{TAKE50-CAPPED-AT-ORDER-TOTAL}, \path{CART-TOTAL-NEVER-NEGATIVE} & 1 (0) \\
+M05 podatek z~adresu wysyłki zamiast rozliczeniowego & \path{TAX-FOLLOWS-BILLING-ADDRESS} & 2 (1) \\
+M06 dopasowanie kodu pocztowego podatku z~wielkością liter & \path{TAX-ZIP-MATCH-IGNORES-CASE} & 2 (1) \\
+M07 szczegóły zamówienia bez sprawdzenia właściciela & \path{OTHERS-ORDER-NEVER-SHOWN}, \path{OTHERS-ORDER-NEVER-NAMES-ITS-OWNER}, \path{OTHERS-ORDER-SENDS-TO-LOGIN} & 2 (0) \\
+M08 serwowana strona nieopublikowanego produktu & \path{UNPUBLISHED-PAGE-NEVER-SERVED}, \path{UNPUBLISHED-PAGE-NOT-FOUND} & 1 (0) \\
+M09 pominięte ostrzeżenie o~stanie magazynu & \path{QUANTITY-ABOVE-STOCK-REFUSED}, \path{T07-CART-HOLDS-ONE-LENOVO}, \path{ORDER-LOWERS-STOCK} & 3 (0) \\
+M10 ceny formatowane w~kulturze niezmiennej & \path{CART-UNIT-PRICES-WRITTEN-IN-USD} (i~27 kolejnych zregresowanych) & 133 (98) \\
+M11 pominięte wykluczenie karty podarunkowej w~walidacji rabatu & \path{GIFT-CARD-IN-CART-COUPON-MESSAGE}, \path{GIFT-CARD-CART-NEVER-DISCOUNTED} & 1 (0) \\
+\bottomrule
+\end{xltabular}
+}
+
+Regresje liczą wymiany: każda jest albo regresją klauzuli, albo różnicą, której kontrakt
+nie wyjaśnia (w~nawiasie). M10 --- defekt kultury formatowania, czyli tej samej klasy co
+różnica NLS → ICU, na którą poluje P7 --- zostawia największy ślad: 133 zregresowane
+wymiany. Jedno oczekiwanie zapisano z~góry jako zależne od reguły \repopath{sk}: M04
+sprowadza sumę poniżej zera, a~.NET Framework zapisuje ujemną kwotę w~nawiasach
+(\texttt{(\$16.00)}); ekstraktor \texttt{cartTotal} nie umie jej odczytać, a~\repopath{sk}
+liczy wartość nieczytelną przeciw stronie, na której wystąpiła, więc
+\path{CART-TOTAL-NEVER-NEGATIVE} miał zregresować jako błąd, a~nie przez \texttt{lt 0}.
+Każdy mutant ma pakiet dowodowy jako artefakt CI \texttt{mutant-<id>-evidence-pack}
+(przechowywany 30 dni), a~\path{results/p9/mutants.json} jest plikiem przebiegu bajt
+w~bajt.
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P9-MUTANTS.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0007-p9-mutants-on-a-second-site.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/mutants/mutants.json},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/mutants.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/mutants/2-deploy-mutant.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md}}
+
 \subsection{Runbook P6: przebieg modernize-dotnet (praca człowieka)}\label{sec:bench-p6}
 
 P6 wykonuje człowiek: osoba z~subskrypcją GitHub Copilot uruchamia agenta migracyjnego
@@ -2313,24 +2454,37 @@ $runner = 'C:\nopbench\tools\NUnit.ConsoleRunner.3.22.0\tools\nunit3-console.exe
     i~niezaliczony u~kandydata -- jest.
   \item \textbf{Uruchomienie agenta.} (5.1) Otwórz \texttt{nop-p6} na gałęzi
     \texttt{secondkey/p6-candidate} w~wybranym kliencie, zalogowany do GitHub Copilot,
-    i~przed czymkolwiek innym zapytaj: „List the skills you have loaded from this
-    repository.” -- odpowiedź wklej do zapisu. Jeśli brakuje skilli Second Key, zatrzymaj
-    się i~popraw krok~3 (akceptacja R4 to właśnie to: agent podejmuje skill). (5.2) Uruchom
+    i~przed czymkolwiek innym zapytaj, tak jak każe przewodnik standardów (jego §6):
+    „Which custom skills from .github/skills are you applying?” (w~Copilot CLI:
+    \texttt{/skills list}, potem \texttt{/skills info applying-dotnet-migration-standards})
+    -- odpowiedź wklej do zapisu. Jeśli brakuje \path{applying-dotnet-migration-standards},
+    zatrzymaj się i~popraw krok~3 (akceptacja R4 to właśnie to: agent podejmuje skill). (5.2) Uruchom
     modernizację: w~Visual Studio otwórz \path{src\NopCommerce.sln} i~uruchom
     \emph{GitHub Copilot app modernization} (menu kontekstowe rozwiązania albo Copilot Chat
     w~trybie agenta z~wybranym agentem modernizacji); w~VS Code otwórz katalog, Copilot
     Chat w~trybie \textbf{Agent} z~agentem app modernization; w~Copilot CLI --
     \texttt{copilot} w~korzeniu repozytorium z~włączonym agentem. Nazwy menu zmieniają się
     między wydaniami: \emph{gdzie} kliknąć mówi dokumentacja narzędzia, \emph{co} mu dać --
-    runbook. Wyślij dosłownie:
+    runbook. Dwa pierwsze prompty pochodzą z~przewodnika standardów (§5, kroki 3 i~4), który
+    jest ich jedynym źródłem: wyślij je dosłownie, w~tej kolejności, w~brzmieniu z~wersji
+    standardów zainstalowanej w~kroku~3; w~wersji 0.1.0:
 \begin{lstlisting}
-Modernize the solution in src/NopCommerce.sln from .NET Framework 4.5.1 to .NET 10.
-Migrate the ASP.NET MVC 5 web application (Nop.Web, the Administration area and the
-plugins) to ASP.NET Core on .NET 10. Keep the SQL Server database schema, the public
-URLs and the observable behaviour of the storefront unchanged. Keep the existing unit
-test projects and make them build and run on .NET 10. Follow the standards in
-.github/skills. Commit your work on the current branch in logical steps.
+Upgrade this solution to .NET 10. Apply the applying-dotnet-migration-standards skill from
+.github/skills to every task: preserve behaviour, and record every behaviour flag in
+docs/migration/behaviour-flags.md instead of fixing it.
+
+From now on, for all tasks in this upgrade, follow the applying-dotnet-migration-standards skill.
 \end{lstlisting}
+    Potem zakres benchu, dosłownie:
+\begin{lstlisting}
+The solution is src/NopCommerce.sln, on .NET Framework 4.5.1. Migrate the ASP.NET MVC 5
+web application (Nop.Web, the Administration area and the plugins) to ASP.NET Core on
+.NET 10. Keep the SQL Server database schema, the public URLs and the observable
+behaviour of the storefront unchanged. Keep the existing unit test projects and make them
+build and run on .NET 10. Commit your work on the current branch in logical steps.
+\end{lstlisting}
+    Etapy agenta prowadzi się tak, jak opisuje §5 krok~5 przewodnika, razem z~jego
+    sprawdzeniem, że w~ocenie jest linia bazowa legacy.
     Każdy kolejny prompt, każde pytanie agenta i~każdy wybór trafiają do zapisu dosłownie,
     po kolei. Agent commituje sam; nie rób squasha. (5.3) Jeśli musisz zmienić kod sam
     (agent utknął albo prosi), zrób osobny commit z~komunikatem zaczynającym się od
@@ -2470,9 +2624,9 @@ P7 & odtworzenie i~porównanie legacy z~kandydatem; przegląd różnic & istniej
 P8 & reguły migracji Portcullis na PR kandydata (R2, R3) & SARIF jest dołączony do
   pakietu & planowane \\
 P9 & publikacja pakietu, kontraktu i~liczb (scenariusze, różnice, regresje, zabite
-  mutanty) & publiczne & planowane \\
+  mutanty) & publiczne & w~toku: zabite mutanty 11 z~11 (\#8); reszta po P6--P8 \\
 P10 & dziennik godzin wdrożenia dla P4--P7 & godziny są w~opublikowanym raporcie &
-  planowane \\
+  w~toku \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -2518,7 +2672,8 @@ Daty i~godziny & daty zamówień na stronach szczegółów i~historii; nowsze da
 które zmienia pull request kandydata, i~dołączy SARIF do pakietu
 (sekcja~\ref{sec:portcullis}). P9 opublikuje pakiet, kontrakt i~liczby: scenariusze,
 różnice, regresje i~zabite mutanty; pakiet cytuje PR, jego commit czołowy, wersję
-standardów i~zapis P6.
+standardów i~zapis P6. Liczba zabitych mutantów już jest: 11 z~11
+(sekcja~\ref{sec:bench-p9}).
 
 \paragraph{P10: dziennik godzin.} Liczba godzin potrzebnych do objęcia prawdziwego systemu
 legacy przez Second Key jest jedną z~liczb raportu fazy 01. Zakres: P4--P7 to wdrożenie
@@ -2526,17 +2681,22 @@ we właściwym sensie; P1 i~P2 są zapisywane osobno jako jednorazowy nakład pr
 legacy. Zasady: jeden wiersz na sesję pracy na jednym zadaniu i~wykonawcę; godziny zegarowe
 faktycznie spędzone, dziesiętnie (0,25 = 15~minut), a~czekanie na CI albo agenta tylko wtedy,
 gdy nic innego się nie działo -- jako osobny wiersz „waiting”; wykonawca to osoba albo
-agent (\texttt{agent: <model> (<tool>)}), nigdy oba, a~godziny agenta i~człowieka nie są
+agent (\texttt{agent (<tool>)}), nigdy oba, a~godziny agenta i~człowieka nie są
 sumowane; każdy wiersz ma dowód (PR, przebieg, zapis); szacunki są oznaczone. Stan
 dziennika w~migawce: siedem wierszy agenta z~jednej sesji około dwóch godzin (P1 0,40 i~0,35;
 P2 0,30 i~0,45; przygotowanie P4 0,40; przygotowanie P6 0,15; P10 0,05; podział między
-wiersze to szacunek z~czasów commitów i~przebiegów), zero godzin człowieka. Suma: P1--P2
--- 1,50~h agenta, przygotowania P4 i~P6 -- 0,55~h, P10 -- 0,05~h, wdrożenie P4--P7 --
-0. Minuty runnerów są prowadzone osobno: \#1 -- 3~przebiegi (jeden nieudany), 4,5~min
+wiersze to szacunek z~czasów commitów i~przebiegów) oraz trzy wiersze dopisane później jako
+szacunki z~czasów commitów i~scaleń --- P3 2,00, P4 z~P5 razem 4,75 (pracowano nad nimi
+równolegle, w~stosie pull requestów), mutanty P9 2,70 --- które obejmują czekanie na CI,
+więc są górnym ograniczeniem; zero godzin człowieka. Suma: P1--P2 -- 1,50~h agenta, P3 --
+2,00~h, przygotowania P4 i~P6 -- 0,55~h, P10 -- 0,05~h, wdrożenie P4--P7 (na razie P4
+i~P5) -- 4,75~h, mutanty P9 (poza wdrożeniem) -- 2,70~h. Minuty runnerów są prowadzone osobno: \#1 -- 3~przebiegi (jeden nieudany), 4,5~min
 Windows i~1,2~min Linux; \#2 -- 3~przebiegi (jeden nieudany), 28,3 i~1,5~min; \#3 -- około
-7 i~0,5~min na przebieg. Zielony przebieg całego workflowu legacy trwał wtedy około
+7 i~0,5~min na przebieg. Zielony przebieg całego workflowu legacy trwał w~P2 około
 7~minut (build 1,5, IIS z~SQL Server, instalatorem i~smoke testem 5--5,5, lint 0,5
 równolegle); nieudany przebieg P2 trwał 13,4~minuty, z~czego 11 w~instalatorze SQL Server.
+Od kiedy workflow obejmuje kroki 6--9 (P4, P5), sam job hosta trwa około 14~minut,
+a~przebieg mutantów P9 to dwanaście takich jobów równolegle (18,5~minuty w~sumie).
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
