@@ -35,7 +35,7 @@ legacy-risk-scan & L18 scalony; zrobiony, gdy job \repopath{verify} w
 \path{deploy.yml} przejdzie po włączeniu źródła GitHub Pages „GitHub Actions” w
 ustawieniach repozytorium. \\
 capture, sandbox, portal & tylko plany; decyzja o topologii demonstracyjnej (D7) w stanie
-„proposed”. \\
+„proposed”, zrobiona, gdy ADR zostanie przyjęty. \\
 \bottomrule
 \end{xltabular}
 
@@ -47,7 +47,9 @@ capture, sandbox, portal & tylko plany; decyzja o topologii demonstracyjnej (D7)
 \path{letsgolegacy.secondkey-standards/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
 \path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
-\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md}}
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
 
 \subsection{Liczby, które już są}\label{sec:status-liczby}
 
@@ -60,11 +62,12 @@ Co & Wynik zapisany przez CI \\
 Co & Wynik zapisany przez CI \\
 \midrule
 \endhead
-P3 --- rozgrzewka na eShopLegacyMVC & pakiet dowodowy wyprodukowany przez cały łańcuch (capture, A/A replay, werdykt, bramka, pakiet) \\
+P3 --- rozgrzewka na eShopLegacyMVC & pakiet dowodowy wyprodukowany przez cały łańcuch (capture, A/A replay, werdykt, bramka, pakiet): 7 scenariuszy, 27 wymian; A/A 54 wyniki, 14 resetów, 0 bez odpowiedzi; werdykt \repopath{pass} --- 27 \repopath{equal}, 0 regresji; kontrakt 13 klauzul, wszystkie zaakceptowane i utrzymane, 0 niesprawdzonych, udział nieobecności 23\,\% (3 \repopath{never}); bramka na całym drzewie legacy: 27 znalezisk, \repopath{sk gate} \repopath{fail} z 7 blokującymi --- zapisane, nie egzekwowane \\
 P4 --- zestaw ruchu nopCommerce & 38 scenariuszy (30 zaplanowanych, niektóre jako kilka sesji), 290 wymian \\
 P5 --- kontrakt i dowód A/A & werdykt \repopath{pass}: 76 z 76 zaakceptowanych klauzul utrzymanych, 0 niesprawdzonych; 15 klauzul \repopath{never} (udział nieobecności 19,7\,\%); 290 wymian w 38 scenariuszach: 272 \repopath{equal}, 18 \repopath{equal-under-contract}, 0 regresji, 0 fix candidates \\
-P9 --- zabite mutanty & 11 z 11: każdy z M01--M11 daje w \repopath{sk compare} wynik \repopath{fail}, a każda klauzula zarejestrowana dla mutanta z góry na nim zregresowała; M00 (kalibracja: źródło bez zmian) \repopath{pass} --- 290 wymian, 269 \repopath{equal}, 21 \repopath{equal-under-contract}, 0 regresji \\
+P9 --- zabite mutanty & 11 z 11: każdy z M01--M11 daje w \repopath{sk compare} wynik \repopath{fail}, a każda klauzula zarejestrowana dla mutanta z góry na nim zregresowała; M00 (kalibracja: źródło bez zmian) \repopath{pass} --- 290 wymian, 269 \repopath{equal}, 21 \repopath{equal-under-contract}, 0 regresji; to wynik dla tych jedenastu defektów na tym ruchu, a nie mutation score --- zasięg kontraktu zmierzą generowane mutanty \repopath{sk mutate} (faza 02) \\
 Testy mutacyjne rdzenia & \repopath{SecondKey.Replay} (bez kodu SQL Server) wzrosło z 60,7\,\% do 89,5\,\% w drugiej rewizji analizy fazy 01 \\
+Testy mutacyjne reguł migracyjnych Portcullis & 100,00\,\% w ostatnim zapisanym przebiegu Stryker.NET: 214 z 214 testowanych mutantów wykrytych (212 zabitych, 2 przekroczenia czasu); \path{mutation.yml} zawodzi poniżej progu 95 \\
 \bottomrule
 \end{xltabular}
 
@@ -73,7 +76,9 @@ Testy mutacyjne rdzenia & \repopath{SecondKey.Replay} (bez kodu SQL Server) wzro
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md},
-\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.portcullis/docs/MUTATIONS.md},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/stryker-config.json}}
 
 \subsection{Droga do bramki fazy 01}\label{sec:status-droga}
 

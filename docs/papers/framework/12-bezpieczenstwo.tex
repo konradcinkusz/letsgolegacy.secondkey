@@ -12,15 +12,28 @@ oraz jak repozytoria pilnują tego mechanicznie.
         \repopath{cookie}, \repopath{set-cookie}, \repopath{x-api-key}, oraz każdy dodany
         przez \repopath{--redact-header} albo \repopath{capture.redactHeaders}. Nagłówek
         pliku \repopath{*.skcap} zapisuje listę zredagowanych nagłówków, a replay redaguje
-        te same nagłówki w przebiegu.
+        te same nagłówki w przebiegu. Replay nie wysyła wartości zredagowanych ani
+        nagranych ciasteczek: każdy scenariusz po każdej stronie dostaje świeży cookie jar.
+  \item \textbf{Ciała są nagrywane.} Redakcja obejmuje tylko nagłówki: ciała żądań
+        i odpowiedzi trafiają do nagrania (jako JSON, tekst albo base64, do limitu
+        \repopath{--max-body-bytes}), także pola formularzy, które kontrakt może czytać jako
+        \repopath{request.body.form.<pole>} --- na przykład hasło wpisane przy logowaniu.
+        Dlatego w benchu żądania konfiguracji sklepu idą do witryny z pominięciem proxy
+        nagrywającego, bo hasło administratora nigdy nie może trafić do nagrania,
+        a scenariusze logują się wyłącznie kontami sklepu przykładowego: publicznym klientem
+        danych przykładowych albo klientem, którego scenariusz sam zarejestrował.
+        Tokenizacja danych osobowych w nagraniach należy do fazy 02
+        (sekcja~\ref{sec:bezpieczenstwo-plan}).
   \item \textbf{Ruch sieciowy.} Nic nie jest wysyłane przez sieć poza dwoma systemami,
         które są porównywane. Zasada projektowa 2: wszystko działa w granicy klienta,
         domyślnie bez ruchu wychodzącego.
   \item \textbf{Nagrania systemów rzeczywistych nigdy nie trafiają do git.} Pliki
-        \repopath{.gitignore} rdzenia i benchu wykluczają \repopath{*.skcap},
-        \repopath{*.skrun}, \path{.secondkey/} i \path{evidence-out/}; wyjątki dotyczą
-        tylko syntetycznych próbek i fixture'ów testów. Bench publikuje nagrania i
-        przebiegi wyłącznie jako artefakty CI.
+        \repopath{.gitignore} rdzenia, benchu, Portcullis, standardów oraz repozytoriów
+        fazy 02 i 03 wykluczają \repopath{*.skcap}, \repopath{*.skrun}, \path{.secondkey/}
+        i \path{evidence-out/}; wyjątki dotyczą tylko syntetycznych próbek i fixture'ów
+        testów. Bench publikuje nagrania, przebiegi i pakiety wyłącznie jako artefakty CI,
+        które CI przechowuje 30 dni; każdy przebieg workflowu tworzy nowe, a trwałym zapisem
+        wyniku jest \path{results/<ticket>/README.md} z linkiem do przebiegu.
   \item \textbf{Pakiet dowodowy bez ruchu.} Opcję \repopath{--run} pomija się, gdy nagrany
         ruch musi zostać w swojej granicy; pakiet nadal wyjaśnia werdykt.
   \item \textbf{Raport HTML jest statyczny}: jeden plik bez skryptów i bez dostępu do sieci
@@ -32,10 +45,23 @@ oraz jak repozytoria pilnują tego mechanicznie.
 
 \zrodla{\path{letsgolegacy.secondkey/SECURITY.md},
 \path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/docs/formats/README.md},
+\path{letsgolegacy.secondkey/docs/formats/contract.md},
 \path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/schemas/skcap.schema.json},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
-\path{letsgolegacy.secondkey/.gitignore},
-\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{.gitignore} w repozytoriach \path{letsgolegacy.secondkey},
+\path{letsgolegacy.secondkey-nopcommerce-bench}, \path{letsgolegacy.portcullis},
+\path{letsgolegacy.secondkey-standards}, \path{letsgolegacy.secondkey-capture},
+\path{letsgolegacy.secondkey-sandbox}, \path{letsgolegacy.secondkey-portal};
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/6-configure-store.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Shop.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md}}
 
 \subsection{Sekrety}\label{sec:bezpieczenstwo-sekrety}
 
@@ -50,37 +76,55 @@ oraz jak repozytoria pilnują tego mechanicznie.
         puli aplikacji (uwierzytelnianie Windows); reset w replay dostaje łańcuch połączenia
         bez sekretu w \repopath{NOPBENCH\_SK\_SQL}. Jedyny sekret benchu --- hasło
         administratora sklepu --- jest generowane na przebieg, maskowane w logach CI i
-        zapisywane tylko w \path{<work>\secrets\legacy-admin.json}.
-  \item \textbf{Gdy sekret trafi do publicznego repozytorium}: najpierw rotacja, potem
-        czyszczenie historii --- wypchnięty commit jest ujawniony w chwili wypchnięcia.
+        zapisywane tylko w \path{<work>\secrets\legacy-admin.json}, czytelnym dla bieżącego
+        użytkownika, grupy Administrators i SYSTEM; diagnostyka nigdy go nie zbiera. Znane
+        hasło można podać w \repopath{NOPBENCH\_ADMIN\_PASSWORD}, trzymając je poza plikami
+        repozytorium.
+  \item \textbf{Gdy skan znajdzie sekret}: najpierw rotacja poświadczenia, potem usunięcie go
+        ze źródła i czytanie ze zmiennej środowiskowej, dopiero na końcu czyszczenie historii
+        --- repozytoria są publiczne, a wypchnięty commit jest ujawniony w chwili
+        wypchnięcia. Fałszywy alarm: w rdzeniu, Portcullis i benchu ścieżkę albo kształt
+        dodaje się do \repopath{[allowlist]} w \path{.gitleaks.toml} w tym samym commicie,
+        żeby wyjątek był przeglądalny; w legacy-risk-scan --- wąski wpis z komentarzem, nigdy
+        przez wklejenie prawdziwej wartości do wyrażenia regularnego; w standardach
+        przeformułowuje się przykład, zamiast dodawać ścieżkę do allowlisty.
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/secrets.env.example},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/scripts/hooks/pre-commit},
+\path{letsgolegacy.portcullis/scripts/hooks/pre-commit},
 \path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.githooks/pre-commit},
 \path{letsgolegacy.secondkey-standards/.gitleaks.toml},
-\path{letsgolegacy.legacy-risk-scan/.gitleaks.toml}}
+\path{letsgolegacy.secondkey-standards/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.legacy-risk-scan/.gitleaks.toml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.legacy-risk-scan/scripts/hooks/pre-commit}}
 
 \subsection{Skan sekretów: hook i CI}\label{sec:bezpieczenstwo-skan}
 
 Każde repozytorium fazy 01 skanuje sekrety gitleaks w dwóch miejscach, celowo: hook
-pre-commit łapie błąd, zanim stanie się historią, a job CI łapie klony bez hooka. Hook
-bez zainstalowanego gitleaks odmawia commitu.
+pre-commit łapie błąd, zanim stanie się historią, a job CI łapie klony bez hooka.
+Zainstalowany hook bez skanera zawsze odmawia commitu; repozytoria różnią się tym, czy hook
+w ogóle trafi do klonu i czy zamiast gitleaks wystarczy Docker --- opisuje to część „Hook”
+każdego wiersza tabeli.
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X@{}}
 \toprule
-Repozytorium & Konfiguracja \\
+Repozytorium & Konfiguracja gitleaks i hook \\
 \midrule
 \endfirsthead
 \toprule
-Repozytorium & Konfiguracja \\
+Repozytorium & Konfiguracja gitleaks i hook \\
 \midrule
 \endhead
-\path{letsgolegacy.secondkey} & reguły domyślne plus reguła na łańcuch połączenia SQL Server z hasłem w treści; wyjątek ścieżki dla \path{secrets.env.example}; hook z \path{./scripts/setup.sh} \\
-\path{letsgolegacy.portcullis} & reguły domyślne plus ta sama reguła SQL Server; hook z \path{./scripts/install-hooks.sh} \\
-\path{letsgolegacy.secondkey-standards} & tylko reguły domyślne i świadomie bez allowlisty: przykłady w standardach używają placeholderów, a gdy skaner je oflaguje, poprawia się przykład \\
-\path{letsgolegacy.legacy-risk-scan} & tylko reguły domyślne: repozytorium nie ma sekretów; pierwszy potrzebny sekret dostaje własną regułę w tym samym commicie \\
-\path{letsgolegacy.secondkey-nopcommerce-bench} & reguły domyślne plus reguła SQL Server (bench łączy się przez uwierzytelnianie Windows, więc hasło w łańcuchu nigdy nie jest uprawnione); hook w \path{.githooks/} włączany przez \repopath{core.hooksPath}; gitleaks w CI przypięty skrótem SHA-256 wydania \\
+\path{letsgolegacy.secondkey} & reguły domyślne plus reguła na łańcuch połączenia SQL Server z hasłem w treści; wyjątek ścieżki dla \path{secrets.env.example}. Hook: \path{./scripts/setup.sh} kopiuje go tylko wtedy, gdy gitleaks jest zainstalowany, a inaczej pomija ten krok --- commit przechodzi wtedy bez skanu i sekret wykrywa dopiero job CI \\
+\path{letsgolegacy.portcullis} & reguły domyślne plus ta sama reguła SQL Server. Hook: \path{./scripts/install-hooks.sh} bez gitleaks kończy się kodem 127 i niczego nie instaluje \\
+\path{letsgolegacy.secondkey-standards} & tylko reguły domyślne i świadomie bez allowlisty: przykłady w standardach używają placeholderów, a gdy skaner je oflaguje, poprawia się przykład. Hook: \path{./scripts/setup.sh} instaluje go zawsze; bez gitleaks hook uruchamia obraz \path{ghcr.io/gitleaks/gitleaks:latest} przez Dockera, a commit odrzuca dopiero wtedy, gdy nie ma ani gitleaks, ani działającego Dockera; \texttt{./scripts/setup.sh --check} kończy się wtedy błędem \\
+\path{letsgolegacy.legacy-risk-scan} & tylko reguły domyślne: repozytorium nie ma sekretów; pierwszy potrzebny sekret dostaje własną regułę w tym samym commicie. Hook: jak w standardach --- \path{./scripts/setup.sh} instaluje go zawsze, a bez gitleaks hook używa obrazu kontenera przez Dockera \\
+\path{letsgolegacy.secondkey-nopcommerce-bench} & reguły domyślne plus reguła SQL Server (bench łączy się przez uwierzytelnianie Windows, więc hasło w łańcuchu nigdy nie jest uprawnione); gitleaks w CI przypięty skrótem SHA-256 wydania. Hook: w \path{.githooks/}, włączany raz na klon przez \texttt{git config core.hooksPath .githooks}; wymaga gitleaks; Git for Windows uruchamia go we własnym bashu, więc działa też na hoście Windows \\
 \bottomrule
 \end{xltabular}
 
@@ -89,35 +133,102 @@ placeholder w nawiasach ostrych (\repopath{Password=<...>}) przechodzi przez all
 reguły, a prawdziwe hasło --- z \repopath{Password} albo \repopath{pwd}, z
 \repopath{Server} albo \repopath{Data Source} --- jest blokowane.
 
-\zrodla{\path{letsgolegacy.secondkey/.gitleaks.toml},
-\path{letsgolegacy.portcullis/.gitleaks.toml},
-\path{letsgolegacy.secondkey-standards/.gitleaks.toml},
-\path{letsgolegacy.legacy-risk-scan/.gitleaks.toml},
-\path{letsgolegacy.secondkey-nopcommerce-bench/.gitleaks.toml},
-\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/secret-scan.yml},
+W standardach i legacy-risk-scan hook kończy skan kodem 2 przy znalezisku, żeby awaria
+narzędzia nie wyglądała jak wykryty sekret; commit jest odrzucany w obu przypadkach.
+\texttt{git commit --no-verify} jest tam celowo głośnym wyjściem awaryjnym, a CI i tak
+skanuje każdy push.
+
+Lokalnym odpowiednikiem jobu CI jest \path{./scripts/scan-secrets.sh} w rdzeniu, standardach
+i legacy-risk-scan: bez argumentu skanuje historię, tak jak CI, z \repopath{--staged} ---
+zmiany w stagingu, tak jak hook, a w standardach i legacy-risk-scan z \repopath{--dir} ---
+drzewo robocze jako pliki. W rdzeniu bez gitleaks kończy się kodem 127; w standardach
+i legacy-risk-scan sięga wtedy po obraz kontenera.
+
+Joby CI różnią się skanerem: rdzeń i Portcullis pobierają gitleaks 8.28.0 jako plik
+wydania, bench tę samą wersję sprawdza skrótem SHA-256, a standardy i legacy-risk-scan
+uruchamiają celowo obraz \path{ghcr.io/gitleaks/gitleaks:latest} („a detection ruleset is
+only worth what its newest rule catches”) i dodatkowo co tydzień, żeby przeskanować
+historię regułami dodanymi w międzyczasie. Każdy job skanuje całą historię
+(\repopath{fetch-depth: 0}).
+
+\zrodla{\path{.gitleaks.toml} i \path{.github/workflows/secret-scan.yml} w repozytoriach
+\path{letsgolegacy.secondkey}, \path{letsgolegacy.portcullis},
+\path{letsgolegacy.secondkey-standards}, \path{letsgolegacy.legacy-risk-scan},
+\path{letsgolegacy.secondkey-nopcommerce-bench};
+\path{letsgolegacy.secondkey/scripts/setup.sh},
+\path{letsgolegacy.secondkey/scripts/hooks/pre-commit},
+\path{letsgolegacy.secondkey/scripts/scan-secrets.sh},
+\path{letsgolegacy.portcullis/scripts/install-hooks.sh},
+\path{letsgolegacy.portcullis/scripts/hooks/pre-commit},
+\path{letsgolegacy.secondkey-standards/scripts/setup.sh},
+\path{letsgolegacy.secondkey-standards/scripts/hooks/pre-commit},
+\path{letsgolegacy.secondkey-standards/scripts/scan-secrets.sh},
+\path{letsgolegacy.legacy-risk-scan/scripts/setup.sh},
+\path{letsgolegacy.legacy-risk-scan/scripts/hooks/pre-commit},
+\path{letsgolegacy.legacy-risk-scan/scripts/scan-secrets.sh},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.githooks/pre-commit},
 \path{letsgolegacy.secondkey-nopcommerce-bench/README.md}}
 
 \subsection{Zależności, analiza statyczna, własność}\label{sec:bezpieczenstwo-zaleznosci}
 
 \begin{itemize}
   \item \textbf{Dependabot} co tydzień w każdym repozytorium fazy 01: rdzeń (NuGet z
-        grupą stosu testowego, GitHub Actions), Portcullis (NuGet, GitHub Actions, Docker;
-        rodzina \repopath{Microsoft.CodeAnalysis*} wyłączona, bo podniesienie „podłogi”
-        Roslyn to decyzja o wspieranych SDK, a nie aktualizacja), standardy (GitHub
+        grupą stosu testowego, GitHub Actions, npm dla renderera diagramów dokumentacji),
+        Portcullis (NuGet, GitHub Actions, Docker; rodzina
+        \repopath{Microsoft.CodeAnalysis*} wyłączona, bo podniesienie „podłogi” Roslyn to
+        decyzja o wspieranych SDK, a nie aktualizacja), standardy (GitHub
         Actions, NuGet z wyłączeniem własnego pakietu \repopath{SecondKey.Standards}),
         legacy-risk-scan (npm, GitHub Actions), bench (GitHub Actions jednym zgrupowanym
         PR).
-  \item \textbf{CodeQL} w rdzeniu, Portcullis, standardach i legacy-risk-scan (na pull
-        request, pushu do \repopath{main} i co tydzień).
-  \item \textbf{CODEOWNERS} w każdym repozytorium fazy 01.
+  \item \textbf{CodeQL} na pull request, pushu do \repopath{main} i co tydzień: C\# w rdzeniu,
+        Portcullis i standardach; w legacy-risk-scan JavaScript/TypeScript i workflowy GitHub
+        Actions zapytaniami \texttt{security-and-quality}. Bench nie ma CodeQL.
+  \item \textbf{CODEOWNERS} w każdym repozytorium fazy 01, z jawnie wymienionymi ścieżkami
+        istotnymi dla bezpieczeństwa: rdzeń \path{/.github/}, \path{/.gitleaks.toml},
+        \path{/schemas/}, \path{/src/SecondKey.Capture/}; Portcullis \path{/.github/},
+        \path{/.gitleaks.toml}, \path{/action.yml}, \path{/portcullis-baseline.json},
+        \path{/src/Portcullis.Rules/}; standardy \path{/standards/}, \path{/catalog/},
+        \path{/generated/}, \path{/src/}, \path{/.github/workflows/}; legacy-risk-scan
+        \path{/src/lib/osv.js}, \path{/.github/workflows/}; bench \path{/.github/},
+        \path{/.githooks/}, \path{/.gitleaks.toml}, \path{/contract/}, \path{/pins.json}.
   \item \textbf{Przypinanie akcji}: bench przypina każdą akcję SHA commita z wersją w
         komentarzu; pozostałe repozytoria używają tagów wersji głównej.
+  \item \textbf{Uprawnienia workflowów i sekrety CI.} Każdy workflow deklaruje
+        \texttt{permissions}, zwykle tylko \texttt{contents: read}; szersze dostają: CodeQL
+        (\texttt{security-events: write}), wdrożenie legacy-risk-scan (\texttt{pages:
+        write}, \texttt{id-token: write}), odświeżanie danych EOL (\texttt{contents: write},
+        \texttt{pull-requests: write}), bramka Portcullis (\texttt{pull-requests: write})
+        i jej SARIF (\texttt{security-events: write}) w osobnym workflowie, żeby job
+        z tokenem komentarza tego uprawnienia nie miał, oraz wydanie Portcullis
+        (\texttt{contents: write}, \texttt{packages: write}). Jedynym sekretem
+        repozytorium, którego używa jakikolwiek workflow, jest \repopath{NUGET\_API\_KEY}
+        Portcullis (klucz nuget.org ze wzorcem \texttt{Portcullis.*}); reszta korzysta
+        z automatycznego tokenu GitHub. Bench nie zapisuje poświadczeń przy checkoucie
+        (\texttt{persist-credentials: false}) we wszystkich workflowach poza skanem
+        sekretów.
 \end{itemize}
 
-\zrodla{\path{.github/dependabot.yml}, \path{.github/workflows/codeql.yml} i
+\zrodla{\path{.github/dependabot.yml}, \path{.github/workflows/*.yml} i
 \path{.github/CODEOWNERS} w repozytoriach \path{letsgolegacy.secondkey},
 \path{letsgolegacy.portcullis}, \path{letsgolegacy.secondkey-standards},
-\path{letsgolegacy.legacy-risk-scan}, \path{letsgolegacy.secondkey-nopcommerce-bench}}
+\path{letsgolegacy.legacy-risk-scan}, \path{letsgolegacy.secondkey-nopcommerce-bench};
+\path{letsgolegacy.secondkey/package.json},
+\path{letsgolegacy.portcullis/CONTRIBUTING.md}}
+
+\subsection{Zgłaszanie podatności}\label{sec:bezpieczenstwo-zgloszenia}
+
+Podatność zgłasza się prywatnie, nie w publicznym issue: przez prywatne zgłaszanie
+podatności GitHub (\emph{Security → Advisories → Report a vulnerability}) w repozytorium,
+którego dotyczy. Tak mówią \path{SECURITY.md} rdzenia i Portcullis; szablony issue
+Portcullis odsyłają do tego formularza („Security report”). Portcullis opisuje też zakres
+(pakiet analyzerów, CLI i kontener, akcja i \repopath{Portcullis.CiComment}, pipeline
+wydań), to, co pomaga w zgłoszeniu, potwierdzenie w ciągu tygodnia i to, co podatnością nie
+jest (podrozdział~\ref{sec:portcullis-bezpieczenstwo}). Pozostałe repozytoria nie mają
+pliku \path{SECURITY.md}.
+
+\zrodla{\path{letsgolegacy.secondkey/SECURITY.md},
+\path{letsgolegacy.portcullis/SECURITY.md},
+\path{letsgolegacy.portcullis/.github/ISSUE_TEMPLATE/config.yml}}
 
 \subsection{Prywatność strony legacy-risk-scan}\label{sec:bezpieczenstwo-risk-scan}
 
@@ -125,15 +236,25 @@ Wklejony plik jest parsowany w przeglądarce i nigdzie nie jest wysyłany. Jedyn
 wychodzące idą do publicznego API OSV.dev: zapytania \repopath{querybatch} po najwyżej
 1000 pakietów, których ciało buduje jedna funkcja (\repopath{toQueries()} w
 \path{src/lib/osv.js}) --- ekosystem, nazwa i wersja pakietu, nic więcej --- przy
-stronicowanej odpowiedzi ponowione z tokenem strony od OSV, i po jednym \repopath{GET} na
-każde advisory.
-Content security policy strony pozwala łączyć się tylko z samą stroną i z
-\repopath{api.osv.dev}. Brak analityki, ciasteczek i pamięci przeglądarki; zestaw testów
+stronicowanej odpowiedzi ponowione z tokenem strony od OSV (najwyżej 10 stron), i po
+jednym \repopath{GET} na każde advisory. Content security policy strony pozwala łączyć się
+tylko z samą stroną i z \repopath{api.osv.dev} oraz nie pozwala ładować skryptów, stylów
+ani fontów z innych miejsc. Brak analityki, ciasteczek i pamięci przeglądarki; zestaw testów
 e2e sprawdza to na zbudowanej stronie: cel każdego żądania, dokładne ciała żądań,
 zablokowane połączenia, ciasteczka, \repopath{localStorage}, \repopath{sessionStorage},
 IndexedDB.
 
-\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md}}
+Tekst z zewnątrz --- opisy advisories z OSV i zawartość pliku odwiedzającego --- trafia do
+DOM wyłącznie przez \repopath{textContent} i \repopath{setAttribute}, nigdy jako znaczniki;
+CodeQL analizuje kod strony właśnie pod kątem tej powierzchni. Zmiany tego, co strona
+wysyła, pilnują CODEOWNERS (\path{src/lib/osv.js}) i sekcja „Privacy check” szablonu pull
+requestu. Szczegóły: podrozdział~\ref{sec:risk-scan-prywatnosc}.
+
+\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/render.js},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/codeql.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/CODEOWNERS},
+\path{letsgolegacy.legacy-risk-scan/.github/pull_request_template.md}}
 
 \subsection{Czego pakiet dowodowy jeszcze nie dowodzi}\label{sec:bezpieczenstwo-podpis}
 
@@ -147,6 +268,29 @@ już niesie skróty SHA-256 i niepodpisany statement.
 \zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+
+\subsection{Ochrona danych zaplanowana na fazy 02 i 03}\label{sec:bezpieczenstwo-plan}
+
+\begin{itemize}
+  \item \textbf{Tokenizacja PII (capture, faza 02).} Capture tokenizuje dane osobowe
+        wewnątrz sieci klienta przez sidecar Presidio; kryterium: nagrania, które opuszczają
+        host capture, zawierają tokeny, a nie dane osobowe.
+  \item \textbf{Bez ruchu wychodzącego (sandbox, faza 02).} Chart Helm ma domyślnie
+        blokować ruch wychodzący (NetworkPolicy); bundle air-gapped dostarcza obrazy do
+        rejestru klienta z manifestem skrótów. Hostowane przez nas może być wyłącznie demo
+        albo wersja próbna na publicznym kodzie.
+  \item \textbf{Tożsamość i ślad decyzji (portal, faza 03).} Logowanie przez IdP klienta
+        (OIDC: Entra ID, ADFS); \repopath{authservice} tylko dla hostowanej przez nas wersji
+        próbnej. Role: engineer, reviewer, risk (tylko odczyt). Każda decyzja recenzenta
+        trafia do dziennika, do którego można tylko dopisywać.
+\end{itemize}
+
+Szczegóły i kryteria odbioru: rozdział~\ref{sec:faza02}.
+
+\zrodla{\path{letsgolegacy.secondkey-capture/README.md},
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
 
 \subsection{Scalanie bez przeglądu człowieka}\label{sec:bezpieczenstwo-scalanie}
 

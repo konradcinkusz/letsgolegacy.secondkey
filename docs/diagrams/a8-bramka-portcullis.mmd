@@ -2,7 +2,7 @@ flowchart TB
   PR["pull request kandydata"] --> SCAN["portcullis scan<br/>--provenance-range base..head"]
   SCAN --> RES["wynik JSON<br/>summary: wszystko znalezione"]
   SCAN -- "--sarif" --> SARIF[("SARIF 2.1.0")]
-  RES --> G["błąd na linii zmienionej w PR,<br/>nie w baseline, nie wyciszony?"]
+  RES --> G["błąd na linii zmienionej w PR<br/>(ostrzeżenie na linii AI = błąd,<br/>przy awarii git: błąd w całym skanie),<br/>nie w baseline?"]
   G -- tak --> BLK["gate.blocked = true<br/>exit 1"]
   G -- nie --> OK["exit 0"]
   SARIF --> SKG["sk gate<br/>(podsumowanie per reguła)"]

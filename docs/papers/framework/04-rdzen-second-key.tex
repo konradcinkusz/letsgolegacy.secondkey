@@ -4,7 +4,8 @@ Repozytorium \path{letsgolegacy.secondkey}, dalej: rdzeń, mieści każdy kompon
 który nie ma własnego powodu, by mieszkać gdzie indziej. W~fazie 01 jest to cały łańcuch
 weryfikacji poza bramką: CLI \repopath{sk}, przechwytywanie ruchu HTTP, silnik kontraktu,
 replay, komparator i~niepodpisany evidence pack (pakiet dowodowy). Rozdział opisuje migawkę
-rdzenia w~commicie \repopath{dfe3982}: po co rdzeń istnieje, gdzie mieszkają komponenty,
+rdzenia w~commicie \repopath{7939e80} (sekcja~\ref{sec:wprowadzenie-wersja}): po co rdzeń
+istnieje, gdzie mieszkają komponenty,
 jakie zasady projektowe egzekwuje i~dlaczego, jak zbudowane jest solution, jak rdzeń jest
 budowany, testowany i~sprawdzany w~CI, jakie ryzyka zaakceptowano, co przejął ze starszych
 repozytoriów i~jaki jest status ticketów. Łańcuch jako całość opisuje
@@ -41,10 +42,18 @@ krokiem jest publiczny okaz, bench nopCommerce 3.x. Nic nie zostało wydane; wsp
 projektów w~\path{Directory.Build.props} to \repopath{0.1.0}. Bramką fazy 01 jest publiczny
 pakiet dowodowy na nopCommerce 3.x.
 
+Rdzeń nie ma jeszcze licencji otwartej: \path{LICENSE} zastrzega wszystkie prawa,
+a~repozytorium jest opublikowane po to, żeby pracę można było obejrzeć. Poza prawem do
+przeglądania i~forkowania publicznych repozytoriów, które daje regulamin GitHuba, nie
+udziela się prawa do użycia, kopiowania, modyfikowania ani dystrybucji. Model
+licencjonowania jest decyzją otwartą; do jej podjęcia zastrzeżenie obejmuje każdy plik,
+który sam nie mówi inaczej.
+
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
-\path{letsgolegacy.secondkey/Directory.Build.props}}
+\path{letsgolegacy.secondkey/Directory.Build.props},
+\path{letsgolegacy.secondkey/LICENSE}}
 
 \subsection{Komponenty C0–C12 i~gdzie mieszkają}\label{sec:rdzen-komponenty}
 
@@ -147,8 +156,8 @@ egzekwuje.
         in-toto Statement. Faza 01 niesie skróty i~niepodpisany statement po to, żeby podpis
         w~fazie 03 niczego w~formacie nie zmienił. Ticket S14 powołuje się na tę zasadę.
   \item \textbf{Brak własnej usługi tożsamości}; używany jest IdP klienta. \emph{Jak:}
-        repozytorium authservice służy wyłącznie próbnej instancji portalu hostowanej
-        samodzielnie (C11, faza 03); produkcyjnie portal używa IdP klienta przez OIDC.
+        repozytorium authservice służy wyłącznie próbnej instancji portalu, którą
+        hostują sami autorzy Second Key (C11, faza 03); produkcyjnie portal używa IdP klienta przez OIDC.
   \item \textbf{Każdy krok działa z~CLI w~pipeline}; portal jest oknem, nie interfejsem.
         \emph{Jak:} każdy krok łańcucha to polecenie \repopath{sk} ze stabilnymi kodami
         wyjścia, na których pipeline może się rozgałęziać bez czytania werdyktu;
@@ -488,10 +497,13 @@ YamlDotNet & 18.1.0 & & \\
 }
 
 \path{.config/dotnet-tools.json} deklaruje lokalne narzędzie \repopath{dotnet-stryker} w~wersji \repopath{5.0.0} bez roll-forward; przywraca je \repopath{dotnet tool restore}.
-\path{.editorconfig} ustala UTF-8, końce linii LF, końcowy znak nowej linii i~wcięcia
-czterema spacjami (dwiema dla JSON, YAML, \texttt{.props}, \texttt{.csproj}, \texttt{.slnx}
-i~XML); w~C\# wymusza przestrzenie nazw o~zasięgu pliku i~pola \texttt{readonly}
-(ostrzeżenia) oraz podnosi CA1305, CA1307, CA1309 i~CA1310 do ostrzeżeń, co przy
+\path{.editorconfig} ustala UTF-8, końce linii LF, końcowy znak nowej linii, usuwanie
+spacji na końcu linii (poza \texttt{*.md}) i~wcięcia czterema spacjami (dwiema dla JSON,
+YAML, \texttt{.props}, \texttt{.targets}, \texttt{.csproj}, \texttt{.slnx} i~XML); w~C\#
+wymusza przestrzenie nazw o~zasięgu pliku i~pola \texttt{readonly} (ostrzeżenia), jako
+sugestie podaje klamry przy instrukcjach wieloliniowych, \texttt{var} dla typów
+wbudowanych i~oczywistych oraz dyrektywy \texttt{using System} na początku listy,
+a~CA1305, CA1307, CA1309 i~CA1310 podnosi do ostrzeżeń, co przy
 \texttt{TreatWarningsAsErrors} czyni z~nich błędy; w~testach wyłącza CA1707.
 
 Według \path{CONTRIBUTING.md} jeden ticket to jeden pull request (PR) albo jeden commit w~PR
@@ -513,7 +525,7 @@ Testy są w~xUnit; \repopath{dotnet test SecondKey.slnx} uruchamia wszystkie pro
 Część testów potrzebuje środowiska, którego lokalnie może nie być: Dockera (SQL Server),
 przeglądarki (PDF) albo sygnałów POSIX. Taki test, gdy środowiska brak, raportuje się jako
 pominięty z~powodem --- nigdy jako zaliczony --- a~w~CI zmienne środowiskowe zamieniają brak
-w~porażkę.
+Dockera albo przeglądarki w~porażkę. Test sygnałów POSIX na Windows jest pomijany zawsze.
 
 \subsubsection{Testy SQL Server na Dockerze}
 
@@ -560,6 +572,19 @@ Atrybut \texttt{[UnixFact]} pomija na Windows test, który wysyła procesowi \te
 SIGTERM: Windows nie potrafi wysłać Ctrl+C jednemu procesowi konsoli bez innych, które
 dzielą tę samą konsolę.
 
+\paragraph{Test golden raportu.} \texttt{GoldenReportTests} renderuje raport HTML dla
+próbek --- werdyktu policzonego z~\path{schemas/samples/contract.yaml}
+i~\path{schemas/samples/sample.skrun}, logu \path{samples/gate/portcullis.sarif}, ze stałym
+czasem i~stałym \texttt{ToolInfo} --- i~porównuje go bajt po bajcie
+z~\path{tests/SecondKey.Evidence.Tests/Golden/sample-report.html}. Każda zmiana
+w~\texttt{HtmlReport} wychodzi więc w~przeglądzie jako diff tego pliku. Plik odświeża się
+celowo: test uruchomiony ze zmienną \repopath{SK\_UPDATE\_GOLDEN=1} zapisuje bieżący
+raport jako nowy plik golden, który trafia do tego samego pull requestu co zmiana raportu.
+
+\begin{lstlisting}
+SK_UPDATE_GOLDEN=1 dotnet test SecondKey.slnx
+\end{lstlisting}
+
 \subsubsection{Testy mutacyjne}
 
 Testy mutacyjne wykonuje Stryker.NET (\repopath{dotnet-stryker} 5.0.0) z~konfiguracją
@@ -578,7 +603,11 @@ Skrypt przechodzi po parach „katalog testów : projekt testowany” --- Artifa
 Compare, Evidence i~Replay, każdy ze swoim projektem testów --- i~dla każdej uruchamia
 Strykera z~katalogu testów, z~raportem w~\path{StrykerOutput/<projekt>}. Dla
 \repopath{SecondKey.Replay} zakres mutacji to \path{**/*.cs} bez \path{**/SqlServer*.cs},
-a~Stryker dostaje zmienną \repopath{SK\_SKIP\_DOCKER=1}.
+a~Stryker dostaje zmienną \repopath{SK\_SKIP\_DOCKER=1}. Przed pierwszym projektem skrypt
+wykonuje \repopath{dotnet tool restore}, a~przed każdym usuwa jego poprzedni raport
+\path{StrykerOutput/<projekt>}. Argument jest porównywany z~nazwą pliku projektu
+(\texttt{SecondKey.<Nazwa>.csproj}) jako podciąg, z~rozróżnieniem wielkości liter:
+\repopath{./scripts/mutation.sh Replay} uruchamia tylko \repopath{SecondKey.Replay}.
 
 Mutacjom podlega ścieżka werdyktu --- formaty, silnik kontraktu, komparator, evidence --- i~silnik replay, który decyduje, co komparator zobaczy. Dwie części zostają testom
 integracyjnym, bo mutowanie ich powtarzałoby I/O~dla każdego mutanta, daleko poza budżetem
@@ -606,16 +635,19 @@ tylko testami integracyjnymi.
 \path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/DockerGate.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/SqlServerTests.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/Fixtures.cs},
-\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/UnixFactAttribute.cs}}
+\path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/GoldenReportTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/UnixFactAttribute.cs},
+\path{letsgolegacy.secondkey/.github/workflows/ci.yml}}
 
 \subsection{Workflowy CI}\label{sec:rdzen-ci}
 
-Rdzeń ma cztery workflowy GitHub Actions i~konfigurację Dependabota. Wszystkie workflowy
+Rdzeń ma pięć workflowów GitHub Actions i~konfigurację Dependabota. Wszystkie workflowy
 mają uprawnienie \repopath{contents: read}, CodeQL dodatkowo
 \repopath{security-events: write}. Używane akcje: \texttt{actions/checkout@v7},
 \texttt{actions/setup-dotnet@v6} (SDK z~\path{global.json}),
-\texttt{actions/upload-artifact@v7} i~\texttt{github/codeql-action} w~wersji 4. Zestawienie
-workflowów wszystkich repozytoriów frameworku zawiera dodatek~\ref{app:ci}.
+\texttt{actions/upload-artifact@v7}, \texttt{github/codeql-action} w~wersji 4, a~w~workflowie
+dokumentacji \texttt{actions/setup-node@v7} (Node 22) i~\texttt{xu-cheng/latex-action@v4}.
+Zestawienie workflowów wszystkich repozytoriów frameworku zawiera dodatek~\ref{app:ci}.
 
 {\small
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
@@ -630,6 +662,9 @@ pięciu projektów, po \texttt{build-test}) \\
 \path{codeql.yml} (CodeQL) & PR, push na \texttt{main}, harmonogram \texttt{17 3 * * 1} &
 \texttt{analyze} (C\#) \\
 \path{secret-scan.yml} (Secret scan) & PR, push na \texttt{main} & \texttt{gitleaks} \\
+\path{build-docs-pdf.yml} (Documentation PDF) & push na \texttt{main}, PR tylko przy zmianie
+źródeł dokumentu, ręcznie & \texttt{pdf} (ubuntu-latest, limit 20 minut;
+sekcja~\ref{sec:rdzen-ci-pdf}) \\
 \bottomrule
 \end{tabularx}
 }
@@ -664,7 +699,10 @@ Job Windows nadpisuje \texttt{SK\_REQUIRE\_DOCKER} wartością \texttt{0} i~usta
 \texttt{SK\_SKIP\_DOCKER} na \texttt{1}. Powód z~komentarza w~workflowie: strona legacy
 wdrożenia to Windows i~IIS, a~\texttt{sk capture} i~\texttt{sk replay} działają obok niej
 (ticket P4 benchu), więc zestaw testów działa także na Windows; testy kontenera SQL Server
-zostają na Linuksie, bo runnery Windows nie uruchamiają kontenerów linuksowych.
+zostają na Linuksie, bo runnery Windows nie uruchamiają kontenerów linuksowych. Job Windows
+dziedziczy natomiast \texttt{SK\_REQUIRE\_PDF=1}, więc testy PDF są wymagane także na
+Windows. Test z~sygnałem SIGTERM (\texttt{[UnixFact]}) jest tam pomijany niezależnie od
+zmiennych.
 
 Job \texttt{mutation} („mutation testing (\emph{projekt})”, ubuntu-latest,
 \texttt{needs: build-test}) ma macierz \texttt{project} z~wartościami Artifacts, Contract,
@@ -705,14 +743,116 @@ gitleaks detect --redact --config .gitleaks.toml --verbose
 \end{lstlisting}
 
 \path{.github/dependabot.yml} co tydzień sprawdza pakiety NuGet (z~grupą
-\texttt{test-stack} dla \texttt{xunit*} i~\texttt{Microsoft.NET.Test.Sdk}) oraz akcje GitHub
-Actions.
+\texttt{test-stack} dla \texttt{xunit*} i~\texttt{Microsoft.NET.Test.Sdk}), akcje GitHub
+Actions oraz pakiety npm. npm dotyczy wyłącznie renderera diagramów Mermaid
+z~\path{package.json}, którego używa build PDF tej dokumentacji; według komentarza w~pliku
+nic w~produkcie nie używa npm.
+
+\subsubsection{Documentation PDF: build tego dokumentu}\label{sec:rdzen-ci-pdf}
+
+\path{build-docs-pdf.yml} buduje PDF tej dokumentacji
+z~\path{docs/papers/letsgolegacy-framework.tex}. Uruchamia się przy każdym pushu na
+\texttt{main}. Jest to świadome odejście od wyzwalania wyłącznie ręcznego, które standard
+przyjmuje domyślnie, bo właściciel chce PDF po każdym buildzie \texttt{main}. Przy pull
+requeście workflow uruchamia się tylko wtedy, gdy zmienia się \path{docs/papers/**},
+\path{docs/diagrams/**}, \path{scripts/render-diagrams.mjs}, \path{scripts/check-papers.mjs},
+\path{scripts/check-doc-sources.mjs}, \path{package.json}, \path{package-lock.json} albo sam
+workflow; można go też uruchomić ręcznie. Checkout pobiera pełną historię
+(\texttt{fetch-depth: 0}), bo kontrola źródeł porównuje rdzeń z~przypiętym commitem. Job \texttt{pdf} („documentation PDF”, ubuntu-latest, limit 20 minut, grupa
+współbieżności \texttt{docs-pdf-} i~ref) wykonuje kolejno:
+
+\begin{enumerate}
+  \item \repopath{npm ci} na Node 22 z~\texttt{PUPPETEER\_SKIP\_DOWNLOAD=true}: runner ma
+        Google Chrome, więc druga przeglądarka nie jest pobierana;
+  \item \repopath{node scripts/check-papers.mjs}, czyli kontrolę stylu dokumentów;
+  \item \path{node scripts/check-doc-sources.mjs}, czyli kontrolę źródeł dokumentu (niżej);
+  \item \repopath{node scripts/render-diagrams.mjs} ze zmienną
+        \texttt{PUPPETEER\_EXECUTABLE\_PATH} równą \path{/usr/bin/google-chrome};
+  \item zapis \path{docs/papers/version.tex} z~\texttt{\textbackslash docversion} równym
+        skrótowi commita i~jego dacie, który trafia do nagłówka każdej strony;
+  \item kompilację \texttt{xu-cheng/latex-action@v4} w~katalogu \path{docs/papers};
+  \item zmianę nazwy pliku na \path{letsgolegacy-framework-<commit>.pdf} i~wysłanie go jako
+        artefakt \texttt{letsgolegacy-framework-pdf}. Brak pliku jest błędem
+        (\texttt{if-no-files-found: error}).
+\end{enumerate}
+
+\path{scripts/check-papers.mjs}, przejęty z~architecture-standards, niczego nie kompiluje.
+Łapie dokument, który się buduje, a~mimo to jest zły, i~sprawdza cztery reguły:
+\begin{itemize}
+  \item R1: każdy dokument główny w~\path{docs/papers} (poza \path{house-preamble.tex},
+        \path{framework/} i~\path{version.tex}) wczytuje house preamble;
+  \item R2: przed tym \texttt{\textbackslash input} definiuje \texttt{\textbackslash paperstatus},
+        \texttt{\textbackslash headerleft}, \texttt{\textbackslash pdftitleline}
+        i~\texttt{\textbackslash pdfauthorline};
+  \item R3: \path{house-preamble.tex} ma SHA-256 zapisany w~skrypcie. Zmianę stylu proponuje
+        się z~powrotem w~architecture-standards, a~skrót aktualizuje w~tym samym commicie;
+  \item R4: wydania językowe występują parami. Ten dokument jest jednojęzyczny.
+\end{itemize}
+Skrypt kończy się kodem 0 albo 1.
+
+\path{scripts/check-doc-sources.mjs} to tani check mechaniczny, o~który standard prosi, gdy
+ręcznie redagowana prezentacja rozjeżdża się ze źródłem więcej niż raz. Sprawdza dwie rzeczy:
+\begin{itemize}
+  \item S1: każda ścieżka \path{letsgolegacy.secondkey/<plik>} cytowana w~rozdziałach
+        (poza wzorcami z~\texttt{*} i~\texttt{<…>}) istnieje w~checkoucie; brak pliku kończy
+        skrypt kodem 1;
+  \item S2: commit rdzenia z~tabeli wersji w~rozdziale~\ref{sec:wprowadzenie} porównuje się
+        z~\texttt{HEAD} z~pominięciem plików samej dokumentacji (\path{docs/papers},
+        \path{docs/diagrams}, skryptów dokumentu, \path{package.json}, jego pliku blokady
+        i~workflowu PDF). Gdy kod się zmienił, skrypt wypisuje zmienione pliki jako
+        ostrzeżenie (w~CI adnotację GitHub), ale nie kończy się błędem: zmiana kodu nie jest
+        zła tylko dlatego, że w~tym samym commicie nie poprawiono dokumentacji. Bez
+        przypiętego commita w~historii S2 jest pomijany.
+\end{itemize}
+Pozostałych repozytoriów skrypt nie czyta i~nie sprawdza, czy zdania dokumentu nadal są
+prawdziwe.
+
+\path{scripts/render-diagrams.mjs} renderuje każdy \path{docs/diagrams/<slug>.mmd} do
+wektorowego \path{docs/diagrams/rendered/<slug>.pdf}. Używa \texttt{@mermaid-js/mermaid-cli}
+12.0.0, przypiętego w~\path{package-lock.json}, z~\path{node_modules/.bin/mmdc}, nigdy przez
+\texttt{npx}. Przeglądarkę wskazuje \texttt{PUPPETEER\_EXECUTABLE\_PATH} albo
+\texttt{CHROME\_BIN}. Argumenty po nazwie skryptu ograniczają render do diagramów, których
+slug je zawiera. Bez \repopath{npm ci} skrypt kończy się komunikatem
+„node\_modules/.bin/mmdc is missing. Run \texttt{npm ci} first.”. Lokalnie dokument buduje
+się tak:
+
+\begin{lstlisting}
+npm ci && node scripts/render-diagrams.mjs
+node scripts/check-papers.mjs && node scripts/check-doc-sources.mjs
+cd docs/papers && latexmk -pdf letsgolegacy-framework.tex
+\end{lstlisting}
+
+Bez \path{version.tex} nagłówek mówi „build lokalny”. Wynik renderu, PDF, pliki pomocnicze
+LaTeX, \path{version.tex} i~\path{node_modules/} są w~\path{.gitignore}, więc nic
+wygenerowanego nie trafia do repozytorium. \path{docs/diagrams/README.md} ustala zasady
+diagramów:
+\begin{itemize}
+  \item jeden plik \path{.mmd} na diagram jest jedynym źródłem, a~dokument dołącza diagram
+        przez \texttt{\textbackslash dgm\{<slug>\}}, nigdy ścieżką;
+  \item \path{mermaid-config.json} ustala kolory house, font z~polskimi znakami i~celowo
+        nazwany układ \texttt{dagre}, bo bez niego Mermaid~12 ignoruje \texttt{nodeSpacing}
+        i~\texttt{rankSpacing};
+  \item diagram projektuje się na stronę: tekst ma około 470~pt szerokości, więc diagram
+        szerszy niż około 1000~px drukuje 15-pikselowe etykiety mniejsze niż 7~pt;
+  \item etykiety są po polsku, w~jednym zestawie.
+\end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey/.github/workflows/ci.yml},
 \path{letsgolegacy.secondkey/.github/workflows/e2e.yml},
 \path{letsgolegacy.secondkey/.github/workflows/codeql.yml},
 \path{letsgolegacy.secondkey/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.secondkey/.github/workflows/build-docs-pdf.yml},
 \path{letsgolegacy.secondkey/.github/dependabot.yml},
+\path{letsgolegacy.secondkey/scripts/check-papers.mjs},
+\path{letsgolegacy.secondkey/scripts/check-doc-sources.mjs},
+\path{letsgolegacy.secondkey/scripts/render-diagrams.mjs},
+\path{letsgolegacy.secondkey/package.json},
+\path{letsgolegacy.secondkey/package-lock.json},
+\path{letsgolegacy.secondkey/docs/diagrams/README.md},
+\path{letsgolegacy.secondkey/docs/diagrams/mermaid-config.json},
+\path{letsgolegacy.secondkey/docs/papers/letsgolegacy-framework.tex},
+\path{letsgolegacy.secondkey/.gitignore},
+\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
 
 \subsection{Onboarding, hook i~skan sekretów}\label{sec:rdzen-setup}
@@ -738,7 +878,29 @@ kroki, a~z~opcją \texttt{-{}-check} tylko raportuje, czego brakuje, i~niczego n
         skrypt kopiuje \path{scripts/hooks/pre-commit} do \path{.git/hooks/pre-commit} i~nadaje mu prawo wykonania; w~przeciwnym razie krok jest pomijany.
   \item \textbf{Local secrets}: jeśli \path{.env} istnieje, zostaje nietknięty; jeśli nie,
         powstaje z~\path{secrets.env.example} (każda zmienna w~nim jest opcjonalna).
+        \finding{Ani \repopath{sk}, ani skrypty rdzenia nie wczytują \path{.env}.} Plik
+        jest tylko lokalnym, ignorowanym przez git miejscem na wartości. \repopath{sk} czyta
+        \repopath{SK\_LEGACY\_DB}, \repopath{SK\_CANDIDATE\_DB} --- ogólnie każdą zmienną
+        wskazaną przez \repopath{connectionStringEnv} --- i~\repopath{SK\_CHROME\_PATH}
+        wyłącznie ze środowiska swojego procesu. Wartości trzeba więc wyeksportować do
+        środowiska przed uruchomieniem polecenia. Inaczej \repopath{sk replay} kończy się
+        kodem 3 i~komunikatem \texttt{environment variable SK\_LEGACY\_DB is not set (see
+        secrets.env.example)}.
 \end{enumerate}
+
+\paragraph{Czego \texttt{setup.sh} nie sprawdza.} Skrypt sprawdza tylko .NET SDK (wymagany)
+oraz Dockera, gitleaks i~przeglądarkę (opcjonalne). Dwa skrypty rdzenia potrzebują narzędzi
+spoza tej listy:
+\begin{itemize}
+  \item \path{scripts/e2e.sh} wysyła żądania przez \texttt{curl}, a~werdykt i~pakiet sprawdza
+        w~Pythonie (\texttt{python3});
+  \item \path{scripts/mutation.sh} liczy wiersz tabeli „Mutation scores” w~\texttt{python3}.
+        Bez niego kończy się błędem po pierwszym przebiegu Strykera.
+\end{itemize}
+Przeglądarki \texttt{setup.sh} szuka wyłącznie w~\texttt{PATH} (\texttt{command -v}),
+a~\texttt{PdfRenderer} szuka także w~miejscach instalacji na Windows i~macOS oraz wśród
+przeglądarek Playwright (sekcja~\ref{sec:cli-evidence}). Ostrzeżenie \texttt{setup.sh}
+o~braku przeglądarki nie przesądza więc, że \repopath{sk evidence} jej nie znajdzie.
 
 \subsubsection{Hook pre-commit i~skan lokalny}
 
@@ -769,26 +931,57 @@ wymienia trzy opcjonalne zmienne: \repopath{SK\_LEGACY\_DB} i~\repopath{SK\_CAND
 Server z~resetem snapshotem (S11) --- oraz \repopath{SK\_CHROME\_PATH}, bezwzględną ścieżkę
 przeglądarki Chromium/Chrome, gdy nie ma jej w~\texttt{PATH}, potrzebną tylko do PDF pakietu.
 
-\path{.gitignore} wyklucza lokalne sekrety (\path{.env}, \path{secrets.env}, poza plikami
-przykładowymi), wyniki testów i~Strykera oraz \texttt{*.skcap} i~\texttt{*.skrun} poza
-\path{samples/**}, \path{schemas/samples/**} i~\path{tests/**/fixtures/**}, a~także katalogi
-\path{.secondkey/} i~\path{evidence-out/}. \path{.gitattributes} normalizuje końce linii do
-LF i~oznacza \texttt{*.skcap} oraz \texttt{*.skrun} jako \texttt{-text}: nagrane próbki są
-danymi, ich końców linii nie wolno renormalizować. Szablon PR wymaga ticketu z~linią „done
-when” cytowaną dosłownie i~testu pokrywającego każde kryterium; szablon zgłoszenia błędu ---
-reprodukcji wyłącznie na syntetycznych artefaktach („A~wrong verdict is the most severe class
-of bug here”). \path{.github/CODEOWNERS} wymienia osobno ścieżki istotne dla bezpieczeństwa:
+\path{.gitignore} wyklucza:
+\begin{itemize}
+  \item lokalne sekrety (\path{.env}, \path{.env.*}, \path{secrets.env}), poza plikami
+        przykładowymi;
+  \item wyniki buildu, testów, pokrycia i~Strykera oraz pliki IDE i~systemu;
+  \item \texttt{*.skcap} i~\texttt{*.skrun} poza \path{samples/**}, \path{schemas/samples/**}
+        i~\path{tests/**/fixtures/**};
+  \item katalogi \path{.secondkey/} i~\path{evidence-out/};
+  \item wynik buildu dokumentacji: \path{node_modules/}, PDF i~pliki pomocnicze LaTeX
+        w~\path{docs/papers/}, \path{version.tex}, \path{docs/diagrams/rendered/}.
+\end{itemize}
+\path{.gitattributes} normalizuje końce linii do LF, a~skryptów \texttt{*.ps1} do CRLF.
+Pliki \texttt{*.png} i~\texttt{*.pdf} oznacza jako binarne, a~\texttt{*.skcap}
+i~\texttt{*.skrun} jako \texttt{-text}: nagrane próbki są danymi, więc ich końców linii
+nie wolno renormalizować. \path{.dockerignore} trzyma poza kontekstem obrazu Dockera
+wyniki buildu, testów i~Strykera, katalogi \path{.git/}, \path{.github/}, \path{docs/}
+i~\path{tests/}, nagrania \texttt{*.skcap} i~\texttt{*.skrun} oraz pliki \path{.env}
+i~\path{.env.*}.
+
+Szablon PR ma cztery sekcje:
+\begin{itemize}
+  \item \emph{Ticket}: identyfikatory z~\path{docs/WORKPLAN.md} i~każda linia „done when”
+        dosłownie;
+  \item \emph{What changed};
+  \item \emph{How it was verified}: uruchomione polecenia, link do przebiegu CI i~dla
+        każdego kryterium akceptacji test, który je pokrywa;
+  \item \emph{Decisions and risks}: decyzje podjęte w~trakcie, z~powodem, i~zaakceptowane
+        ryzyka.
+\end{itemize}
+Są dwa szablony zgłoszeń. \emph{Ticket} (etykieta \texttt{ticket}) wymaga identyfikatora,
+np.~S12, i~linii „done when”. \emph{Bug} (etykieta \texttt{bug}) wymaga reprodukcji
+(polecenie i~artefakty, wyłącznie syntetyczne, nigdy prawdziwe nagrania), oczekiwanego
+wyniku i~wpływu: „A~wrong verdict is the most severe class of bug here”.
+\path{.github/CODEOWNERS} wymienia osobno ścieżki istotne dla bezpieczeństwa:
 \path{/.github/}, \path{/.gitleaks.toml}, \path{/schemas/} i~\path{/src/SecondKey.Capture/}.
 \path{SECURITY.md} prosi o~zgłaszanie podatności prywatnie przez „Report a~vulnerability”.
 
 \zrodla{\path{letsgolegacy.secondkey/scripts/setup.sh},
 \path{letsgolegacy.secondkey/scripts/hooks/pre-commit},
 \path{letsgolegacy.secondkey/scripts/scan-secrets.sh},
+\path{letsgolegacy.secondkey/scripts/e2e.sh},
+\path{letsgolegacy.secondkey/scripts/mutation.sh},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/PdfRenderer.cs},
 \path{letsgolegacy.secondkey/.gitleaks.toml},
 \path{letsgolegacy.secondkey/secrets.env.example},
 \path{letsgolegacy.secondkey/.gitignore},
 \path{letsgolegacy.secondkey/.gitattributes},
+\path{letsgolegacy.secondkey/.dockerignore},
 \path{letsgolegacy.secondkey/.github/pull_request_template.md},
+\path{letsgolegacy.secondkey/.github/ISSUE_TEMPLATE/ticket.yml},
 \path{letsgolegacy.secondkey/.github/ISSUE_TEMPLATE/bug.yml},
 \path{letsgolegacy.secondkey/.github/CODEOWNERS},
 \path{letsgolegacy.secondkey/SECURITY.md}}
@@ -990,8 +1183,8 @@ Analiza fazy 01 przypisuje ponadto ticketom zasady P4 (persistence za granicą) 
 Celowo nieużywane przez rdzeń: \texttt{context-pin} --- jego idea, wersja standardów
 przypięta per repozytorium i~wykrywanie dryfu w~CI, weszła do C4
 (\path{letsgolegacy.secondkey-standards}) jako pakiet NuGet, tag gita i~jeden krok CI, bez
-osobnej usługi; \texttt{authservice} --- tylko dla próbnej instancji portalu hostowanej
-samodzielnie (C11, faza 03), bo produkcja używa IdP klienta przez OIDC (zasada 6); Keploy
+osobnej usługi; \texttt{authservice} --- tylko dla próbnej instancji portalu, którą hostują
+sami autorzy Second Key (C11, faza 03), bo produkcja używa IdP klienta przez OIDC (zasada 6); Keploy
 (zewnętrzny) --- wczesny plan zbudowania na nim capture porzucono, bo eBPF działa tylko na
 Linuksie, a~legacy .NET Framework działa na Windows/IIS.
 
@@ -1063,6 +1256,76 @@ sample shop, ani demonstracyjna konfiguracja nopCommerce nie wywołują usług z
 Analiza zamyka pytanie S16 konkretnie: nopCommerce 3.90 z~danymi przykładowymi używa
 offline'owych metod płatności i~wysyłki, więc okaz nie wykonuje wywołań wychodzących.
 
+\paragraph{Przypisanie ticketów w~analizie.} Tabela analizy fazy 01 (§2) mówi dla każdego
+ticketu, do którego kontekstu i~warstwy należy, które zasady nim rządzą, który przewodnik
+architecture-standards trzeba załadować, które pliki do niego należą i~czy jest pytanie
+blokujące. Kryteria akceptacji są w~niej skopiowane dosłownie z~planu pracy.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}l >{\raggedright\arraybackslash}p{3.1cm} >{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Id & Kontekst i~warstwa & Zasady; przewodnik & Pliki; pytanie blokujące \\
+\midrule
+\endfirsthead
+\toprule
+Id & Kontekst i~warstwa & Zasady; przewodnik & Pliki; pytanie blokujące \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+S1 & katalog główny: build, CI, onboarding & P5, P13; REPO-BASELINE §1–§3, §7,
+TESTING-STRATEGY §9 & \path{Directory.Build.props}, \path{Directory.Packages.props},
+\path{global.json}, \path{SecondKey.slnx}, \path{.editorconfig}, \path{.gitattributes},
+\path{.gitleaks.toml}, \path{.config/dotnet-tools.json}, \path{stryker-config.json},
+workflowy \texttt{ci}, \texttt{secret-scan}, \texttt{codeql}, \path{dependabot.yml},
+\path{CODEOWNERS}, szablon PR, \path{scripts/setup.sh}, \path{scripts/scan-secrets.sh},
+\path{scripts/hooks/pre-commit}, \path{.claude/settings.json}, \path{ToolInfo.cs}
+i~\path{ToolInfoTests.cs}; brak \\
+S2 & dokumentacja & brak (proces); GENERATE-MASTER-PROMPT §0: każde twierdzenie cytuje
+źródło & \path{docs/reference-notes.md}; brak \\
+S3 & \path{SecondKey.Artifacts}, warstwa formatów & P13; TESTING-STRATEGY §5–§6 &
+\path{skcap.schema.json}, \path{sample.skcap}, \path{ArtifactSchemas.cs},
+\path{Capture/*.cs}, \path{SkcapTests.cs}; brak \\
+S4 & warstwa formatów & brak (format domenowy) & \path{contract.schema.json}, próbka,
+\path{Contracts/*.cs}, \path{ContractTests.cs}, \path{docs/formats/contract.md}, ADR 0002;
+zamknięte: słownik predykatów rozstrzyga ADR 0002 \\
+S5 & warstwa formatów & brak (format domenowy) & \path{skrun.schema.json}, próbka,
+\path{Runs/*.cs}, \path{SkrunTests.cs}; brak \\
+S6 & warstwa formatów & zasada 1 & \path{verdict.schema.json}, próbka,
+\path{Verdicts/*.cs}, \path{VerdictTests.cs}, ADR 0003; zamknięte: cztery klasy i~fail
+closed rozstrzyga ADR 0003 \\
+S7 & \path{SecondKey.Cli}, interfejs produktu & zasada 7 & \path{Program.cs},
+\path{Commands/*.cs}, \path{ExitCodes.cs}, \path{Configuration/*.cs}, \path{docs/cli.md},
+testy CLI; brak \\
+S8 & \path{SecondKey.Contract}, domena & P13, zasada 1; TESTING-STRATEGY §6,
+AI-EVALS (brak modelu w~ścieżce werdyktu) & kod i~testy silnika, \path{stryker-config.json},
+\path{scripts/mutation.sh}; brak \\
+S9 & \path{SecondKey.Capture}, krawędź przed systemem legacy & P11 (warstwa
+antykorupcyjna), P5 (nagrania mogą nieść sekrety), zasada 4; SECURITY-REVIEW & kod
+i~testy capture, \path{samples/SampleShop/*}; brak \\
+S10 & \path{SecondKey.Replay}, aplikacja & brak (domena) & kod replay,
+\path{ReplayEngineTests.cs}; brak \\
+S11 & \path{SecondKey.Replay}, krawędź persistence & P4; TESTING-STRATEGY §4 (tier 2:
+prawdziwa baza na przebieg) & \path{Resets/*.cs}, \path{ResetTests.cs},
+\path{SqlServerTests.cs}; zaakceptowane ryzyko A1 \\
+S12 & \path{SecondKey.Compare}, domena & brak (logika domenowa) &
+\path{CanonicalJson.cs}, \path{ComparableDocument.cs}, \path{JsonDiff.cs},
+\path{Normalizer.cs}, \path{NormalizerTests.cs}. Diff przeniesiono tu z~S13, bo regułę
+normalizacji testuje się różnicami, które wyjaśnia; brak \\
+S13 & \path{SecondKey.Compare}, domena & zasada 1 & \path{Comparator.cs},
+\path{CompareCommand.cs}, \path{ComparatorTests.cs}; poprawka ADR 0003 (kandydat na
+poprawkę rozstrzygany przed równością); brak \\
+S14 & \path{SecondKey.Evidence}, krawędź wyjściowa & zasada 5; SECURITY-REVIEW (co
+może zawierać raport) & kod i~testy evidence, \path{GateCommand.cs},
+\path{EvidenceCommand.cs}, \path{samples/gate/portcullis.sarif} (syntetyczny,
+w~kształcie Portcullis); zaakceptowane ryzyko A2 \\
+S15 & CI i~próbka & TESTING-STRATEGY §9; TESTING-STRATEGY §3 & \path{e2e.yml},
+\path{scripts/e2e.sh}, \path{samples/SampleShop/*}, \path{samples/contract.yaml}; brak \\
+S16 & \path{SecondKey.Replay}, krawędź wychodząca & P11 & odłożone; zamknięte: okaz nie
+wykonuje wywołań wychodzących, więc S16 przechodzi do fazy 02 \\
+\end{xltabular}
+}
+
 \paragraph{Faza 02 i~dalej} (zaczyna się po bramce fazy 01):
 
 {\footnotesize
@@ -1106,9 +1369,33 @@ testy SQL Server działały tam na kontenerze; teraz wygrywa świadome pominięc
 i~fixture dzielą jedną decyzję (\texttt{DockerGate}). Wpis 4: wiersze S8 i~S11 tabeli
 wskazują pliki, które faktycznie powstały --- jeden \path{stryker-config.json}
 i~\path{scripts/mutation.sh} w~katalogu głównym, \path{Resets/} z~\path{ResetTests.cs}
-i~\path{SqlServerTests.cs} --- zamiast nazw zaplanowanych w~pierwszym przebiegu. Master prompt dla S1–S3 (\path{docs/analysis/S1-S3.master-prompt.md}) jest
-plikiem generowanym z~rewizji 1 analizy i~nie jest edytowany ręcznie; przy rozbieżności
-wygrywa analiza.
+i~\path{SqlServerTests.cs} --- zamiast nazw zaplanowanych w~pierwszym przebiegu.
+
+Analizę napisała faza ticket-analysis (\path{docs/delivery/TICKET-ANALYSIS.md}
+w~architecture-standards). Poprawki trafiają najpierw do analizy, a~master prompt generuje
+się z~niej ponownie (GENERATE-MASTER-PROMPT §5). Master prompt dla S1–S3
+(\path{docs/analysis/S1-S3.master-prompt.md}) jest plikiem generowanym z~rewizji 1 analizy
+i~nie jest edytowany ręcznie. Ma dziesięć sekcji:
+\begin{enumerate}
+  \item preambułę standardów: przeczytać \path{00-REFERENCE-ARCHITECTURE.md}, załadować
+        REPO-BASELINE §1–§3, §7 i~TESTING-STRATEGY §5, §6, §9, a~gdy się nie da, zatrzymać
+        się i~to powiedzieć;
+  \item identyfikację;
+  \item opis zmiany;
+  \item kryteria akceptacji S1–S3 przytoczone dosłownie;
+  \item tabelę z~analizy;
+  \item zakres wyłączony: S4–S6, CLI (S7) i~proxy capture (S9);
+  \item zgodność, którą zmiana naraża;
+  \item decyzje i~zaakceptowane ryzyka;
+  \item procedurę: \texttt{/implementation-phase}; ukończenie to zielony build, każde
+        kryterium pokryte testem w~warstwie, która ma logikę, i~żaden zmieniony plik spoza
+        tabeli z~sekcji 5;
+  \item pierwszeństwo: przy rozbieżności wygrywa analiza, a~rozbieżność jest znaleziskiem
+        do odesłania.
+\end{enumerate}
+Taka rozbieżność już istnieje. Sekcja 8 promptu opisuje A3 jako dostarczenie stosu pull
+requestów scalanych po kolei przez właściciela, a~rewizja 4 analizy jako scalanie przez
+sesję implementującą, gdy każdy check jest zielony. Obowiązuje analiza.
 
 \zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md},

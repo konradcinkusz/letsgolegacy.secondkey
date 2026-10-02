@@ -6,6 +6,8 @@ nie są tłumaczone.
 \begin{description}[style=nextline, leftmargin=1.2em, font=\normalfont\bfseries]
   \item[A/A replay] Replay, w którym obie strony to system legacy. Pokazuje, że łańcuch
         nie wnosi własnych różnic i że kontrakt trzyma na legacy; w benchu kryterium P5.
+  \item[advisory] Opis znanej podatności w bazie OSV.dev; legacy-risk-scan pobiera go po
+        identyfikatorze, który zwróciło OSV.
   \item[analyzer] Reguła Roslyn uruchamiana przez kompilator albo przez Portcullis;
         wynik to diagnostyka z identyfikatorem i severity.
   \item[artefakt] Plik, którym komponenty się wymieniają: \repopath{*.skcap},
@@ -20,49 +22,107 @@ nie są tłumaczone.
   \item[bramka fazy 01] Ticket P9 benchu: publiczny pakiet dowodowy na nopCommerce 3.x.
   \item[capture] Nagrywanie ruchu przez proxy \repopath{sk capture} przed systemem legacy,
         bez zmiany jego kodu.
+  \item[CVE] W tym dokumencie: znane podatności, które legacy-risk-scan pobiera z OSV.dev jako
+        advisories; plan pracy nazywa raport „EOL and CVE report”.
+  \item[diff gate] Bramka zawężona do linii zmienionych przez pull request
+        (\repopath{gate.scope} \repopath{"diff"}); bez commita bazowego w checkoucie
+        Portcullis przechodzi na całe drzewo (\repopath{"all"}) i podaje
+        \repopath{degradedReason}.
   \item[drift check] Krok CI repozytorium docelowego, który porównuje przypiętą wersję
         standardów z opublikowaną i skill z pakietem.
   \item[DSSE] Koperta podpisu dla statementu in-toto; w fazie 03 (\repopath{evidence.dsse}).
   \item[ekstraktor] Reguła, która wyciąga wartość z HTML, JSON, nagłówka albo tekstu,
         zanim ocenią ją klauzule; \repopath{all: true} zbiera listę.
+  \item[EOL] Koniec wsparcia wersji; legacy-risk-scan bierze daty z danych endoflife.date
+        dołączonych do strony i datowanych polem \repopath{generatedAt}.
   \item[evidence pack (pakiet dowodowy)] Katalog z raportem, werdyktem, kontraktem,
         opcjonalnie przebiegiem, SARIF, statementem in-toto i manifestem skrótów SHA-256.
   \item[fix candidate] Klasa \repopath{fix-candidate}: kandydat spełnia klauzulę, którą
         legacy łamie; decyduje człowiek (wynik \repopath{review}).
+  \item[flaga zachowania] Wpis agenta w rejestrze \path{docs/migration/behaviour-flags.md}:
+        podejrzany defekt legacy oznaczony zamiast naprawiony (SK-MIG-011); linia wyciszona
+        z uzasadnieniem nosi znacznik \repopath{SECONDKEY-FLAG}.
+  \item[granica klienta] Sieć i infrastruktura klienta, w której działa cały łańcuch;
+        domyślnie bez ruchu wychodzącego (zasada projektowa 2). Łańcuch dla różnych rodzajów
+        takiej granicy pakuje repozytorium \path{letsgolegacy.secondkey-sandbox}.
+  \item[IdP] Dostawca tożsamości klienta, np. Entra ID albo ADFS przez OIDC; framework nie ma
+        własnej usługi tożsamości (zasada projektowa 6).
   \item[kandydat] Zmigrowana wersja systemu, wskazana commitem head pull requestu.
+  \item[kill rate] Wynik komponentu C9 (\repopath{sk mutate}, faza 02): mutanty zabite przez
+        kontrakt, liczone dla każdej klauzuli. W fazie 01 bench podaje „N z 11 zabitych” dla
+        ręcznie napisanych mutantów.
   \item[klauzula] Element kontraktu: \repopath{must} (musi się dziać) albo
         \repopath{never} (nigdy nie wolno); ma \repopath{when}, \repopath{assert},
         \repopath{why} i pochodzenie.
   \item[klauzula nieobecności] Klauzula \repopath{never}; udział nieobecności to część
         zaakceptowanych klauzul, które są \repopath{never}.
+  \item[kontrakt] \repopath{contract.yaml}: co system musi robić (\repopath{must}), czego
+        nigdy nie wolno (\repopath{never}) i które różnice między wersjami nie mają znaczenia
+        (normalizacja); YAML walidowany schematem JSON i regułami w kodzie. Musi zawierać co
+        najmniej jedną zaakceptowaną klauzulę \repopath{never}.
   \item[korelacja] Reguła replay, która przenosi wartość wygenerowaną przez serwer (np.
         token anti-forgery) z ostatniej odpowiedzi tej samej strony do kolejnych żądań.
   \item[legacy] System przed migracją; strona \repopath{legacy} w replay i werdykcie.
   \item[manifest] \repopath{manifest.json} pakietu: każdy plik z SHA-256 i rozmiarem.
   \item[maska] Reguła normalizacji, po której dwa napisy są równe (\repopath{timestamps},
         \repopath{guids}, nazwane wzorce).
-  \item[modernize-dotnet] Agent migracyjny GitHub Copilot app modernization for .NET.
+  \item[miner kontraktu (C2)] \repopath{sk mine}, faza 02: proponuje klauzule z nagrań, ze
+        wsparciem statystycznym dla każdej; klauzula decyduje dopiero po akceptacji.
+  \item[modernize-dotnet] Agent migracyjny Microsoftu, tak nazwany w planach pracy. Microsoft
+        dokumentuje go obecnie jako GitHub Copilot upgrade (wcześniej GitHub Copilot app
+        modernization for .NET); w Visual Studio to komponent GitHub Copilot app modernization
+        wywoływany przez \repopath{@Modernize}, w pozostałych środowiskach agent Upgrade
+        (\repopath{@upgrade}).
   \item[mutant (P9)] Kod legacy z jednym celowo wprowadzonym defektem, zarejestrowanym
         z góry razem z klauzulami, które mają go złapać. Jest \emph{zabity}, gdy
         \repopath{sk compare} legacy kontra mutant daje \repopath{fail}; M00 (bez zmian)
         kalibruje metodę i musi dać \repopath{pass}.
+  \item[nagranie] Plik \repopath{*.skcap} z \repopath{sk capture}: nagłówek
+        \repopath{capture.header}, potem zdarzenia \repopath{http.exchange} w kolejności
+        nagrania (JSON Lines).
   \item[NLS / ICU] Biblioteki globalizacji .NET Framework (NLS) i współczesnego .NET
         (ICU); ich różnice w porównywaniu i formatowaniu to główny kandydat na różnicę
         zachowania po migracji.
   \item[normalizacja] Sekcja kontraktu opisująca różnice bez znaczenia:
         \repopath{ignore}, \repopath{tolerances}, \repopath{sets}, \repopath{masks}.
+  \item[OSV] Publiczna baza podatności OSV.dev; jedyny adres poza samą stroną, z którym łączy
+        się legacy-risk-scan.
+  \item[outbound stubs] Zaślepki wywołań wychodzących z nagranego ruchu (WireMock.Net,
+        komponent C6, ticket S16); przeniesione do fazy 02, bo ani sklep przykładowy, ani
+        demonstracyjna konfiguracja nopCommerce nie wywołują usług zewnętrznych.
+  \item[PII] Dane osobowe w nagraniach; od fazy 02 capture tokenizuje je wewnątrz sieci
+        klienta (sidecar Presidio).
+  \item[podpis pakietu (faza 03)] Statement in-toto w kopercie DSSE podpisany przez cosign
+        kluczem klienta z jego KMS albo HSM, bez publicznego transparency log, przechowywany
+        w OCI (ORAS) albo WORM.
   \item[pozytywny bliźniak] Klauzula lub krok scenariusza, który dowodzi, że scenariusz
         dotarł do miejsca, którego pilnuje klauzula \repopath{never}.
   \item[probe] Dwa znaczenia: sonda bazy w \repopath{secondkey.yaml}
         (\repopath{probe: sqlServer}, zmiany wierszy w tabelach per żądanie) oraz w benchu
         parametr query \repopath{probe=<nazwa>}, który nazywa żądanie dla klauzuli.
-  \item[regression] Klasa \repopath{regression}: brak odpowiedzi, złamana zaakceptowana
-        klauzula albo różnica, której kontrakt nie tłumaczy (fail closed).
+  \item[provenance] Dwa znaczenia: pochodzenie klauzuli kontraktu (\repopath{origin},
+        \repopath{status} \repopath{proposed} albo \repopath{accepted}, autor, data;
+        decydują tylko klauzule \repopath{accepted}) oraz zakres commitów, który Portcullis
+        dostaje w \repopath{--provenance-range}: zawęża bramkę do zmienionych linii
+        i zaostrza próg dla linii napisanych przez AI.
+  \item[przebieg] Plik \repopath{*.skrun} z \repopath{sk replay}: \repopath{run.header},
+        zdarzenia \repopath{state.reset} i \repopath{exchange.result} obu stron oraz
+        \repopath{run.end}; przebieg bez \repopath{run.end} został przerwany i nigdy nie jest
+        porównywany.
+  \item[rdzeń] Repozytorium \path{letsgolegacy.secondkey}.
+  \item[regression] Klasa \repopath{regression}: strona bez odpowiedzi
+        (\repopath{missing-result}), zaakceptowana klauzula spełniona przez legacy, a u
+        kandydata złamana albo niedająca się ocenić (\repopath{clause-regression}), albo
+        różnica, której nie tłumaczy żadna klauzula ani reguła normalizacji
+        (\repopath{uncovered-difference}; fail closed).
   \item[replay] Odtwarzanie nagranych scenariuszy na obu stronach z resetem stanu przed
         każdym scenariuszem (\repopath{sk replay}).
   \item[reset stanu] Przywrócenie stanu startowego strony przed scenariuszem:
         \repopath{http}, \repopath{sqlServerSnapshot} albo \repopath{command}.
-  \item[rdzeń] Repozytorium \path{letsgolegacy.secondkey}.
+  \item[rozgrzewka (P3)] Pierwszy przebieg całego łańcucha w benchu, na eShopLegacyMVC
+        Microsoftu z danymi mock, przed nopCommerce.
+  \item[sample shop] \path{samples/SampleShop}: mała aplikacja ASP.NET Core rdzenia, która
+        w \path{scripts/e2e.sh} gra stronę legacy i kandydata.
   \item[SARIF] Static Analysis Results Interchange Format 2.1.0 --- format wyniku bramki.
   \item[scenariusz] Sesja z nagrania odtwarzana jako całość (\repopath{session}) albo
         pojedyncza wymiana (\repopath{exchange}).
@@ -73,14 +133,64 @@ nie są tłumaczone.
   \item[snapshot] Snapshot bazy SQL Server, z którego reset przywraca stan startowy.
   \item[standardy] Reguły \repopath{SK-ARCH-001}--\repopath{007} i
         \repopath{SK-MIG-001}--\repopath{013} z \path{letsgolegacy.secondkey-standards}.
+  \item[statement in-toto] \path{statement.intoto.json} pakietu: in-toto Statement v1, który
+        wymienia każdy plik pakietu poza sobą i \repopath{manifest.json} z jego SHA-256,
+        a jako predykat niesie wynik, podsumowanie, skróty kontraktu i przebiegu oraz wynik
+        bramki; w fazie 01 niepodpisany (\repopath{"signed": false}).
+  \item[suppression] Zaakceptowane wyciszenie diagnostyki w logu SARIF; błąd, który obejmuje,
+        nie blokuje \repopath{sk gate}.
+  \item[testy mutacyjne] Stryker.NET na kodzie rdzenia i reguł Portcullis: mutanty kodu
+        narzędzi, które testy muszą wykryć; poniżej progu \texttt{break} CI zawodzi. To co
+        innego niż mutanty P9 --- defekty w kodzie systemu legacy, które ma złapać kontrakt.
+  \item[ticket] Jednostka pracy z planu pracy repozytorium (\path{docs/WORKPLAN.md}) z jednym
+        rezultatem i kryterium „done when”, cytowanym w pull requeście dosłownie; jeden
+        ticket to jeden pull request (w benchu poza zadaniami oznaczonymi jako praca
+        człowieka). Identyfikatory są wspólne dla repozytoriów: \repopath{S0}--\repopath{S16}
+        rdzeń, \repopath{R0}--\repopath{R3} Portcullis, \repopath{R4}
+        i \repopath{C4-a}--\repopath{C4-c} standardy, \repopath{P1}--\repopath{P10} bench,
+        \repopath{L18} legacy-risk-scan.
+  \item[triage doradcza (C8)] Pomoc w porządkowaniu różnic do przeglądu (faza 02--03); nigdy
+        nie zmienia klasy werdyktu.
   \item[unexercised] Klauzula, której \repopath{when} nie pasowało do żadnego żądania;
         nigdy nie jest liczona jako spełniona.
-  \item[violated-both] Klauzula złamana po obu stronach; o niczym nie decyduje i
-        wskazuje błąd kontraktu wobec legacy.
+  \item[violated-both] Klauzula złamana po obu stronach; sama nie przesądza o wyniku
+        przebiegu. ADR 0003 nazywa ją defektem istniejącym przed migracją, który migracja
+        zachowała; w dowodzie A/A, gdzie obie strony to legacy, oznacza kontrakt, który myli
+        się co do systemu legacy.
   \item[werdykt] \repopath{verdict.json}: każda wymiana w jednej z klas \repopath{equal},
         \repopath{equal-under-contract}, \repopath{regression}, \repopath{fix-candidate};
         wynik \repopath{pass}, \repopath{fail} albo \repopath{review}.
   \item[wymiana (exchange)] Para żądanie--odpowiedź w nagraniu i w przebiegu.
+  \item[YARP] Podstawa proxy nagrywającego \repopath{sk capture} (C1, ticket S9); domyślnie
+        wysyła do systemu nagłówek host celu.
 \end{description}
 
-\zrodla{rozdziały~\ref{sec:architektura}--\ref{sec:procedura} i ich źródła}
+\zrodla{\path{letsgolegacy.secondkey/README.md},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/docs/formats/README.md},
+\path{letsgolegacy.secondkey/docs/formats/contract.md},
+\path{letsgolegacy.secondkey/docs/formats/verdict.md},
+\path{letsgolegacy.secondkey/docs/formats/evidence.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey/scripts/mutation.sh},
+\path{letsgolegacy.portcullis/docs/WORKPLAN.md},
+\path{letsgolegacy.portcullis/docs/TUTORIAL.md},
+\path{letsgolegacy.portcullis/docs/SARIF.md},
+\path{letsgolegacy.portcullis/docs/MUTATIONS.md},
+\path{letsgolegacy.portcullis/action.yml},
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P9-MUTANTS.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/warmup/eshop/README.md},
+\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}

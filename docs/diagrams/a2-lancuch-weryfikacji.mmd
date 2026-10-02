@@ -11,3 +11,5 @@ flowchart TB
   VER -- "sk evidence" --> PACK["pakiet dowodowy<br/>index.html, report.pdf,<br/>manifest.json,<br/>statement.intoto.json"]
   SARIF -- "sk gate" --> PACK
   CON --> PACK
+  CON --> MUT["mutanty (C9; w fazie 01<br/>łatki benchu P9)"]
+  MUT -- "sk replay i sk compare:<br/>kill rate per klauzula" --> KR[("zabite mutanty")]

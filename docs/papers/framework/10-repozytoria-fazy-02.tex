@@ -10,12 +10,22 @@ pozycja planu ma status „planned” (jedyny wyjątek to decyzja D7 w~sandboxie
 Rozdział opisuje więc cel, zakres, zaplanowane prace i~ich status oraz zależności od fazy 01
 -- wyłącznie tak, jak podają je źródła.
 
+Wszystkie trzy mają ten sam \path{LICENSE}: wszystkie prawa zastrzeżone; repozytorium
+opublikowano, żeby dało się obejrzeć jego pracę, ale nie udziela się prawa do używania,
+kopiowania, modyfikowania ani rozpowszechniania poza prawami, które regulamin GitHub daje
+każdemu użytkownikowi (oglądanie i~fork publicznych repozytoriów). Model licencjonowania
+jest otwartą decyzją; do jej podjęcia nota obowiązuje każdy plik, który sam nie stanowi
+inaczej.
+
 \finding{Portal (C11) jest w~tym rozdziale, bo jest trzecim z~repozytoriów planowanych po
 fazie 01, ale jego README i~WORKPLAN przypisują całą jego pracę do fazy 03, a~nie 02.}
 
 \zrodla{\path{letsgolegacy.secondkey-capture/README.md},
 \path{letsgolegacy.secondkey-sandbox/README.md},
-\path{letsgolegacy.secondkey-portal/README.md}}
+\path{letsgolegacy.secondkey-portal/README.md},
+\path{letsgolegacy.secondkey-capture/LICENSE},
+\path{letsgolegacy.secondkey-sandbox/LICENSE},
+\path{letsgolegacy.secondkey-portal/LICENSE}}
 
 \subsection{Umiejscowienie i~bramka fazy 01}\label{sec:faza02-bramka}
 
@@ -39,7 +49,10 @@ Repozytorium & Zawiera \\
 evidence pack (pakiet dowodowy) na nopCommerce 3.x; sekcja „Phase 02 and later” zaczyna się od zastrzeżenia,
 że faza 02 startuje dopiero po bramce fazy 01. Plan pracy benchu wskazuje swój ticket P9 jako
 bramkę fazy: publikację pakietu dowodowego, kontraktu i~liczb (scenariusze, różnice,
-regresje, zabite mutanty); w~migawce P9 ma status „planned” (rozdział~\ref{sec:bench}).
+regresje, zabite mutanty). W~migawce benchu P9 ma status „in progress”: zabite mutanty są
+gotowe (\#8, 11 z~11), a~otwarte pozostają pakiet dowodowy kandydata, różnice i~regresje,
+które czekają na P6--P8, z~których żaden nie jest jeszcze zrobiony
+(rozdział~\ref{sec:bench-p9}).
 Plany trzech repozytoriów fazy 02 same nie powołują się na tę bramkę; wynika ona z~planów
 rdzenia i~benchu.
 
@@ -47,16 +60,26 @@ Z~planu rdzenia wynikają też zależności tych repozytoriów od fazy 01 i~od s
 nawzajem:
 
 \begin{itemize}
-  \item \textbf{Artefakty.} \repopath{*.skcap} (zdarzenia JSONL korelowane identyfikatorem
-        żądania) produkuje C1 capture, a~czytają C2 miner i~C6 replay; \repopath{verdict.json}
-        czytają C10 i~C11 portal; \repopath{evidence.dsse} (in-toto/DSSE, podpisywany przez
-        C10 od fazy 03) czytają C11 portal i~audytor (rozdział~\ref{sec:formaty}).
+  \item \textbf{Artefakty.} \repopath{*.skcap} (zdarzenia JSONL, jedno na linię, korelowane
+        identyfikatorem wymiany, \emph{exchange id}) produkuje C1 capture, a~czytają C2 miner
+        i~C6 replay; \repopath{verdict.json} czytają C10 i~C11 portal;
+        \repopath{evidence.dsse} (in-toto/DSSE, podpisywany przez C10 od fazy 03) czytają C11
+        portal i~audytor (rozdział~\ref{sec:formaty}).
   \item \textbf{Przeniesienie C1.} W~tabeli fazy 02 rdzenia pozycja „C1 SQL/queues/PII” ma
         opis: przenosi się do \path{letsgolegacy.secondkey-capture} (strona Windows/IIS,
         własny cykl wydań), faza 02. Capture HTTP fazy 01 (ticket S9 rdzenia: proxy nagrywające
         YARP zapisujące \repopath{*.skcap}, tylko ruch przychodzący) jest zrobiony.
-  \item \textbf{Zasady projektowe rdzenia}, które te repozytoria realizują: wszystko działa
-        wewnątrz granicy klienta, domyślnie bez ruchu wychodzącego (sandbox); tylko
+  \item \textbf{Wywołania wychodzące.} Ticket rdzenia S16 -- stuby wywołań wychodzących
+        w~C6 z~WireMock.Net, budowane z~nagranego ruchu -- przeszedł do fazy 02, bo ani sklep
+        przykładowy, ani nopCommerce 3.90 z~danymi przykładowymi nie wykonują wywołań
+        wychodzących (rozdział~\ref{sec:rdzen-status}). Pierwsza pozycja planu capture fazy
+        02 dodaje nagrywanie wymian wychodzących (\repopath{defaultProxy}), których capture
+        fazy 01 (S9) nie nagrywa.
+  \item \textbf{Zasady projektowe rdzenia}, które te repozytoria realizują: werdykt jest
+        deterministyczny -- model może szkicować klauzule albo porządkować różnice, ale nigdy
+        nie decyduje, więc triage C8, którą kalibrują decyzje recenzentów z~portalu, nigdy nie
+        zmienia werdyktu (portal); wszystko działa wewnątrz granicy klienta, domyślnie bez
+        ruchu wychodzącego (sandbox); tylko
         technologie, które odbiorca już utrzymuje -- .NET, SQL Server, Entra ID, GitHub albo
         Azure DevOps, Kubernetes (sandbox, portal); system legacy jest nietykalny -- capture nie
         wymaga zmiany kodu ani rekompilacji (capture); brak własnej usługi tożsamości, używany
@@ -64,10 +87,19 @@ nawzajem:
         interfejsem (portal).
   \item \textbf{Znany trudny problem C1} według rdzenia: przypisanie instrukcji SQL do żądania
         HTTP bez zmian w~kodzie jest heurystyką z~jawnie raportowanym marginesem niepewności.
+  \item \textbf{Przewodniki architecture-standards.} Notatki referencyjne rdzenia
+        (\path{docs/reference-notes.md}, §5) przypisują tym komponentom przewodniki:
+        PRIVATE-CLOUD-DELIVERY -- C12 (repozytorium sandbox); SECURITY-REVIEW -- capture C1,
+        bo nagrania mogą zawierać dane osobowe; AI-EVALS -- triage C8, którą zasilają
+        etykiety z~portalu (rozdział~\ref{sec:rdzen-referencje}).
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/reference-notes.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/schemas/skcap.schema.json},
+\path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
 
 \subsection{secondkey-capture (C1 od fazy 02)}\label{sec:faza02-capture}
@@ -83,7 +115,12 @@ Windows/IIS, i~ma własny cykl wydań.
 
 \textbf{Format wyjścia.} Wynikiem jest format \repopath{*.skcap} zdefiniowany przez schemat
 w~repozytorium rdzenia (rozdział~\ref{sec:formaty}); to repozytorium nigdy nie zmienia tego
-formatu samodzielnie.
+formatu samodzielnie. Schemat w~wersji~1 opisuje wyłącznie wymiany HTTP; według jego opisu
+instrukcje SQL, wiadomości kolejek i~wywołania wychodzące mają przyjść w~późniejszych
+wersjach jako nowe typy zdarzeń (sekcja~\ref{sec:formaty-skcap}). Taka zmiana należy do
+rdzenia: zmiana \path{schemas/*.json} to zmiana formatu, która podbija pole \repopath{v},
+aktualizuje \path{docs/formats/} i~utrzymuje walidujące się próbki
+(sekcja~\ref{sec:procedura-rozwoj}).
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{1.6cm}@{}}
 \toprule
@@ -102,6 +139,14 @@ Tokenizacja PII przez sidecar Presidio & Nagrania opuszczające host capture zaw
 \bottomrule
 \end{xltabular}
 
+Plan rdzenia i~schemat \repopath{*.skcap} w~wersji~1 wiążą zdarzenia jednego żądania
+identyfikatorem wymiany (\emph{exchange id}); plan capture zapowiada w~fazie 02 wiązanie
+wymian przychodzących i~wychodzących w~jednym pliku identyfikatorem żądania
+(\emph{request id}). Capture fazy 01 w~rdzeniu redaguje skonfigurowane nagłówki, zanim
+cokolwiek trafi na dysk (sekcja~\ref{sec:bezpieczenstwo-dane}); tokenizacja PII z~planu
+fazy 02 sięga dalej: nagrania opuszczające host capture mają zawierać tokeny, a~nie dane
+osobowe.
+
 Faza 04: usługi Java (modernize-java) -- planned.
 
 \textbf{Odrzucony wariant.} Wczesny plan budowy capture na Keploy porzucono: eBPF działa tylko
@@ -118,7 +163,14 @@ i~\path{evidence-out/}. Stan w~README: faza 02; capture HTTP fazy 01 mieszka w~r
 \zrodla{\path{letsgolegacy.secondkey-capture/README.md},
 \path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-capture/.gitignore},
-\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+\path{letsgolegacy.secondkey-sandbox/.gitignore},
+\path{letsgolegacy.secondkey-portal/.gitignore},
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/reference-notes.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/schemas/skcap.schema.json},
+\path{letsgolegacy.secondkey/CLAUDE.md},
+\path{letsgolegacy.secondkey/SECURITY.md}}
 
 \subsection{secondkey-sandbox (C12)}\label{sec:faza02-sandbox}
 
@@ -192,8 +244,8 @@ interfejsem: każdy krok nadal działa z~CLI w~pipeline.
 \textbf{Reguły z~planu.}
 \begin{itemize}
   \item \textbf{Brak własnej usługi tożsamości.} Produkcja loguje przez IdP klienta po OIDC
-        (Entra ID, ADFS). \repopath{authservice} jest używany tylko dla wersji próbnej
-        hostowanej samodzielnie.
+        (Entra ID, ADFS). \repopath{authservice} jest używany tylko dla wersji próbnej,
+        którą hostują sami autorzy Second Key.
   \item Role: \emph{engineer}, \emph{reviewer}, \emph{risk} (tylko odczyt).
   \item Każda decyzja recenzenta trafia do dziennika audytu, do którego można tylko
         dopisywać; te decyzje są też etykietami, które kalibrują triage doradczy C8.
@@ -213,7 +265,7 @@ Metadane przebiegów w~Postgres (przebiegi, podsumowania werdyktów, skróty pak
 Widoki dowodów: podsumowanie, per klauzula, różnice per scenariusz & Widoki renderują pakiet-fixture & 03 & planned \\
 Decyzje recenzentów z~dziennikiem audytu & Każda decyzja zapisuje kto, kiedy, co i~dlaczego; dziennik jest tylko do dopisywania & 03 & planned \\
 Eksport etykiet do kalibracji C8 & Decyzje eksportują się jako oznaczone przykłady & 03 & planned \\
-Tenancy wersji próbnej przez \repopath{authservice} & Logowanie w~wersji próbnej działa; konfiguracja produkcyjna od niego nie zależy & 03 & planned \\
+Tenancy wersji próbnej hostowanej przez autorów, przez \repopath{authservice} & Logowanie w~wersji próbnej działa; konfiguracja produkcyjna od niego nie zależy & 03 & planned \\
 \bottomrule
 \end{xltabular}
 
@@ -224,10 +276,22 @@ Etykiety z~decyzji recenzentów zasilają C8 -- triage doradczy, który według 
 (fazy 02--03) jest portem kalibracji z~judge-worker (kappa Cohena na etykietach recenzentów,
 bez liczby przy małej próbie) i~nigdy nie zmienia werdyktu.
 
+Podpis nie zmieni formatu pakietu: pakiet fazy 01 niesie skróty SHA-256 i~niepodpisany
+statement in-toto właśnie po to, żeby podpis doszedł później bez zmiany formatu. Plan
+rdzenia przewiduje atestacje in-toto w~kopertach DSSE, cosign z~kluczem klienta w~KMS/HSM,
+bez publicznego rejestru przejrzystości, i~przechowywanie w~OCI (ORAS) albo WORM
+(sekcja~\ref{sec:bezpieczenstwo-podpis}). Według notatek referencyjnych rdzenia C8 pozostaje
+doradcza, dopóki nie zostanie skalibrowana na etykietach recenzentów: bramka kalibracji
+wymaga co najmniej 10 etykiet i~$\kappa \geq 0{,}6$, inaczej wyniki są tylko raportowane
+i~niczego nie blokują; wynik strukturalny C8 daje \texttt{Microsoft.Extensions.AI}
+(rozdział~\ref{sec:rdzen-referencje}).
+
 \zrodla{\path{letsgolegacy.secondkey-portal/README.md},
 \path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-portal/.gitignore},
-\path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
+\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey/docs/reference-notes.md},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
 
 \subsection{Czego źródła nie określają}\label{sec:faza02-luki}
 

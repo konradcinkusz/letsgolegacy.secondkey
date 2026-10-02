@@ -30,7 +30,8 @@ przepisuje.}
 
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
-\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md}}
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
+\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md}}
 
 \subsection{Czym jest framework letsgolegacy}\label{sec:wprowadzenie-framework}
 
@@ -86,9 +87,17 @@ kontraktu \repopath{apiVersion: secondkey/v1}, nazwy repozytoriów i pakietów. 
 dokument cytuje źródło, które mówi „Second Key” w szerszym sensie, zaznacza to w
 kontekście.
 
+Agenta migracyjnego plany pracy nazywają \textbf{modernize-dotnet} i tej nazwy używa ten
+dokument. Microsoft dokumentuje go obecnie jako GitHub Copilot upgrade (wcześniej GitHub
+Copilot app modernization for .NET): w Visual Studio instaluje się go jako komponent GitHub
+Copilot app modernization i wywołuje przez \repopath{@Modernize}, w pozostałych
+środowiskach to agent Upgrade (\repopath{@upgrade}). To ten sam agent i ten sam mechanizm
+skilli (podrozdział~\ref{sec:standardy-modernize}).
+
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.portcullis/docs/WORKPLAN.md},
-\path{letsgolegacy.secondkey-standards/README.md}}
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md}}
 
 \subsection{Zakres, wersja i źródła}\label{sec:wprowadzenie-wersja}
 
@@ -96,9 +105,12 @@ Dokument prezentuje publiczne repozytoria frameworku w stanie z tabeli poniżej 
 \repopath{main}). Każda podsekcja kończy się listą plików, z których pochodzi jej treść.
 Źródłem prawdy są te pliki: dokumentacja w Markdown, schematy, skrypty, workflowy i kod.
 \finding{Gdy ten dokument i źródło się różnią, rację ma źródło}, a dokument należy
-poprawić. Nic mechanicznie nie pilnuje, że zmiana w źródle trafi do tego dokumentu --- to
-przyjęty koszt ręcznie redagowanej prezentacji; listy źródeł pozwalają sprawdzić każde
-twierdzenie osobno.
+poprawić. Nic nie sprawdza, że zdania tego dokumentu nadal są prawdziwe --- to przyjęty
+koszt ręcznie redagowanej prezentacji; listy źródeł pozwalają sprawdzić każde twierdzenie
+osobno. Workflow dokumentu sprawdza mechanicznie tylko tanią połowę dryfu i tylko w rdzeniu
+(\path{scripts/check-doc-sources.mjs}): każdy cytowany plik rdzenia musi istnieć, inaczej
+build zawodzi, a gdy kod rdzenia odszedł od commitu z tabeli, log wymienia zmienione pliki.
+Pozostałych repozytoriów ten check nie czyta.
 
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.2cm} l l X@{}}
 \toprule
@@ -108,16 +120,26 @@ Repozytorium & Commit & Data & Rola \\
 \path{letsgolegacy.portcullis} & \texttt{d045f07} & 2026-09-26 & bramka C5 \\
 \path{letsgolegacy.secondkey-standards} & \texttt{a8c60ff} & 2026-09-26 & standardy C4 \\
 \path{letsgolegacy.secondkey-nopcommerce-bench} & \texttt{5bf3cfc} & 2026-10-02 & publiczny okaz \\
-\path{letsgolegacy.legacy-risk-scan} & \texttt{fb09178} & 2026-09-26 & raport EOL i CVE \\
+\path{letsgolegacy.legacy-risk-scan} & \texttt{d87b9e6} & 2026-10-02 & raport EOL i CVE \\
 \path{letsgolegacy.secondkey-capture} & \texttt{e56068e} & 2026-09-25 & C1, faza 02 \\
 \path{letsgolegacy.secondkey-sandbox} & \texttt{75042c6} & 2026-09-25 & C12, faza 02 \\
 \path{letsgolegacy.secondkey-portal} & \texttt{e73546f} & 2026-09-25 & C11, faza 03 \\
 \bottomrule
 \end{tabularx}
 
+Commit rdzenia w tabeli to ostatni, który zmienia źródła opisane w tym dokumencie:
+późniejsze commity gałęzi \repopath{main} rdzenia zmieniają tylko sam dokument i narzędzia,
+które go budują (\path{docs/papers/}, \path{docs/diagrams/}, skrypty dokumentu,
+\path{package.json} i workflow PDF).
+
 Poza zakresem są sprawy nietechniczne i wszystko, czego nie ma w publicznych
 repozytoriach. Dokument nie opisuje też pracy w toku na gałęziach, które nie trafiły do
 \repopath{main} na wymienionych commitach.
+
+Bench buduje narzędzia łańcucha z własnych przypiętych commitów (\path{pins.json}, sekcja
+\repopath{chain}; podrozdział~\ref{sec:bench-pins}): \repopath{sk} z \texttt{967c49c},
+Portcullis z \texttt{84e1925}. Oba są starsze niż commity z tabeli; co z tego wynika,
+mówi sekcja~\ref{sec:procedura-wymagania}.
 
 Wersję samego dokumentu --- commit, z którego zbudowano PDF --- podaje nagłówek każdej
 strony. PDF buduje workflow \path{.github/workflows/build-docs-pdf.yml} repozytorium
@@ -125,6 +147,8 @@ rdzenia przy każdym pushu do \repopath{main}; źródła dokumentu są w
 \path{docs/papers/} i \path{docs/diagrams/} (dodatek~\ref{app:ci}).
 
 \zrodla{\path{letsgolegacy.*} na podanych commitach;
+\path{letsgolegacy.secondkey/scripts/check-doc-sources.mjs},
+\path{letsgolegacy.secondkey/.github/workflows/build-docs-pdf.yml},
 \path{architecture-standards/docs/research/00-RESEARCH-DOCUMENTATION.md}}
 
 \subsection{Jak czytać ten dokument}\label{sec:wprowadzenie-czytanie}
@@ -150,7 +174,7 @@ Rozdział & Zawartość \\
 \bottomrule
 \end{tabularx}
 
-Kto chce zacząć pracę, czyta rozdziały~\ref{sec:architektura} i~\ref{sec:procedura};
+Kto chce zacząć pracę, czyta rozdziały~\ref{sec:architektura} i \ref{sec:procedura};
 rozdziały~\ref{sec:rdzen}--\ref{sec:bench} są referencją, do której procedura odsyła.
 
 Konwencje: nazwy techniczne zostają po angielsku, gdy są nazwami własnymi,

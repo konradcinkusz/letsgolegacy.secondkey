@@ -53,7 +53,7 @@ Artefakt & Format & Produkuje & Czyta \\
 Artefakt & Format & Produkuje & Czyta \\
 \midrule
 \endhead
-\repopath{*.skcap} & JSONL, jedno zdarzenie na linię, korelowane identyfikatorem żądania & C1 capture & C2 miner, C6 replay \\
+\repopath{*.skcap} & JSONL, jedno zdarzenie na linię, korelowane identyfikatorem wymiany (\emph{exchange id}) & C1 capture & C2 miner, C6 replay \\
 \repopath{contract.yaml} & YAML walidowany JSON Schema & C2 miner i człowiek & C3 silnik, C7 komparator, C9 mutacje \\
 \repopath{standards/} & Markdown → skills i NuGet & C4 (\path{letsgolegacy.secondkey-standards}) & agent migracyjny, C5 bramka \\
 \repopath{*.sarif} & SARIF 2.1 & C5 bramka (\path{letsgolegacy.portcullis}) & C10 evidence \\
@@ -70,6 +70,7 @@ systemu; kontrakt, porównanie i pakiet dowodowy to „plik na wejściu, plik na
 
 \zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/adr/0001-artifacts-are-the-interface.md},
+\path{letsgolegacy.secondkey/schemas/skcap.schema.json},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md}}
 
 \subsection{Komponenty C0--C12 i repozytoria}\label{sec:architektura-komponenty}
@@ -144,10 +145,32 @@ Rdzeń egzekwuje siedem zasad projektowych. Pozostałe repozytoria się na nie p
         interfejsem.
 \end{enumerate}
 
+Obok siedmiu zasad cały łańcuch wiążą trzy decyzje:
+
+\begin{itemize}
+  \item \textbf{Różnica bez wyjaśnienia zawodzi (fail closed).} Różnica, której nie tłumaczy
+        żadna klauzula ani reguła normalizacji, jest regresją \repopath{uncovered-difference}
+        i blokuje, dopóki przeglądnięta zmiana kontraktu nie doda reguły normalizacji
+        (różnica nie ma znaczenia) albo klauzuli (ma znaczenie). Strona bez odpowiedzi to
+        regresja \repopath{missing-result} (ADR 0003, decyzja D-2 analizy fazy 01).
+  \item \textbf{Kontrakt nie czyta prozy i nie przechodzi pusto.} Wartości ze stron HTML
+        wyciągają nazwane ekstraktory z jawnym typem i kulturą; klauzula, do której nie
+        trafiło żadne żądanie, jest \repopath{unexercised}, nigdy spełniona (ADR 0002).
+  \item \textbf{Agent i bramka dostają te same standardy.} Standardy są spisane raz
+        i kompilowane do skilla agenta oraz do konfiguracji analyzerów bramki; rozbieżność
+        między tym, co usłyszał agent, a tym, co egzekwuje bramka, jest błędem CI, a nie
+        znaleziskiem (rozdział~\ref{sec:standardy}).
+\end{itemize}
+
+Decyzje ADR rdzenia opisuje podrozdział~\ref{sec:rdzen-adr}.
+
 \zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/CLAUDE.md},
 \path{letsgolegacy.secondkey/docs/formats/verdict.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/docs/adr/0002-contract-language.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
+\path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
 
 \subsection{Fazy i bramka fazy 01}\label{sec:architektura-fazy}
@@ -167,14 +190,17 @@ Faza & Zakres według planów pracy repozytoriów \\
 \midrule
 \endhead
 01 & Rdzeń: CLI, capture HTTP, silnik kontraktu, replay z resetem snapshotem SQL Server,
-komparator, niepodpisany pakiet dowodowy, job end-to-end (S0--S16). Portcullis: import,
-zmiana nazwy, reguły migracyjne, SARIF z filtrem zmienionych linii i baseline (R0--R3).
-Standardy: format, generator, drift check, skill dla modernize-dotnet (C4-a--c, R4).
-Bench: P1--P10. legacy-risk-scan: L18. \\
+komparator, niepodpisany pakiet dowodowy, job end-to-end (S0--S15; S16 przeniesiony do
+fazy 02). Portcullis: import, zmiana nazwy, reguły migracyjne, SARIF z filtrem zmienionych
+linii i baseline (R0--R3); wsparcie P8 (reguły Portcullis na pull requeście kandydata
+benchu) zaplanowane. Standardy: format, generator, drift check, skill dla modernize-dotnet
+(C4-a--c, R4). Bench: P1--P10. legacy-risk-scan: L18. Sandbox: decyzja o topologii
+demonstracyjnej D7 w stanie „proposed”, zrobiona, gdy ADR zostanie przyjęty. \\
 02 & \repopath{sk mine} (miner kontraktu), \repopath{sk mutate} (silnik mutacji), capture
 SQL, kolejek i PII w \path{secondkey-capture}, triage doradcza C8, pakowanie sandbox (Helm,
 Hyper-V, Bicep, bundle air-gapped), reguły warstw ArchUnitNET w Portcullis, standardy
-klienta jako skills, outbound stubs (S16). \\
+klienta jako skills, kanały wydań standardów przez NuGet i tagi git z wersją przypiętą
+w każdym repozytorium (02--03), outbound stubs (S16). \\
 03 & Podpis pakietu (in-toto w kopertach DSSE, cosign z kluczem klienta), biblioteka
 fragmentów kontraktów, portal dowodów C11, paczki reguł per estate, pakiet Azure Managed
 Application. \\

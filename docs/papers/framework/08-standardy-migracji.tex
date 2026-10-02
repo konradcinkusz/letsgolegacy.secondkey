@@ -5,7 +5,8 @@ pakietem standardów architektonicznych i~migracyjnych, które są zapisane raz 
 źródła trafiają w~dwie postacie -- do agenta migracyjnego jako skill oraz do bramki
 (Portcullis, rozdział~\ref{sec:portcullis}) jako konfiguracja analyzerów. Rozdział opisuje
 format standardu, wszystkie dwadzieścia reguł, generator, który je waliduje i~kompiluje,
-wersjonowanie, skill dla GitHub Copilot upgrade, drift check dla repozytoriów korzystających
+wersjonowanie, procedurę zmiany standardu, to, jak wagi standardów działają w~kanałach
+Portcullis, skill dla GitHub Copilot upgrade, drift check dla repozytoriów korzystających
 ze standardów, procedurę użycia z~modernize-dotnet, testy, CI i~stan prac.
 
 Stan według README: faza 01 w~budowie; standardy, ich walidator, generator, skill dla agenta
@@ -65,8 +66,35 @@ zachowaj zachowanie i~oflaguj podejrzewany defekt zamiast go naprawiać.
 \bottomrule
 \end{xltabular}
 
+Rejestr decyzji (\path{docs/adr/README.md}) z~ich statusami; każdy ADR ma datę
+2026-09-26:
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{1.1cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4.2cm}@{}}
+\toprule
+ADR & Decyzja & Status \\
+\midrule
+\endfirsthead
+\toprule
+ADR & Decyzja & Status \\
+\midrule
+\endhead
+0001 & Format źródłowy: jeden plik Markdown na regułę, metadane w~front matter, jedno słownictwo wag dla agenta i~bramki (sekcja~\ref{sec:standardy-format}) & przyjęty (C4-a) \\
+0002 & Generator jako narzędzie .NET~10, które waliduje standardy od pierwszego pull requestu (sekcja~\ref{sec:standardy-generator}) & przyjęty (C4-a) \\
+0003 & Drzewo generowane, \repopath{generate -{}-check}, bramka wersji i~pakiet NuGet zawierający wyłącznie konfigurację (sekcja~\ref{sec:standardy-wersje}) & przyjęty (C4-b) \\
+0004 & Standardy jako własny skill agenta modernizacyjnego GitHub Copilot: format, lokalizacja, nazwa, wykrywanie (sekcja~\ref{sec:standardy-skill}) & przyjęty (R4); podjęcie skilla w~prawdziwym przebiegu ma potwierdzić P6; poprawka z~2026-09-26 \\
+0005 & Drift check: pin czytany z~referencji pakietu i~ze skilla, wydania z~tagów git, jeden krok CI, bez usługi (sekcja~\ref{sec:standardy-drift}) & przyjęty (C4-c) \\
+\bottomrule
+\end{xltabular}
+
+Indeks wyjaśnia, po co ADR zapisują odrzucone warianty: dokument, który mówi
+„rozważyliśmy X i~odrzuciliśmy go, bo Y”, jest wart więcej niż taki, który wymienia
+polecenia (P14).
+
 Rysunek~\ref{fig:standardy} pokazuje, jak jedno źródło reguł trafia do agenta
-migracyjnego i~do buildu kandydata.
+migracyjnego i~do buildu kandydata. Drift check (\path{actions/drift-check}, krawędź
+przerywana) czyta oba piny repozytorium konsumenta -- \repopath{metadata.version}
+zainstalowanego skilla i~referencję pakietu -- i~porównuje je z~najwyższym tagiem
+\repopath{v<MAJOR.MINOR.PATCH>} repozytorium standardów (sekcja~\ref{sec:standardy-drift}).
 
 \begin{figure}[htbp]
   \centering
@@ -90,6 +118,17 @@ Projekt & Pakiety & Powód \\
 \bottomrule
 \end{tabularx}
 
+Licencja (\path{LICENSE}, README): wszystkie prawa zastrzeżone. Repozytorium jest
+opublikowane po to, żeby można było obejrzeć jego pracę; poza prawami, które warunki
+korzystania z~GitHub dają każdemu użytkownikowi (oglądanie i~fork repozytoriów
+publicznych), nie jest udzielana licencja na używanie, kopiowanie, modyfikowanie, łączenie,
+publikowanie, dystrybucję, sublicencjonowanie ani sprzedaż oprogramowania i~dokumentacji.
+Model licencjonowania jest decyzją otwartą; do jej podjęcia ta informacja dotyczy każdego
+pliku, który nie stanowi inaczej. Pakiet \repopath{SecondKey.Standards} zawiera ten sam
+plik \path{LICENSE}. Reguły \repopath{SK-ARCH-} powtarzają zasady
+\path{architecture-standards} (MIT, ten sam autor), a~skrypty skanu sekretów są
+przeniesione z~tamtego repozytorium.
+
 Konwencje repozytorium (\path{AGENTS.md}): reguła mówi, co zmigrowany kod musi lub czego
 nie wolno mu robić, dlaczego, i~pokazuje przykład niezgodny oraz zgodny; twierdzenia
 techniczne cytują źródło pierwotne (dokumentację Microsoft, konstytucję) w~sekcji
@@ -101,10 +140,53 @@ angielski, bez sekretów i~bez informacji biznesowych. Zasady architektury nie s
 wyprowadzane na nowo -- konstytucja pozostaje źródłem rozstrzygającym, a~reguły
 \repopath{SK-ARCH-} ją powtarzają i~linkują.
 
+Co edytuje się przy jakiej zmianie (\path{AGENTS.md}); niczego pod \path{generated/} nie
+pisze się ręcznie:
+
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.0cm}@{}}
+\toprule
+Zmiana & Plik do edycji & Potem \\
+\midrule
+Reguła & \path{standards/<id>-<slug>.md} & \repopath{generate} \\
+Wersja pakietu standardów, nazwa lub opis skilla, pakiet NuGet & \path{catalog/pack.json} & \repopath{generate} \\
+Ręcznie pisana treść skilla & \path{catalog/skill.template.md} & \repopath{generate} \\
+Opis tego, co zmieniła wersja & \path{CHANGELOG.md} & -- \\
+\bottomrule
+\end{tabularx}
+
+Przed edycją reguły czyta się \path{standards/README.md}, który definiuje format oraz
+znaczenie każdego pola i~każdej wagi. Decyzje i~ich powody są w~\path{docs/adr/}; zmiana,
+która odwraca decyzję ADR, aktualizuje ten ADR.
+
+Repozytorium deklaruje \path{architecture-standards} tak samo jak rdzeń
+(rozdział~\ref{sec:rdzen}): \path{.claude/settings.json} rejestruje marketplace
+\texttt{architecture-standards} i~włącza plugin \texttt{architecture-core}. Pliki higieny
+powołują się na \path{REPO-BASELINE.md} z~\path{architecture-standards}: §1 --
+\path{.editorconfig}, \path{.gitattributes}, \path{.github/CODEOWNERS},
+\path{.github/dependabot.yml}, \path{Directory.Build.props},
+\path{Directory.Packages.props} i~CodeQL; §2 -- skan sekretów w~hooku pre-commit i~w~CI;
+§3 -- onboarding jednym poleceniem (\path{scripts/setup.sh}); §4 -- skrypty odtwarzające
+job CI 1:1 (\path{scripts/scan-secrets.sh}, \path{scripts/verify-package.sh}).
+
 \zrodla{\path{letsgolegacy.secondkey-standards/README.md},
 \path{letsgolegacy.secondkey-standards/AGENTS.md},
+\path{letsgolegacy.secondkey-standards/LICENSE},
 \path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/docs/adr/README.md},
 \path{letsgolegacy.secondkey-standards/Directory.Packages.props},
+\path{letsgolegacy.secondkey-standards/Directory.Build.props},
+\path{letsgolegacy.secondkey-standards/.claude/settings.json},
+\path{letsgolegacy.secondkey-standards/.editorconfig},
+\path{letsgolegacy.secondkey-standards/.gitattributes},
+\path{letsgolegacy.secondkey-standards/.github/CODEOWNERS},
+\path{letsgolegacy.secondkey-standards/.github/dependabot.yml},
+\path{letsgolegacy.secondkey-standards/.github/workflows/codeql.yml},
+\path{letsgolegacy.secondkey-standards/.github/workflows/secret-scan.yml},
+\path{letsgolegacy.secondkey-standards/.gitleaks.toml},
+\path{letsgolegacy.secondkey-standards/scripts/setup.sh},
+\path{letsgolegacy.secondkey-standards/scripts/hooks/pre-commit},
+\path{letsgolegacy.secondkey-standards/scripts/scan-secrets.sh},
+\path{letsgolegacy.secondkey-standards/scripts/verify-package.sh},
 \path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md}}
 
@@ -176,7 +258,12 @@ Klucz & Wymagany & Znaczenie i~walidacja \\
 
 Walidacja obejmująca cały zbiór: identyfikatory są unikalne (duplikat jest zgłaszany na
 drugim pliku), a~każda diagnostyka jest przypisana tylko jednej regule -- dwie reguły dałyby
-jej dwie wagi.
+jej dwie wagi. Brak katalogu \path{standards/} („\texttt{the standards directory does not
+exist}”) albo katalog bez plików reguł („\texttt{no rule files found; each rule is one
+standards/<id>-<slug>.md file}”) jest problemem, a~nie zaliczoną walidacją.
+\path{README.md} jest pomijany bez względu na wielkość liter nazwy. Przed parsowaniem
+generator usuwa z~pliku reguły znacznik BOM UTF-8 i~zamienia końce linii CRLF na LF, więc
+reguła zapisana w~edytorze z~CRLF znaczy to samo.
 
 \subsubsection{Wagi}\label{sec:standardy-wagi}
 
@@ -221,7 +308,10 @@ powtórzona sekcja. Parser śledzi ogrodzenia kodu (\repopath{`{}`{}`} lub \repo
 spacji wcięcia), więc \repopath{\#\# heading} wewnątrz bloku kodu jest treścią, a~nie sekcją;
 niezamknięty blok jest zgłaszany w~wierszu, który go otworzył. Link względny w~treści
 (\repopath{](plik.md)}) jest błędem, bo w~wygenerowanym skillu wskazywałby donikąd -- należy
-użyć bezwzględnego URL albo zacytować inną regułę jej identyfikatorem.
+użyć bezwzględnego URL albo zacytować inną regułę jej identyfikatorem. Dozwolone są cele
+linków zaczynające się od \repopath{http://}, \repopath{https://}, \repopath{mailto:}
+i~\repopath{\#} (kotwica w~dokumencie); wierszy wewnątrz bloków kodu parser pod tym kątem
+nie sprawdza.
 
 \subsubsection{Decyzje ADR 0001 i~ich powody}
 
@@ -315,8 +405,15 @@ Zmiana reguły według \path{standards/README.md}: edycja lub dodanie pliku (stw
 sprawdzalne, przykłady minimalne); \repopath{validate} musi przejść; pull request cytuje
 dowód -- dokumentację, kod lub zaobserwowane zachowanie, na którym reguła się opiera.
 Szablon zgłoszenia \path{.github/ISSUE_TEMPLATE/rule-gap.yml} („Gap in a migration
-standard”) wymaga identyfikatora reguły, rodzaju luki (\emph{Missing}, \emph{Wrong},
-\emph{Drift} -- agent usłyszał co innego, niż egzekwuje bramka, \emph{Unclear}) oraz dowodu.
+standard”) wymaga identyfikatora reguły (albo informacji, że reguły brakuje), rodzaju luki
+(\emph{Missing} -- pułapka migracyjna, której nie pokrywa żadna reguła, \emph{Wrong} --
+reguła przeczy udokumentowanemu zachowaniu .NET, \emph{Drift} -- agent usłyszał co innego,
+niż egzekwuje bramka, \emph{Unclear} -- reguła jest zapisana, ale w~praktyce nie da się jej
+rozstrzygnąć) oraz dowodu: kodu, zaobserwowanego zachowania albo dokumentacji; reguła
+zmieniona bez dowodu to błąd, któremu standardy mają zapobiegać. Pole „What the rule should
+say” jest opcjonalne. \path{.github/ISSUE_TEMPLATE/config.yml} dopuszcza puste zgłoszenia
+i~kieruje do konstytucji architektury: luka w~zasadzie należy tam, luka w~regule
+migracyjnej -- tutaj.
 
 \zrodla{\path{letsgolegacy.secondkey-standards/docs/adr/0001-standards-source-format.md},
 \path{letsgolegacy.secondkey-standards/standards/README.md},
@@ -324,9 +421,11 @@ standard”) wymaga identyfikatora reguły, rodzaju luki (\emph{Missing}, \emph{
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Parsing/RuleParser.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Parsing/MarkdownBody.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Parsing/FrontMatter.cs},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Parsing/SourceText.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Model/Patterns.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/StandardsLoader.cs},
-\path{letsgolegacy.secondkey-standards/.github/ISSUE_TEMPLATE/rule-gap.yml}}
+\path{letsgolegacy.secondkey-standards/.github/ISSUE_TEMPLATE/rule-gap.yml},
+\path{letsgolegacy.secondkey-standards/.github/ISSUE_TEMPLATE/config.yml}}
 
 \subsection{Przegląd standardów}\label{sec:standardy-przeglad}
 
@@ -334,7 +433,8 @@ Tabela zbiorcza wszystkich dwudziestu reguł w~wersji 0.1.0. Tytuły są streszc
 oryginalny tytuł (to, co agent widzi w~tabeli reguł skilla) podaje opis każdej reguły
 w~sekcjach~\ref{sec:standardy-arch} i~\ref{sec:standardy-mig}. Kolumna „Diagnostyka” podaje
 identyfikator, którym bramka lub .NET SDK sprawdza regułę; kreska oznacza regułę bez
-analyzera, egzekwowaną instrukcją agenta i~weryfikowaną przez replay.
+analyzera: egzekwuje ją instrukcja agenta, a~w~zakresie zachowania weryfikuje ją replay
+i~porównanie Second Key.
 
 {\small
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{1.95cm} >{\raggedright\arraybackslash}p{3.9cm} >{\raggedright\arraybackslash}p{1.15cm}@{}}
@@ -377,7 +477,8 @@ Kategorie i~wzorce \repopath{appliesTo} podaje opis każdej reguły.
 
 \zrodla{\path{letsgolegacy.secondkey-standards/generated/manifest.json},
 \path{letsgolegacy.secondkey-standards/generated/skills/applying-dotnet-migration-standards/SKILL.md},
-\path{letsgolegacy.secondkey-standards/README.md}}
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-standards/standards/README.md}}
 
 \subsection{Standardy architektoniczne SK-ARCH-001--007}\label{sec:standardy-arch}
 
@@ -385,7 +486,10 @@ Każda reguła \repopath{SK-ARCH-} powtarza jedną zasadę konstytucji architekt
 migracji i~linkuje jej kotwicę w~\path{00-REFERENCE-ARCHITECTURE.md}; konstytucja pozostaje
 źródłem rozstrzygającym. Opis każdej reguły ma cztery części: regułę (stwierdzenie
 normatywne), powód („dlaczego”), sposób spełnienia (sekcja \emph{Migration} reguły) oraz
-kontrolę zgodności z~przypadkami, które agent flaguje zamiast naprawiać.
+kontrolę zgodności z~przypadkami, które agent flaguje zamiast naprawiać. Zdanie „Bramka
+zgłasza … jako …” w~opisie reguły podaje wagę, którą ustawia konfiguracja standardów
+w~buildzie; skan CLI Portcullis raportuje poziomy domyślne
+(sekcja~\ref{sec:standardy-wagi-kanaly}).
 
 \subsubsection{SK-ARCH-001 -- istniejący schemat jest kontraktem}\label{sec:standardy-sk-arch-001}
 
@@ -700,6 +804,27 @@ zachowania, z~krokiem, który go usunie. Wywołania \repopath{HttpUtility} zosta
 jeśli bramka zgłosi takie wywołanie, wiersz jest tłumiony z~uzasadnieniem cytującym regułę,
 zamiast zmiany enkodera.
 
+Przykład z~reguły dla zdarzenia potoku: niezgodny \path{Global.asax.cs} zawiera klasę
+\texttt{ShopApplication : System.Web.HttpApplication}, której
+\path{Application_BeginRequest} dodaje nagłówek \repopath{X-Shop-Node} przez
+\repopath{HttpContext.Current}; zgodny ustawia ten sam nagłówek w~middleware, zanim zacznie
+się odpowiedź:
+
+\begin{lstlisting}
+// Program.cs: the same header, set by middleware before the response starts
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Shop-Node"] = Environment.MachineName;
+    await next(context);
+});
+\end{lstlisting}
+
+Portcullis domyślnie nie zgłasza \path{System.Web.HttpUtility} ani
+\path{System.Web.IHtmlString} (lista \repopath{systemWebAllowedTypes},
+sekcja~\ref{sec:portcullis-migracja}); ustawienie tej listy zastępuje wartość domyślną,
+więc bramka zgłosi \repopath{HttpUtility} dopiero wtedy, gdy konfiguracja repozytorium poda
+listę bez niego -- i~wtedy obowiązuje tłumienie z~uzasadnieniem cytującym regułę.
+
 \paragraph{Zgodność i~flagi.} Bramka zgłasza \path{PORTCULLIS_MIG_SYSTEM_WEB} jako błąd.
 Flagowane są: walidacja żądań -- ASP.NET Framework odrzucał żądania zawierające znaczniki
 („A potentially dangerous Request.Form value was detected”), ASP.NET Core nie ma
@@ -707,7 +832,9 @@ odpowiednika, więc zmigrowany system przyjmuje wejście, które legacy odrzuca�
 zapisuje, bez doraźnego filtrowania imitującego dawną walidację -- oraz każde zachowanie
 kodowania, kolejności potoku albo buforowania, którego zmigrowany kod nie odtwarza dokładnie.
 
-\zrodla{\path{letsgolegacy.secondkey-standards/standards/SK-MIG-001-replace-system-web.md}}
+\zrodla{\path{letsgolegacy.secondkey-standards/standards/SK-MIG-001-replace-system-web.md},
+\path{letsgolegacy.portcullis/docs/CONFIGURATION.md},
+\path{letsgolegacy.portcullis/docs/rules/MIGRATION.md}}
 
 \subsubsection{SK-MIG-002 -- bez HttpContext.Current}\label{sec:standardy-sk-mig-002}
 
@@ -742,6 +869,39 @@ preferowana jest wąska abstrakcja (\repopath{ICurrentCustomer}) zamiast
 \repopath{IHttpContextAccessor}. \repopath{AddHttpContextAccessor()} rejestruje się tylko dla
 infrastruktury, która tego potrzebuje. Przed startem pracy w~tle kopiuje się z~kontekstu
 wartości, których ta praca potrzebuje.
+
+Przykłady zgodne z~reguły: usługa dostaje host sklepu jako parametr, kontroler czyta
+żądanie raz i~przekazuje w~dół zwykłe wartości, a~praca w~tle dostaje wartość skopiowaną,
+zanim żądanie się skończy:
+
+\begin{lstlisting}
+public class OrderNumberService
+{
+    public string NextNumber(string storeHost) => $"{storeHost}-{_sequence.Next()}";
+}
+
+// The controller reads the request once and passes plain values down
+public IActionResult PlaceOrder(OrderForm form)
+{
+    var number = _orderNumbers.NextNumber(Request.Host.Host);
+    // ...
+}
+\end{lstlisting}
+
+\begin{lstlisting}
+// Copy what background work needs while the request is still in scope
+public IActionResult Checkout()
+{
+    var userName = User.Identity?.Name;
+    _queue.Enqueue(() => _audit.Write(userName, "checkout"));
+    return RedirectToAction("Complete");
+}
+\end{lstlisting}
+
+Przykłady niezgodne: \repopath{OrderNumberService} czytający
+\path{HttpContext.Current.Request.Url.Host} w~usłudze domenowej oraz mechaniczny zamiennik
+\repopath{AuditService}, który przez \repopath{IHttpContextAccessor} czyta użytkownika
+w~\repopath{Task.Run}, już poza żądaniem.
 
 \paragraph{Zgodność i~flagi.} Bramka zgłasza \path{PORTCULLIS_MIG_HTTPCONTEXT_CURRENT} jako
 błąd. Flagowane są: wartość, której znaczenie zmienia się między modelami hostingu -- nazwa
@@ -991,7 +1151,23 @@ systemu legacy pod jego kulturą; tekst maszynowy zwykle przechodzi na
 \repopath{tr-TR} zamieniający na wielką literę \repopath{i}), zapisuje się flagę. Parsowanie
 wejścia użytkownika zachowuje kulturę żądania, którą miało; parsowanie tekstu
 przechowywanego lub wymienianego przechodzi na \repopath{InvariantCulture} tylko wtedy, gdy
-ten tekst był zapisywany niezmiennie. Przykład z~reguły:
+ten tekst był zapisywany niezmiennie. Przykłady z~reguły dla miejsc wywołań -- niezgodne:
+
+\begin{lstlisting}[escapechar=!]
+var cacheKey = "price:" + product.Id + ":" + price.ToString();  // separator depends on the host
+var shipDate = DateTime.Parse(form["shipDate"]);                  // day/month order depends on the host
+var code = couponCode.ToUpper();                                  // "file" becomes "F!\.{I}!LE" under tr-TR
+\end{lstlisting}
+
+i~zgodne:
+
+\begin{lstlisting}
+var cacheKey = string.Create(CultureInfo.InvariantCulture, $"price:{product.Id}:{price}");
+var shipDate = DateTime.Parse(form["shipDate"], CultureInfo.CurrentCulture); // the request's culture, as before
+var code = couponCode.ToUpperInvariant();
+\end{lstlisting}
+
+Odtworzenie źródła kultury z~\repopath{web.config}:
 
 \begin{lstlisting}
 // web.config had <globalization culture="pl-PL" uiCulture="pl-PL" />; reproduce it
@@ -1105,6 +1281,25 @@ statyczna. Tam, gdzie kod nie może przyjmować parametrów konstruktora (atrybu
 metoda rozszerzająca), przekazuje się mu to, czego potrzebuje; jeśli nie da się tego zrobić
 bez zmiany zachowania -- flaga.
 
+Przykład z~reguły: niezgodny kontroler pobiera \repopath{IOrderService} przez
+\path{DependencyResolver.Current.GetService} i~cache cen przez statyczne
+\repopath{PriceCache.Instance}; zgodny zachowuje czasy życia legacy -- cache cen był
+procesowy, usługa zamówień była per żądanie:
+
+\begin{lstlisting}
+// The legacy lifetimes, kept: the price cache was process-wide, the order service per request
+builder.Services.AddSingleton<IPriceCache, PriceCache>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+
+public class CheckoutController(IOrderService orders, IPriceCache prices) : Controller
+{
+    public IActionResult Confirm()
+    {
+        // ...
+    }
+}
+\end{lstlisting}
+
 \paragraph{Zgodność i~flagi.} Reguła nie ma diagnostyki; egzekwuje ją instrukcja agenta.
 Flagowane są: czas życia, którego wbudowany kontener nie odtworzy, albo defekt legacy, np.
 obiekt per żądanie przechwycony przez singleton (zachowanie się zachowuje i~zapisuje), oraz
@@ -1154,6 +1349,27 @@ Liczba wywołań zostaje ta sama: żadnej polityki ponowień, hedgingu ani circu
 w~zmianie migracyjnej. W~przykładzie niezgodnym
 \path{AddHttpClient<ShippingLabelClient>().AddStandardResilienceHandler()} sprawia, że zakup
 etykiety, który przekroczył limit czasu, może zostać wykonany dwa razy.
+
+Przykład zgodny z~reguły -- klient typowany, skonfigurowany raz przy rejestracji, z~limitem
+czasu przeniesionym z~klienta legacy:
+
+\begin{lstlisting}
+builder.Services.AddHttpClient<RatesClient>(client =>
+{
+    client.BaseAddress = new Uri("https://rates.example.com/");
+    client.Timeout = TimeSpan.FromSeconds(30); // the legacy client's timeout, carried over
+});
+
+public class RatesClient(HttpClient client)
+{
+    public Task<Rate[]?> GetRatesAsync(string zip) =>
+        client.GetFromJsonAsync<Rate[]>($"v1/rates/{zip}");
+}
+\end{lstlisting}
+
+Pierwszy przykład niezgodny tworzy klienta przy każdym wywołaniu
+(\texttt{using var client = new HttpClient \{ BaseAddress = ... \};}), czyli nową pulę
+połączeń na każde wywołanie.
 
 \paragraph{Zgodność i~flagi.} Reguła nie ma diagnostyki; egzekwuje ją instrukcja agenta,
 a~zmianę wywołań wychodzących wykrywa porównanie Second Key. Flagowane są: callback walidacji
@@ -1289,7 +1505,7 @@ zduplikowane reguły, które się ze sobą nie zgadzają, i~walidacja niespójna
 
 \subsubsection{SK-MIG-012 -- kontrakt HTTP bez zmian}\label{sec:standardy-sk-mig-012}
 
-Tytuł źródłowy: \emph{Keep the HTTP contract -- routes, status codes, headers, cookies and
+Tytuł źródłowy: \emph{Keep the HTTP contract --- routes, status codes, headers, cookies and
 JSON shape}. Waga \repopath{error}, kategoria \repopath{behaviour}, \repopath{appliesTo}:
 \repopath{"*.cs"}, \repopath{"*.cshtml"}.
 
@@ -1389,6 +1605,47 @@ koniec migracji nadal nie przechodzi, z~przyczyną, oraz test, który już przed
 przechodził albo był pomijany -- zostaje taki, jaki był, i~jest zapisany.
 
 \zrodla{\path{letsgolegacy.secondkey-standards/standards/SK-MIG-013-tests-are-evidence.md}}
+
+\subsubsection{Źródła pierwotne cytowane przez reguły}\label{sec:standardy-referencje}
+
+Każda reguła poza SK-MIG-011 i~SK-MIG-013 kończy się sekcją \emph{References}, która podaje
+źródła pierwotne jej twierdzeń technicznych; generator przenosi ją bez zmian do
+\path{references/<id>.md} skilla.
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.3cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Reguła & Źródła (tytuły jak w~regule) \\
+\midrule
+\endfirsthead
+\toprule
+Reguła & Źródła (tytuły jak w~regule) \\
+\midrule
+\endhead
+SK-ARCH-001 & Konstytucja, P4 „Persistence is provider-portable and its schema is migrated, never ensured”; EF Core, „Porting from EF6 to EF Core” -- inicjalizacja bazy w~Code First \\
+SK-ARCH-002 & Konstytucja, P4 -- „Migrations describe schema; reference data is seeded separately” \\
+SK-ARCH-003 & Konstytucja, P5 „Configuration through the environment; secrets through the platform” \\
+SK-ARCH-004 & Konstytucja, P9 „Program.cs is a manifest; wiring lives in extension methods” \\
+SK-ARCH-005 & Konstytucja, P9 -- warstwy kontrolerów, orkiestratorów, usług domenowych i~repozytoriów \\
+SK-ARCH-006 & Konstytucja, P10 „Extensibility through interface + registration, not inheritance” \\
+SK-ARCH-007 & Konstytucja, P15 „Observability is a build-time decision, not an afterthought” i~P2a „every service calls AddServiceDefaults()” \\
+SK-MIG-001 & ASP.NET Core, „Migrate from ASP.NET Framework to ASP.NET Core” -- sekcja \path{migration/fx-to-core}, w~tym adaptery System.Web i~obszar \repopath{HttpContext} (buforowanie, powiązanie z~wątkiem) \\
+SK-MIG-002 & ASP.NET Core, „Access HttpContext in ASP.NET Core” -- bezpieczeństwo wątkowe i~praca w~tle \\
+SK-MIG-003 & ASP.NET Core, „Kestrel options” -- \repopath{AllowSynchronousIO} domyślnie \repopath{false} \\
+SK-MIG-004 & ASP.NET Core, „Migrate configuration to ASP.NET Core” (\path{migration/fx-to-core}); .NET, „Options pattern in .NET” \\
+SK-MIG-005 & .NET, „Globalization and ICU” -- różnice NLS i~ICU; .NET, „Best practices for comparing strings in .NET”; reguła CA1310 „Specify StringComparison for correctness” \\
+SK-MIG-006 & .NET, „Globalization APIs use ICU libraries on Windows” (zmiana łamiąca w~.NET~5) -- przykład z~walutą; reguły CA1304, CA1305 i~CA1311 \\
+SK-MIG-007 & .NET, „Globalization and ICU” -- przełączniki NLS i~app-local ICU; .NET, „Runtime configuration options for globalization”; zmiana łamiąca .NET~6 „Culture creation and case mapping in globalization-invariant mode” \\
+SK-MIG-008 & Konstytucja, P10 „Extensibility through interface + registration, not inheritance” i~§4 „Deliberate non-goals” (bez własnego kontenera DI) \\
+SK-MIG-009 & .NET, „HttpClient guidelines for .NET” -- pule połączeń, DNS i~\repopath{IHttpClientFactory}; konstytucja, P2 -- handler odporności jako stan docelowy \\
+SK-MIG-010 & EF Core, „Porting from EF6 to EF Core” -- „Behavior changes between EF6 and EF Core” i~zalecana kolejność kroków; EF Core, „Lazy loading of related data” \\
+SK-MIG-012 & ASP.NET Core, „Format response data in ASP.NET Core Web API” -- camelCase domyślnie, \texttt{PropertyNamingPolicy = null} dla nazw zadeklarowanych; .NET, „Migrate from Newtonsoft.Json to System.Text.Json” -- pola, escapowanie i~wielkość liter \\
+\bottomrule
+\end{xltabular}
+}
+
+\zrodla{\path{letsgolegacy.secondkey-standards/standards/} (sekcje \emph{References} reguł),
+\path{letsgolegacy.secondkey-standards/AGENTS.md}}
 
 \subsection{Protokół flag zachowania}\label{sec:standardy-flagi}
 
@@ -1516,7 +1773,8 @@ Plik & Ustawienia \\
 \bottomrule
 \end{tabularx}
 
-Polecenia pracy w~repozytorium (README):
+Polecenia pracy w~repozytorium (README); wymagania: .NET~10 SDK oraz gitleaks albo Docker
+dla skanu sekretów w~hooku pre-commit:
 
 \begin{lstlisting}
 ./scripts/setup.sh                                                          # prerequisites + pre-commit hook
@@ -1554,6 +1812,12 @@ katalog w~bieżącym lub wyższym, który zawiera \path{catalog/pack.json}. Gdy 
 polecenie kończy się komunikatem „\texttt{no catalog/pack.json found at or above <katalog>;
 pass -{}-root}” i~kodem 2. Błąd parsowania argumentów daje „\texttt{error: <komunikat>}”
 i~„\texttt{Run with -{}-help for usage.}” oraz kod 2.
+
+Według \path{ExitCodes.cs} oba kody niezerowe kończą krok CI błędem, ale ponawiać warto
+tylko kod 2 (polecenie nie mogło się wykonać: złe argumenty, brakujący plik, nieosiągalne
+źródło). \repopath{drift-check} z~\repopath{-{}-repo} wskazującym nieistniejący katalog
+kończy się komunikatem „\texttt{the repository to check, <ścieżka>, does not exist}”
+i~kodem 2.
 
 W~GitHub Actions (\repopath{GITHUB\_ACTIONS=true}) każdy problem jest dodatkowo wypisywany
 jako komenda workflow \texttt{::error file=<ścieżka>,line=<wiersz>::<komunikat>}, a~błąd
@@ -1611,7 +1875,8 @@ się nie zgadzać co do tego, jaki wynik jest poprawny:
   \item Wczytanie szablonu \path{catalog/skill.template.md}: nieznany placeholder jest
         błędem z~numerem wiersza (agent przeczytałby go dosłownie), brak wymaganych
         \repopath{\{\{rule-table\}\}} i~\repopath{\{\{gate-table\}\}} także.
-  \item Wczytanie i~parsowanie \path{CHANGELOG.md}.
+  \item Wczytanie i~parsowanie \path{CHANGELOG.md}. Brak \path{catalog/skill.template.md}
+        albo \path{CHANGELOG.md} jest problemem („\texttt{this source file is missing}”).
   \item Jeśli jest jakikolwiek problem -- koniec, nic nie jest generowane.
   \item Zbudowanie całego drzewa w~pamięci: skill, konfiguracje analyzerów, pakiet; następnie
         skrót treści i~manifest.
@@ -1789,7 +2054,9 @@ Bramka wersji (\repopath{VersionGate}) zgłasza problem, gdy:
   \item wersja jest równa zatwierdzonej, skrót treści się różni, a~wpis w~changelogu ma datę
         wydania -- komunikat każe podnieść wersję i~dodać dla niej wpis \repopath{Unreleased}.
 \end{itemize}
-Podniesienie wersji bez zmiany treści jest dozwolone (zwykłe ponowne wydanie).
+Gdy zatwierdzonego \path{generated/manifest.json} nie ma (pierwsze generowanie) albo nie da
+się go odczytać, bramka sprawdza tylko wpis w~changelogu. Podniesienie wersji bez zmiany
+treści jest dozwolone (zwykłe ponowne wydanie).
 
 Changelog ma jeden wpis na wersję, najnowszy pierwszy, z~nagłówkiem
 \texttt{\#\# [MAJOR.MINOR.PATCH] — YYYY-MM-DD} albo \texttt{\#\# [MAJOR.MINOR.PATCH] —
@@ -1835,8 +2102,14 @@ dotnet_diagnostic.CA1305.severity = suggestion
 
 \path{<SecondKeyStandardsGlobalConfig>false</SecondKeyStandardsGlobalConfig>} wyłącza pakiet
 w~projekcie, a~props ustawia też właściwość MSBuild \repopath{SecondKeyStandardsVersion}
-z~wersją standardów. Bez pakietu można skopiować \path{generated/config/.globalconfig} do
-katalogu głównego repozytorium. Diagnostyki Portcullis są skonfigurowane, zanim ich
+z~wersją standardów. Bez pakietu są dwie drogi. \path{generated/config/.globalconfig}
+kopiuje się do katalogu głównego repozytorium jako \path{.globalconfig}; jako globalna
+konfiguracja analyzerów obowiązuje dla każdego pliku każdego projektu, który ją ładuje, bez
+zawężenia do \repopath{appliesTo}. Sekcje \path{generated/config/.editorconfig} -- zawężone
+do wzorców \repopath{appliesTo} reguł -- scala się z~własnym \path{.editorconfig}
+repozytorium; plik nie ma \texttt{root = true}, a~wpisy \path{.editorconfig} mają
+pierwszeństwo przed każdą globalną konfiguracją analyzerów, także tą z~pakietu.
+Diagnostyki Portcullis są skonfigurowane, zanim ich
 analyzery pojawią się w~buildzie konsumenta; waga \repopath{.editorconfig} dla nieznanego
 identyfikatora diagnostyki nie ma żadnego efektu, więc konfigurację można przyjąć przed bramką.
 
@@ -1847,6 +2120,13 @@ to plik z~kropką, który NuGet inaczej pomija). Do pakietu trafiają
 \path{build/SecondKey.Standards.props}, \path{build/SecondKey.Standards.globalconfig} (kopia
 \path{generated/config/.globalconfig}), \path{README.md} i~\path{LICENSE}. Pakowanie ręczne:
 \texttt{dotnet pack generated/nuget/SecondKey.Standards.csproj -o artifacts/packages}.
+Metadane pakietu: \repopath{PackageId} i~\repopath{Version} z~\path{catalog/pack.json}
+(wersja pakietu jest wersją standardów), \repopath{Description}
+z~\repopath{package.description}, \repopath{PackageTags}
+\path{secondkey;standards;migration;analyzers;globalconfig;editorconfig},
+\repopath{PackageProjectUrl} -- adres repozytorium, \repopath{PackageReadmeFile}
+\repopath{README.md}, \repopath{PackageLicenseFile} \repopath{LICENSE},
+\repopath{IsPackable} \repopath{true}.
 
 Skrypt \path{scripts/verify-package.sh} (opcjonalny argument: katalog wyjściowy, domyślnie
 \path{artifacts/packages}) pakuje pakiet, sprawdza jego zawartość (obecne
@@ -1857,6 +2137,16 @@ trzy przypadki: bez pakietu CA1310 nie jest zgłaszany; z~pakietem jest zgłasza
 \repopath{warning}; z~\path{-p:SecondKeyStandardsGlobalConfig=false} znów nie jest zgłaszany.
 CA1310 zastępuje każdą przypisaną diagnostykę: analyzery Portcullis są osobnym pakietem, ale
 wagi docierają do kompilatora tą samą konfiguracją globalną.
+
+Skrypt działa tylko w~klonie git repozytorium (\texttt{git rev-parse -{}-show-toplevel}),
+czyta identyfikator i~wersję pakietu z~\path{catalog/pack.json}, a~bez
+\path{generated/nuget/SecondKey.Standards.csproj} kończy się komunikatem, żeby najpierw
+uruchomić generator. Zawartość pakietu sprawdza poleceniem \repopath{unzip}, a~konsument
+tymczasowy ma \path{nuget.config} z~dwoma źródłami: katalogiem wyjściowym i~nuget.org.
+Wynikiem jest plik \path{<katalog>/SecondKey.Standards.<wersja>.nupkg} -- dla wersji 0.1.0
+domyślnie \path{artifacts/packages/SecondKey.Standards.0.1.0.nupkg}, ten sam, który krok~7
+procedury (sekcja~\ref{sec:standardy-modernize}) kopiuje do \path{.packages/}. Każda
+nieudana kontrola kończy skrypt komunikatem „\texttt{verify-package: ...}” i~kodem 1.
 
 \subsubsection{Odrzucone alternatywy}
 
@@ -1876,12 +2166,127 @@ wagi docierają do kompilatora tą samą konfiguracją globalną.
 \path{letsgolegacy.secondkey-standards/CHANGELOG.md},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Versioning/VersionGate.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Versioning/Changelog.cs},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Generation/PackGenerator.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Generation/PackageEmitter.cs},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Generation/AnalyzerConfigEmitter.cs},
 \path{letsgolegacy.secondkey-standards/generated/nuget/README.md},
 \path{letsgolegacy.secondkey-standards/generated/nuget/SecondKey.Standards.csproj},
 \path{letsgolegacy.secondkey-standards/generated/nuget/build/SecondKey.Standards.props},
 \path{letsgolegacy.secondkey-standards/generated/config/.globalconfig},
-\path{letsgolegacy.secondkey-standards/scripts/verify-package.sh}}
+\path{letsgolegacy.secondkey-standards/generated/config/.editorconfig},
+\path{letsgolegacy.secondkey-standards/scripts/verify-package.sh},
+\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md}}
+
+\subsection{Procedura: zmiana standardu od edycji do wydania}\label{sec:standardy-procedura-zmiany}
+
+Kroki zebrane z~README, \path{AGENTS.md}, \path{standards/README.md}, ADR 0003, szablonu
+pull requestu i~joba \repopath{release-guard}:
+
+\begin{enumerate}
+  \item Przygotować klon: \texttt{./scripts/setup.sh} (.NET~10 SDK, skaner sekretów, hook
+        pre-commit).
+  \item Edytować plik reguły albo dodać nowy plik \path{standards/<id>-<slug>.md}
+        z~nowym, unikalnym identyfikatorem. Dane pakietu jako całości zmienia się
+        w~\path{catalog/pack.json}, treść skilla -- w~\path{catalog/skill.template.md}.
+        Diagnostykę Portcullis dopisuje się do \repopath{portcullisRules}
+        w~\path{catalog/pack.json} dopiero wtedy, gdy bramka ją dostarcza.
+  \item \texttt{dotnet run -{}-project src/SecondKey.Standards.Generator -{}- validate} musi
+        przejść.
+  \item Podjąć decyzję o~wersji według tabeli podniesień (major, minor, patch;
+        sekcja~\ref{sec:standardy-wersje}). Jeśli bieżąca wersja ma w~\path{CHANGELOG.md}
+        datę wydania, każda zmiana wygenerowanej treści wymaga nowej wersji: podnieść
+        \repopath{version} w~\path{catalog/pack.json}
+        i~dodać na początku changeloga wpis \texttt{\#\# [<nowa wersja>] — Unreleased}
+        z~opisem zmiany. Wersja, której wpis mówi \repopath{Unreleased}, może się jeszcze
+        zmieniać bez podnoszenia.
+  \item Uruchomić \repopath{generate} i~zacommitować źródło razem z~\path{generated/}.
+  \item Sprawdzić lokalnie to, co sprawdza CI: \repopath{dotnet test},
+        \texttt{generate -{}-check}, \path{./scripts/verify-package.sh},
+        \path{./scripts/scan-secrets.sh}.
+  \item Otworzyć pull request według szablonu: ticket i~jego „done when”, zmiana z~powodem
+        i~dowodem, na którym reguła się opiera (dokumentacja, kod albo zaobserwowane
+        zachowanie), decyzja wersji (major, minor, patch albo „No standards content
+        changed”) i~lista weryfikacji.
+  \item Wydanie: w~\path{CHANGELOG.md} zastąpić \repopath{Unreleased} datą
+        \texttt{RRRR-MM-DD}, uruchomić \repopath{generate}, scalić i~otagować
+        \repopath{v<wersja>} na \repopath{main}. Job \repopath{release-guard} odrzuca tag,
+        który nie równa się \repopath{v} i~wersji z~\path{catalog/pack.json} („\texttt{Tag …
+        does not match catalog/pack.json version …}”), wersję bez daty w~changelogu
+        („\texttt{replace 'Unreleased' with the release date before tagging}”) oraz manifest
+        w~innej wersji („\texttt{regenerate before tagging}”).
+\end{enumerate}
+
+\begin{checklista}
+  \item Reguła zmieniona albo dodana; \repopath{validate} przechodzi.
+  \item Decyzja wersji podjęta; \path{CHANGELOG.md} ma wpis dla wersji z~\path{catalog/pack.json}.
+  \item \path{generated/} zregenerowane i~zacommitowane razem ze źródłem.
+  \item \repopath{dotnet test}, \repopath{generate -{}-check} i~skan sekretów przechodzą.
+  \item Przy wydaniu: data w~changelogu, tag \repopath{v<wersja>} na \repopath{main}.
+\end{checklista}
+
+\zrodla{\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-standards/AGENTS.md},
+\path{letsgolegacy.secondkey-standards/standards/README.md},
+\path{letsgolegacy.secondkey-standards/docs/adr/0003-generated-tree-and-versioning.md},
+\path{letsgolegacy.secondkey-standards/.github/pull_request_template.md},
+\path{letsgolegacy.secondkey-standards/.github/workflows/ci.yml},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Versioning/VersionGate.cs},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Versioning/Changelog.cs}}
+
+\subsection{Wagi standardów a~kanały Portcullis}\label{sec:standardy-wagi-kanaly}
+
+Wagi standardów trafiają do kompilatora: pakiet \repopath{SecondKey.Standards} dodaje
+globalną konfigurację do elementu \repopath{EditorConfigFiles} buildu, a~sam nie dodaje
+analyzerów -- diagnostyki \repopath{PORTCULLIS\_} zgłasza w~buildzie pakiet analyzerów
+Portcullis (sekcja~\ref{sec:portcullis-dystrybucja}). Skill mówi agentowi, że bramka
+Portcullis i~analyzery .NET SDK zgłaszają te diagnostyki na pull requeście migracji „at
+these severities”. Źródła Portcullis mówią co innego o~kanale CLI, akcji i~kontenera:
+\repopath{portcullis scan} buduje własną kompilację, raportuje każdą diagnostykę na jej
+poziomie domyślnym i~nie stosuje nadpisań \texttt{dotnet\_diagnostic.<id>.severity}
+(sekcja~\ref{sec:portcullis-konfiguracja}). Dla pięciu z~dziewięciu zmapowanych diagnostyk
+Portcullis poziom domyślny różni się od wagi standardu:
+
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.75cm} >{\raggedright\arraybackslash}p{2.25cm} >{\raggedright\arraybackslash}p{2.25cm}@{}}
+\toprule
+Diagnostyka & Reguła & Waga standardu & Poziom domyślny Portcullis \\
+\midrule
+\endfirsthead
+\toprule
+Diagnostyka & Reguła & Waga standardu & Poziom domyślny Portcullis \\
+\midrule
+\endhead
+\path{PORTCULLIS_P4_ENSURE_CREATED_OUTSIDE_TEST} & SK-ARCH-001 & \repopath{error} & \repopath{error} \\
+\path{PORTCULLIS_P4_SEED_DATA_IN_MODEL} & SK-ARCH-002 & \repopath{warning} & \repopath{warning} \\
+\path{PORTCULLIS_P9_CONTROLLER_NO_DBCONTEXT} & SK-ARCH-005 & \repopath{warning} & \repopath{error} \\
+\path{PORTCULLIS_P10_CUSTOM_BASE_CLASS} & SK-ARCH-006 & \repopath{suggestion} & \repopath{warning} \\
+\path{PORTCULLIS_P15_MISSING_SERVICE_DEFAULTS} & SK-ARCH-007 & \repopath{suggestion} & \repopath{warning} \\
+\path{PORTCULLIS_MIG_SYSTEM_WEB} & SK-MIG-001 & \repopath{error} & \repopath{warning} \\
+\path{PORTCULLIS_MIG_HTTPCONTEXT_CURRENT} & SK-MIG-002 & \repopath{error} & \repopath{error} \\
+\path{PORTCULLIS_MIG_SYNC_OVER_ASYNC} & SK-MIG-003 & \repopath{error} & \repopath{warning} \\
+\path{PORTCULLIS_MIG_CONFIGURATION_MANAGER} & SK-MIG-004 & \repopath{error} & \repopath{error} \\
+\bottomrule
+\end{xltabular}
+
+Bramka CLI blokuje tylko finding o~poziomie \repopath{error} -- także ostrzeżenie
+podniesione do \repopath{error} na linii przypisanej AI -- w~zakresie bramki
+i~nieprzyjęty przez baseline (sekcja~\ref{sec:portcullis-spec}). W~skanie CLI
+\path{PORTCULLIS_P9_CONTROLLER_NO_DBCONTEXT} blokuje więc w~zakresie bramki, choć
+SK-ARCH-005 każe zapisać przeniesiony \repopath{DbContext} jako dług;
+\path{PORTCULLIS_P10_CUSTOM_BASE_CLASS} i~\path{PORTCULLIS_P15_MISSING_SERVICE_DEFAULTS}
+mogą zablokować po eskalacji, choć sugestia według standardów nigdy nie blokuje;
+\path{PORTCULLIS_MIG_SYSTEM_WEB} i~\path{PORTCULLIS_MIG_SYNC_OVER_ASYNC} blokują tylko po
+eskalacji, choć standard daje im \repopath{error}. Wagi z~tabel skilla i~pakietu oraz
+z~opisów reguł (sekcje~\ref{sec:standardy-arch} i~\ref{sec:standardy-mig}) obowiązują
+w~buildzie, który ma pakiet analyzerów Portcullis i~konfigurację standardów. Źródła
+standardów tej różnicy nie opisują.
+
+\zrodla{\path{letsgolegacy.secondkey-standards/catalog/skill.template.md},
+\path{letsgolegacy.secondkey-standards/generated/nuget/README.md},
+\path{letsgolegacy.secondkey-standards/generated/nuget/build/SecondKey.Standards.props},
+\path{letsgolegacy.secondkey-standards/standards/README.md},
+\path{letsgolegacy.portcullis/README.md},
+\path{letsgolegacy.portcullis/docs/CONFIGURATION.md},
+\path{letsgolegacy.portcullis/docs/SPEC.md}}
 
 \subsection{Skill dla GitHub Copilot upgrade (ADR 0004)}\label{sec:standardy-skill}
 
@@ -1910,7 +2315,7 @@ Skill to plik Markdown z~front matter \repopath{name}, \repopath{description} i~
 Lokalizacje i~priorytet: \texttt{\%UserProfile\%/.copilot/skills/} > \path{.github/upgrades/skills/} > \path{.github/skills/} > wbudowane & jw. \\
 Instrukcje sformułowane „From now on…” są zapisywane do \path{.github/upgrades/<scenarioId>/scenario-instructions.md} i~ładowane do każdej decyzji & jw. \\
 Skille dostarczane przez Microsoft to katalogi \path{<name>/SKILL.md} z~plikami referencyjnymi; nazwy zaczynają się od gerundium; opisy do 1024 znaków, w~trzeciej osobie, bez znaczników XML; \repopath{SKILL.md} poniżej 500 wierszy & \path{microsoft/upgrade-agent-plugins} (jego skill \repopath{creating-skills} i~reguły walidacji) \\
-Skille projektu mieszkają w~\path{.github/skills}, \path{.agents/skills} albo w~jeszcze jednym katalogu projektu, po jednym katalogu na skill, z~plikiem \repopath{SKILL.md}; działają w~agencie chmurowym, CLI, aplikacji Copilot i~VS Code & \repopath{github/docs}: \emph{About agent skills}, \emph{Adding agent skills} \\
+Skille projektu mieszkają w~\path{.github/skills}, \path{.claude/skills} albo \path{.agents/skills}, po jednym katalogu na skill, z~plikiem \repopath{SKILL.md}; działają w~agencie chmurowym, CLI, aplikacji Copilot i~VS Code & \repopath{github/docs}: \emph{About agent skills}, \emph{Adding agent skills} \\
 Format katalogu i~ograniczenia nazwy oraz opisu & specyfikacja Agent Skills (\path{agentskills/agentskills}) \\
 \bottomrule
 \end{xltabular}
@@ -1961,8 +2366,9 @@ Format katalogu i~ograniczenia nazwy oraz opisu & specyfikacja Agent Skills (\pa
         zaczyna się od wiersza \repopath{Contents:} z~sekcjami reguły, co spełnia regułę
         autorską Microsoft (spis treści w~plikach dłuższych niż 100 wierszy); wiersz jest
         w~każdym pliku, żeby nie pojawiał się i~nie znikał, gdy reguła przekroczy próg.
-        Tak brzmi decyzja po poprawce ADR z~26 IX 2026; wcześniej mówiła tylko o~plikach
-        dłuższych niż 100 wierszy, choć generator od początku dodawał wiersz wszędzie.
+        Tak brzmi decyzja po poprawce ADR z~26 IX 2026; wcześniej mówiła o~wierszu
+        \repopath{Contents:} tylko w~plikach dłuższych niż 100 wierszy, a~poprawka uznała za
+        zamierzone to, co robi generator: wiersz w~każdym pliku referencyjnym.
   \item \textbf{Jednorazowe sprawdzenie walidatorem skilli Microsoft, poza CI.} Skrypt
         \path{validate_skill.sh} z~\path{microsoft/upgrade-agent-plugins} zgłasza 0 błędów
         i~dwa ostrzeżenia, obydwa heurystyczne i~nieadekwatne: jego lista prefiksów gerundium
@@ -2044,7 +2450,9 @@ sprawdza test \repopath{SkillContentTests}):
         wag dla agenta.
   \item[What the gate checks.] Generowana tabela 13 diagnostyk z~wagami. Bramka patrzy na
         wiersze zmienione przez pull request, więc kod przepisany przez migrację jest
-        sprawdzany nawet tam, gdzie kod legacy miał ten sam wzorzec.
+        sprawdzany nawet tam, gdzie kod legacy miał ten sam wzorzec. W~skanie CLI Portcullis
+        obowiązują poziomy domyślne reguł, nie wagi z~tej tabeli
+        (sekcja~\ref{sec:standardy-wagi-kanaly}).
   \item[Flag format.] Format komentarza i~nagłówek rejestru (sekcja~\ref{sec:standardy-flagi}).
   \item[Success criteria.] Lista kryteriów sukcesu (zestawienie niżej).
   \item[When something goes wrong.] Reguła i~zadanie się nie zgadzają (krok dodałby
@@ -2175,10 +2583,10 @@ Drift check przegląda rekurencyjnie repozytorium konsumenta, pomijając katalog
   \item \textbf{\repopath{packages.config}}: element \repopath{package} z~\repopath{id}
         pakietu i~atrybutem \repopath{version}.
   \item \textbf{Skill}: \texttt{<katalog skilli>/<skill-name>/SKILL.md} w~jednym z~czterech
-        katalogów skilli -- \path{.github/skills}, \path{.github/upgrades/skills},
-        \path{.agents/skills} i~katalogu skilli jeszcze jednego klienta agentowego; wersja to
-        \repopath{metadata.version} z~front matter. Skill bez czytelnej wersji jest problemem
-        z~komunikatem, żeby skopiować skill ponownie z~wydania zamiast go edytować.
+        katalogów skilli, sprawdzanych w~tej kolejności: \path{.github/skills},
+        \path{.github/upgrades/skills}, \path{.claude/skills} i~\path{.agents/skills}; wersja
+        to \repopath{metadata.version} z~front matter. Skill bez czytelnej wersji jest
+        problemem z~komunikatem, żeby skopiować skill ponownie z~wydania zamiast go edytować.
 \end{itemize}
 
 Tekst wersji \repopath{[1.2.3]} (dokładna wersja w~notacji NuGet) jest przyjmowany jako pin;
@@ -2186,6 +2594,15 @@ każdy inny zakres albo wersja pływająca -- nie. Wersja ustawiana właściwoś
 (\repopath{\$(...)}) jest problemem z~podpowiedzią, żeby użyć \repopath{-{}-pinned-version};
 check nie wylicza MSBuild. Każdy znaleziony pin jest raportowany, żeby niezgodności były
 widoczne.
+
+Pin liczy się osobno w~każdym miejscu: referencja w~każdym pliku MSBuild
+i~\repopath{packages.config} oraz kopia skilla w~każdym z~czterech katalogów. Status
+\repopath{disagree} daje każda para pinów o~różnych wersjach, nie tylko skill i~pakiet --
+także dwie kopie skilla, np. po skopiowaniu katalogu również do
+\path{.github/upgrades/skills/}, jak radzi tabela rozwiązywania problemów
+(sekcja~\ref{sec:standardy-modernize}); przy aktualizacji trzeba więc zaktualizować każdą
+kopię. Bez \repopath{-{}-pinned-version} nieczytelny pin w~jednym pliku daje status
+\repopath{unreadable} (kod 2), nawet gdy pozostałe piny są poprawne.
 
 \subsubsection{Wyniki i~kody wyjścia}
 
@@ -2201,7 +2618,7 @@ Status & Kod & Znaczenie \\
 \path{current} & 0 & Pin jest najnowszym wydaniem: „\texttt{Up to date: this repository pins standards <v>, the latest release.}” \\
 \path{behind} & 1 & Istnieje nowsze wydanie; wypisuje piny, reguły zmienione między wersjami, wpisy changeloga i~instrukcję aktualizacji \\
 \path{ahead} & 1 & Pin jest wyższy niż każde wydanie: przypina coś, co nigdy nie zostało wydane \\
-\path{disagree} & 1 & Skill agenta i~pakiet bramki przypinają różne wersje \\
+\path{disagree} & 1 & Piny mają różne wersje: skill agenta i~pakiet bramki albo dowolne dwa inne piny (dwa pliki projektu, dwie kopie skilla) \\
 \path{unpinned} & 1 & Nic w~repozytorium nie przypina standardów (oczekiwana referencja pakietu albo skill w~\path{.github/skills/<skill>/SKILL.md}) \\
 \path{unreadable} & 2 & Pin istnieje, ale nie da się go odczytać jako dokładnej wersji \\
 \path{no-release} & 2 & Źródło nie ma wydania (tagu \repopath{v<MAJOR.MINOR.PATCH>}), z~którym można porównać \\
@@ -2219,6 +2636,21 @@ najnowszego wydania (włącznie). Jeśli przypięta wersja nie jest wydaniem, wy
 zaznacza. Na końcu jest instrukcja: zmienić referencję pakietu na najnowszą wersję i~ponownie
 skopiować skill z~tagu \repopath{v<latest>} (z~\path{generated/skills/<skill>/} do
 \path{.github/skills/<skill>/}).
+
+Podsumowania pozostałych statusów (na stderr z~prefiksem \texttt{error:}, w~GitHub Actions
+także jako adnotacja): \repopath{behind} -- „\texttt{Behind: this repository pins standards
+<pin>; the latest release is <latest>.}”; \repopath{ahead} -- „\texttt{This repository pins
+standards <pin>, but the latest release is <latest>: <pin> was never released.}” ze
+wskazówką „\texttt{Pin a released version (the latest is <latest>).}”; \repopath{disagree}
+-- „\texttt{The pins disagree (<a> and <b>): the migration agent and the gate are working
+from different standards.}”; \repopath{unpinned} -- „\texttt{This repository does not pin
+the Second Key standards.}”; \repopath{unreadable} -- „\texttt{A standards pin could not be
+read.}” z~listą problemów; \repopath{no-release} -- „\texttt{No release (a tag
+v<MAJOR.MINOR.PATCH>) was found at <źródło>; there is nothing to compare the pin with.}”;
+\repopath{source-unavailable} -- „\texttt{The standards releases could not be read:
+<powód>}”. Dla wierszy \texttt{added} i~\texttt{removed} szczegółem jest waga reguły. Gdy
+plików wydań nie da się pobrać, zamiast list wynik mówi „\texttt{What changed could not be
+read: <powód>}”.
 
 W~GitHub Actions wynik inny niż \repopath{current} jest adnotacją \texttt{::error::}, do
 \repopath{\$GITHUB\_STEP\_SUMMARY} trafia sekcja „\texttt{\#\#\# Second Key standards drift
@@ -2280,8 +2712,13 @@ Wejście akcji / opcja & Znaczenie i~wartość domyślna \\
 \bottomrule
 \end{xltabular}
 
-Wersje w~\repopath{-{}-pinned-version} i~\repopath{-{}-latest-version} muszą mieć postać
-\repopath{MAJOR.MINOR.PATCH}; inaczej kod 2. Wyjścia akcji: \repopath{status} (jedna z~wartości
+Wersje w~\repopath{-{}-pinned-version} i~\repopath{-{}-latest-version}, tak jak piny czytane
+z~plików, mają postać \repopath{MAJOR.MINOR.PATCH} bez zer wiodących i~bez prefiksu
+\repopath{v}, z~opcjonalnym sufiksem pre-release (\repopath{-rc.1}) i~metadanymi builda
+(\repopath{+build.7}); opcja w~innej postaci kończy się kodem 2 („\texttt{-{}-pinned-version
+and -{}-latest-version take a MAJOR.MINOR.PATCH version}”). Metadane builda nie są częścią
+wersji (\repopath{1.2.3+build.7} równa się \repopath{1.2.3}), a~pre-release sortuje się
+przed swoim wydaniem. Wyjścia akcji: \repopath{status} (jedna z~wartości
 z~tabeli wyników), \repopath{pinned-version}, \repopath{latest-version}.
 
 Kroki composite action: (1) sprawdzenie, czy na runnerze jest .NET~10 SDK (\texttt{dotnet
@@ -2324,7 +2761,9 @@ Odrzucone warianty:
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Drift/GitReleaseSource.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Drift/ManifestDiff.cs},
 \path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Drift/DriftReport.cs},
-\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Cli/CommandLineApp.cs}}
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Model/SemanticVersion.cs},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Cli/CommandLineApp.cs},
+\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md}}
 
 \subsection{Użycie z~modernize-dotnet}\label{sec:standardy-modernize}
 
@@ -2575,6 +3014,14 @@ mkdir -p .packages && cp /path/to/SecondKey.Standards.0.1.0.nupkg .packages/
 
 Wersja musi być ta sama co wersja skilla: agent i~bramka muszą dostać te same standardy.
 
+Pakiet ustawia tylko wagi: diagnostyki \repopath{CA} zgłasza .NET SDK, a~diagnostyki
+\repopath{PORTCULLIS\_} pojawią się w~buildzie dopiero z~pakietem analyzerów Portcullis
+(sekcja~\ref{sec:portcullis-dystrybucja}). Sprawdzenie, że konfiguracja dotarła do buildu
+-- tak, jak robi to \path{scripts/verify-package.sh}: wywołanie zależne od kultury, np.
+\texttt{string.Compare(left, right)}, daje w~\repopath{dotnet build}
+\texttt{warning CA1310}; z~\path{-p:SecondKeyStandardsGlobalConfig=false} (albo bez
+pakietu) CA1310 nie jest zgłaszany.
+
 \subsubsection{Krok 8: utrzymanie aktualnego pinu}
 
 Kopia skilla i~referencja pakietu są pinem repozytorium docelowego: obie niosą wersję
@@ -2609,6 +3056,10 @@ Build kończy się błędem \repopath{PORTCULLIS\_} albo \repopath{CA} & Konfigu
 \bottomrule
 \end{xltabular}
 
+W~wersji 0.1.0 wszystkie zmapowane diagnostyki \repopath{CA} mają wagę \repopath{warning}
+(sekcja~\ref{sec:standardy-przeglad}); wagę \repopath{error} mają w~tej wersji tylko
+diagnostyki \repopath{PORTCULLIS\_}.
+
 \subsubsection{Co jest zweryfikowane, a~co nie}
 
 Zweryfikowane z~bieżącą dokumentacją Microsoft i~GitHub (odczyt 2026-09-26):
@@ -2627,8 +3078,8 @@ Zweryfikowane z~bieżącą dokumentacją Microsoft i~GitHub (odczyt 2026-09-26):
         \path{microsoft/upgrade-agent-plugins}.
   \item Format katalogu skilla (\path{<name>/SKILL.md}, ograniczenia nazwy i~opisu):
         specyfikacja Agent Skills; dokument GitHub \emph{About agent skills} (skille projektu
-        w~\path{.github/skills} i~dwóch innych katalogach projektu, w~tym
-        \path{.agents/skills}); skille dostarczane przez Microsoft
+        w~\path{.github/skills}, \path{.claude/skills} albo \path{.agents/skills}); skille
+        dostarczane przez Microsoft
         w~\path{microsoft/upgrade-agent-plugins}, które używają tego samego układu. Nazwa
         stosuje regułę autorską Microsoft dla skilli upgrade (zaczyna się od gerundium:
         \repopath{applying-}).
@@ -2654,7 +3105,10 @@ Niezweryfikowane tutaj i~celowo pozostawione P6, które uruchamia człowiek z~Gi
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md},
-\path{letsgolegacy.secondkey-standards/docs/adr/0004-skill-for-github-copilot-upgrade.md}}
+\path{letsgolegacy.secondkey-standards/docs/adr/0004-skill-for-github-copilot-upgrade.md},
+\path{letsgolegacy.secondkey-standards/generated/nuget/README.md},
+\path{letsgolegacy.secondkey-standards/generated/config/.globalconfig},
+\path{letsgolegacy.secondkey-standards/scripts/verify-package.sh}}
 
 \subsection{Testy}\label{sec:standardy-testy}
 
@@ -2666,6 +3120,13 @@ tworzy repozytorium standardów (\path{catalog/pack.json}, szablon skilla, chang
 reguł pisane przez test), \repopath{Consumer} -- repozytorium konsumenta, a~\repopath{StandardsSource}
 -- lokalne repozytorium git z~tagami wydań dla drift checka. Część testów sprawdza samo to
 repozytorium: jego reguły, zatwierdzone drzewo generowane i~changelog.
+
+Testy uruchamia się z~klonu repozytorium: \repopath{RepositoryRoot} szuka
+\path{catalog/pack.json} nad katalogiem binariów testów i~bez niego kończy się komunikatem
+„\texttt{run the tests from a clone of the repository}”. Testy drift checka tworzą
+prawdziwe repozytoria git (z~wyłączonym podpisywaniem i~stałą tożsamością) i~uruchamiają na
+nich \texttt{git ls-remote} oraz \texttt{git fetch}, więc wymagają git w~\repopath{PATH}; sieci
+nie potrzebują.
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.1cm} >{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -2712,6 +3173,8 @@ poniżej każdej prawdziwej wersji, więc zatwierdzonych fixture też nie trzeba
 
 \zrodla{\path{letsgolegacy.secondkey-standards/tests/SecondKey.Standards.Generator.Tests/},
 \path{letsgolegacy.secondkey-standards/tests/SecondKey.Standards.Generator.Tests/SecondKey.Standards.Generator.Tests.csproj},
+\path{letsgolegacy.secondkey-standards/tests/SecondKey.Standards.Generator.Tests/Support/RepositoryRoot.cs},
+\path{letsgolegacy.secondkey-standards/tests/SecondKey.Standards.Generator.Tests/Support/StandardsSource.cs},
 \path{letsgolegacy.secondkey-standards/tests/fixtures/drift/README.md},
 \path{letsgolegacy.secondkey-standards/docs/adr/0002-generator-as-a-dotnet-tool.md}}
 
@@ -2759,15 +3222,30 @@ Job & Kroki \\
         uwierzytelniających, potem usunięcie ze źródła, dopiero potem czyszczenie historii;
         fałszywy alarm usuwa się przez przeredagowanie przykładu, a~nie przez wyjątek dla
         ścieżki.
-  \item \path{scripts/setup.sh} -- onboarding jednym poleceniem: sprawdza .NET~10 SDK, szuka
-        gitleaks albo działającego Dockera, instaluje hook pre-commit (istniejący zapisuje jako
-        kopię) i~uruchamia \repopath{validate} oraz \repopath{generate -{}-check}. Opcja
-        \repopath{-{}-check} zamienia brak skanera sekretów w~błąd.
-  \item \path{scripts/hooks/pre-commit} -- skanuje zmiany w~stagingu; celowo odmawia commitu,
-        gdy nie ma gitleaks ani Dockera, bo ochrona zależna od narzędzi dewelopera byłaby
-        egzekwowana tylko pamięcią człowieka; \repopath{git commit -{}-no-verify} pozostaje
-        głośnym obejściem, a~CI i~tak zablokuje push. \path{scripts/scan-secrets.sh} odtwarza
-        skan CI lokalnie (domyślnie historia; \repopath{-{}-staged}, \repopath{-{}-dir}).
+  \item \path{scripts/setup.sh} -- onboarding jednym poleceniem: sprawdza .NET~10 SDK (bez
+        niego kończy się kodem 1 i~adresem instalacji), szuka gitleaks albo działającego
+        Dockera, instaluje hook pre-commit w~katalogu hooków git (inny istniejący hook
+        zapisuje jako \path{pre-commit.backup}) i~uruchamia \repopath{validate} oraz
+        \repopath{generate -{}-check}; ich niepowodzenie zgłasza jako ostrzeżenie
+        z~poleceniem naprawy. Bez skanera kończy się ostrzeżeniem, że commity będą
+        odrzucane, dopóki skaner nie zostanie zainstalowany; opcja \repopath{-{}-check}
+        zamienia brak skanera w~błąd (kod 1).
+  \item \path{scripts/hooks/pre-commit} -- skanuje zmiany w~stagingu gitleaksem
+        z~\repopath{PATH} albo, gdy go nie ma, obrazem \path{ghcr.io/gitleaks/gitleaks:latest}
+        przez Dockera; celowo odmawia commitu, gdy nie ma gitleaks ani Dockera, bo ochrona
+        zależna od narzędzi dewelopera byłaby egzekwowana tylko pamięcią człowieka;
+        \repopath{git commit -{}-no-verify} pozostaje głośnym obejściem, a~CI i~tak zablokuje
+        push. Znalezisko hook rozpoznaje po kodzie wyjścia 2 (\repopath{-{}-exit-code 2}), bo
+        gitleaks zwraca 1 zarówno dla znaleziska, jak i~dla błędu użycia; każdy inny kod
+        niezerowy to awaria narzędzia, przy której commit także jest odrzucany („a scanner
+        that did not run proves nothing”), z~podpowiedzią
+        \texttt{./scripts/scan-secrets.sh -{}-staged}. Przy fałszywym alarmie hook radzi wąski
+        wpis allowlisty w~\path{.gitleaks.toml} z~komentarzem, podczas gdy
+        \path{.gitleaks.toml} i~podsumowanie joba CI każą przeredagować przykład zamiast
+        dodawać wyjątek dla ścieżki. \path{scripts/scan-secrets.sh} odtwarza skan CI
+        lokalnie: bez argumentu -- cała historia (to, co uruchamia CI),
+        \repopath{-{}-staged} -- zmiany w~stagingu (to, co uruchamia hook), \repopath{-{}-dir}
+        -- drzewo robocze bez historii; nieznany tryb kończy się instrukcją użycia i~kodem 2.
   \item \path{.github/dependabot.yml} -- cotygodniowe (poniedziałek 06:00) grupowane
         aktualizacje GitHub Actions i~pakietów NuGet; pakiet \repopath{SecondKey.Standards} jest
         wykluczony, bo występuje tylko w~fixture drift checka, celowo poniżej każdego wydania.
@@ -2818,6 +3296,7 @@ Weryfikacja:
 \path{letsgolegacy.secondkey-standards/scripts/setup.sh},
 \path{letsgolegacy.secondkey-standards/scripts/hooks/pre-commit},
 \path{letsgolegacy.secondkey-standards/scripts/scan-secrets.sh},
+\path{letsgolegacy.secondkey-standards/.gitleaks.toml},
 \path{letsgolegacy.secondkey-standards/README.md}}
 
 \subsection{Status według WORKPLAN i~CHANGELOG}\label{sec:standardy-status}
@@ -2868,7 +3347,8 @@ nie jest wydana (otagowana).
 
 \subsection{Ograniczenia i~otwarte punkty}\label{sec:standardy-ograniczenia}
 
-Zebrane z~ADR, README, WORKPLAN i~procedury -- tak, jak opisują je źródła:
+Zebrane z~ADR, README, WORKPLAN, \path{LICENSE}, procedury, reguł, kodu narzędzia
+i~dokumentacji Portcullis -- tak, jak opisują je źródła:
 
 \begin{itemize}
   \item \textbf{Brak wydania.} Wersja 0.1.0 nie jest otagowana, więc drift check względem
@@ -2893,10 +3373,36 @@ Zebrane z~ADR, README, WORKPLAN i~procedury -- tak, jak opisują je źródła:
         repozytorium; jego istotne ograniczenia pokrywają generator i~testy.
   \item \textbf{Dziewięć z~dwudziestu reguł nie ma analyzera}; egzekwuje je instrukcja agenta,
         a~w~zakresie zachowania weryfikuje replay i~porównanie Second Key.
+  \item \textbf{Wagi standardów tylko w~buildzie.} \repopath{portcullis scan} (CLI, akcja,
+        kontener) raportuje poziomy domyślne Portcullis i~nie stosuje konfiguracji standardów;
+        dla pięciu diagnostyk różnią się one od wag standardów
+        (sekcja~\ref{sec:standardy-wagi-kanaly}).
+  \item \textbf{Licencja.} Wszystkie prawa zastrzeżone, a~model licencjonowania jest decyzją
+        otwartą (\path{LICENSE}); dotyczy to także pakietu \repopath{SecondKey.Standards},
+        który niesie ten plik.
+  \item \textbf{Comparery sortowania poza analyzerami.} CA1310 znajduje wywołania, których
+        domyślne porównanie zależy od kultury, ale domyślnych comparerów, do których wracają
+        \repopath{OrderBy}, \repopath{List<string>.Sort}, \repopath{Array.Sort},
+        \repopath{SortedList} i~\repopath{SortedDictionary}, nie zgłasza żaden analyzer;
+        trzeba je wyszukać (SK-MIG-005).
+  \item \textbf{Linki w~stopkach przed wydaniem.} Stopki \repopath{SKILL.md} i~plików
+        referencyjnych linkują źródła pod tagiem \repopath{v<wersja>}, więc działają dopiero
+        po otagowaniu wersji; 0.1.0 nie jest otagowana.
+  \item \textbf{Drift check porównuje numery wersji, nie treść.} Wersja, której wpis
+        w~\path{CHANGELOG.md} mówi \repopath{Unreleased}, może się jeszcze zmienić, a~kopia
+        skilla wzięta z~\repopath{main} przed wydaniem niesie jej numer
+        w~\repopath{metadata.version}; dlatego krok~3 procedury każe zapisać commit,
+        z~którego pochodzi kopia.
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey-standards/docs/adr/0003-generated-tree-and-versioning.md},
 \path{letsgolegacy.secondkey-standards/docs/adr/0004-skill-for-github-copilot-upgrade.md},
 \path{letsgolegacy.secondkey-standards/docs/adr/0005-drift-check.md},
 \path{letsgolegacy.secondkey-standards/docs/USING-WITH-MODERNIZE-DOTNET.md},
-\path{letsgolegacy.secondkey-standards/README.md}}
+\path{letsgolegacy.secondkey-standards/README.md},
+\path{letsgolegacy.secondkey-standards/LICENSE},
+\path{letsgolegacy.secondkey-standards/standards/SK-MIG-005-explicit-string-comparison.md},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Generation/SkillEmitter.cs},
+\path{letsgolegacy.secondkey-standards/src/SecondKey.Standards.Generator/Drift/DriftChecker.cs},
+\path{letsgolegacy.portcullis/README.md},
+\path{letsgolegacy.portcullis/docs/CONFIGURATION.md}}

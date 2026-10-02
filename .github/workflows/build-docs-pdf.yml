@@ -14,6 +14,19 @@ name: Documentation PDF
 # requests, filtered to the document's own sources, so a LaTeX or diagram error fails
 # before it merges without a LaTeX build on every code change. workflow_dispatch stays for
 # a PDF on demand.
+#
+# Drift: the document is a hand-written presentation of sources it does not own, and it
+# re-synced with moved code often enough that the standard's "cheap mechanical check" is
+# due. scripts/check-doc-sources.mjs fails when a cited core file no longer exists and
+# warns, naming the files, when the core's code moved past the commit chapter 01 pins
+# (hence the full-history checkout).
+#
+# Engine: pdflatex only, and no workflow_dispatch engine input. The standard offers that
+# input for a document that may outgrow pdflatex; this one is written for it — the house
+# preamble loads fontenc and inputenc, and 00-dodatki.tex declares the few non-Latin
+# characters through \DeclareUnicodeCharacter, which a Unicode engine does not define (a
+# lualatex build stops there). A switch would offer an engine the document cannot use;
+# moving to one is a change to the document, not a run option.
 
 on:
   push:
@@ -24,6 +37,7 @@ on:
       - 'docs/diagrams/**'
       - 'scripts/render-diagrams.mjs'
       - 'scripts/check-papers.mjs'
+      - 'scripts/check-doc-sources.mjs'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/build-docs-pdf.yml'
@@ -43,6 +57,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+        with:
+          # check-doc-sources.mjs diffs the core against the commit chapter 01 pins.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v7
         with:
@@ -57,6 +74,9 @@ jobs:
 
       - name: Check the papers (house preamble, its contract and digest)
         run: node scripts/check-papers.mjs
+
+      - name: Check the document's sources (cited core files exist; the core's pin)
+        run: node scripts/check-doc-sources.mjs
 
       - name: Render the diagrams
         run: node scripts/render-diagrams.mjs
