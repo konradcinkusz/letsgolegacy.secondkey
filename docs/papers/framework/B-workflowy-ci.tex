@@ -15,27 +15,27 @@ Plik & Triggery & Joby \\
 \endhead
 \multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey}}} \\
 \path{ci.yml} & pull request, push, ręcznie & build i testy (Linux), build i testy (Windows), testy mutacyjne (macierz projektów) \\
-\path{e2e.yml} & pull request, push, ręcznie & capture, replay, compare, evidence na sklepie przykładowym; pakiet jako artefakt \repopath{evidence-pack} \\
+\path{e2e.yml} & pull request, push, ręcznie & capture, replay, compare, evidence na sklepie przykładowym; pakiet jako artefakt \repopath{evidence-pack}, nagranie, przebieg, werdykt i logi jako \repopath{e2e-artifacts} \\
 \path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
-\path{secret-scan.yml} & pull request, push & gitleaks \\
-\path{build-docs-pdf.yml} & push, pull request (paths), ręcznie & ten dokument: render diagramów, kontrola dokumentów, LaTeX, PDF jako artefakt \\
+\path{secret-scan.yml} & pull request, push & gitleaks 8.28.0 (cała historia) \\
+\path{build-docs-pdf.yml} & push, pull request (paths), ręcznie & ten dokument: kontrola dokumentów (\path{check-papers.mjs}) i cytowanych plików rdzenia (\path{check-doc-sources.mjs}, z pełną historią), render diagramów, stempel commitu w \path{version.tex}, LaTeX, PDF nazwany commitem jako artefakt \repopath{letsgolegacy-framework-pdf} (sekcja~\ref{sec:rdzen-ci-pdf}) \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.portcullis}}} \\
 \path{ci.yml} & push, pull request & brak dawnej nazwy w drzewie; build i testy; pakiet analyzerów na SDK .NET 8 (podłoga Roslyn) \\
 \path{mutation.yml} & pull request (paths), push (paths) & Stryker dla reguł migracyjnych \\
-\path{portcullis-pr-check.yml} & pull request & skan Portcullis na własnym PR \\
-\path{portcullis-sarif.yml} & pull request & przefiltrowany SARIF \\
-\path{release.yml} & tag \repopath{v*}, ręcznie & build, testy, pakowanie; publikacja NuGet; kontener do GHCR; release na GitHub; przesunięcie tagu wersji głównej \\
+\path{portcullis-pr-check.yml} & pull request & skan Portcullis na własnym PR z baseline i zakresem diff; komentarz sticky, którego krok decyduje o bramce; wynik poprzedniego pushu z cache \\
+\path{portcullis-sarif.yml} & pull request & przefiltrowany SARIF jako artefakt i do code scanning; nigdy nie blokuje \\
+\path{release.yml} & tag \repopath{v*}, ręcznie & build, testy, pakowanie; na tagu publikacja NuGet, kontener do GHCR, release na GitHub i przesunięcie tagu wersji głównej; ręczne uruchomienie buduje pakiety bez publikacji \\
 \path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
-\path{secret-scan.yml} & pull request, push & gitleaks \\
+\path{secret-scan.yml} & pull request, push & gitleaks 8.28.0 (cała historia) \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey-standards}}} \\
-\path{ci.yml} & pull request, push (także tagi \repopath{v*}), ręcznie & build, testy i kontrola drzewa generowanego; pakowanie i weryfikacja pakietów NuGet; drift check na konsumentach-fixture'ach; release guard \\
+\path{ci.yml} & pull request, push (także tagi \repopath{v*}), ręcznie & build i testy; walidacja standardów (\repopath{validate}); kontrola drzewa generowanego z samotestem, że zawodzi na nieaktualnym drzewie; pakowanie i weryfikacja pakietów NuGet; drift check na konsumentach-fixture'ach; release guard na tagach \\
 \path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
-\path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks (cała historia) \\
+\path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks z obrazu \texttt{:latest} (cała historia) \\
 \midrule
 \multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey-nopcommerce-bench}}} \\
-\path{legacy-build.yml} & pull request, push, ręcznie & lint PSScriptAnalyzer; build nopCommerce (MSBuild); narzędzia łańcucha; legacy pod IIS z SQL Server (instalacja, smoke, konfiguracja, nagranie, replay A/A); werdykt i pakiet \\
+\path{legacy-build.yml} & pull request, push, ręcznie (z wyborem obrazu \texttt{windows-2022} albo \texttt{windows-2025}) & lint PSScriptAnalyzer i kontrola, że skrypty są tylko w ASCII; build nopCommerce (MSBuild); narzędzia łańcucha; legacy pod IIS z SQL Server (instalacja, smoke, konfiguracja, nagranie, replay A/A); werdykt i pakiet \\
 \path{warmup-eshop.yml} & pull request, push, ręcznie & narzędzia łańcucha; eShopLegacyMVC pod IIS (nagranie, replay A/A); werdykt, bramka i pakiet \\
 \path{mutants.yml} & pull request (paths), ręcznie & P9: plan (katalog i łatki na przypiętym drzewie); build legacy; narzędzia łańcucha; dwanaście jobów mutantów pod IIS (build z łatką, legacy, mutant obok, nagranie, replay legacy kontra mutant); dwanaście werdyktów; podsumowanie „N z 11 zabitych” (bez przechodzącego M00 błąd) \\
 \path{chain-tools.yml} & wywoływany z innych workflowów & \repopath{sk} i Portcullis z przypiętych commitów \\
@@ -45,8 +45,8 @@ Plik & Triggery & Joby \\
 \path{ci.yml} & pull request, push, co tydzień, ręcznie & testy jednostkowe (Node 22); e2e (Playwright, OSV zamockowane); smoke z prawdziwym API OSV (błąd sieci nie blokuje) \\
 \path{deploy.yml} & push, ręcznie & testy i build strony; wdrożenie na GitHub Pages; weryfikacja opublikowanej strony z prawdziwym OSV \\
 \path{update-eol.yml} & co miesiąc, ręcznie, pull request (paths) & odświeżenie danych EOL z endoflife.date i pull request; regeneracja danych w PR generatora \\
-\path{codeql.yml} & pull request, push, co tydzień, ręcznie & analiza \\
-\path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks (cała historia) \\
+\path{codeql.yml} & pull request, push, co tydzień, ręcznie & JavaScript/TypeScript i workflowy GitHub Actions, zapytania \texttt{security-and-quality} \\
+\path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks z obrazu \texttt{:latest} (cała historia) \\
 \bottomrule
 \end{xltabular}
 

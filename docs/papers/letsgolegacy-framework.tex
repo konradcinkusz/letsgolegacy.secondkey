@@ -16,11 +16,16 @@
 % dokumentu: commit, z którego zbudowano PDF. Workflow zapisuje ją w version.tex
 % przed kompilacją; lokalnie tego pliku nie ma i nagłówek mówi "build lokalny".
 %
-% PRZYJĘTY DRYF. Dokument jest ręcznie redagowaną prezentacją źródeł; nic
-% mechanicznie nie pilnuje, że zmiana w źródle dotrze tutaj.
+% PRZYJĘTY DRYF. Dokument jest ręcznie redagowaną prezentacją źródeł; nic nie
+% sprawdza, że jego zdania nadal są prawdziwe. Po kilku rundach poprawek, w których
+% dokument doganiał zmieniony kod, workflow dostał tani check mechaniczny
+% (scripts/check-doc-sources.mjs): każdy cytowany plik rdzenia musi istnieć, a gdy
+% kod rdzenia odszedł od commitu z tabeli wersji w rozdziale 1, log wymienia
+% zmienione pliki. Pozostałych repozytoriów check nie czyta.
 %
 % BUDOWANIE. .github/workflows/build-docs-pdf.yml. Lokalnie:
 %   npm ci && node scripts/render-diagrams.mjs
+%   node scripts/check-papers.mjs && node scripts/check-doc-sources.mjs
 %   cd docs/papers && latexmk -pdf letsgolegacy-framework.tex
 % ============================================================================
 \documentclass[11pt,a4paper]{article}

@@ -1,13 +1,17 @@
+%%{init: {"flowchart": {"rankSpacing": 14, "nodeSpacing": 22, "padding": 6}}}%%
 flowchart TD
+  KP["Próba łańcucha<br/>e2e.sh, rozgrzewka P3"] --> K0
   K0["0. Ocena ryzyka<br/>legacy-risk-scan"] --> K1["1. Środowisko legacy<br/>znany stan i snapshot"]
   K1 --> K2["2. Nagranie ruchu<br/>sk capture"]
   K2 --> K3["3. Kontrakt<br/>contract.yaml, sk validate"]
   K3 --> K4["4. Dowód A/A<br/>legacy kontra legacy"]
-  K4 -- "różnica bez reguły<br/>albo błędna klauzula" --> K3
-  K4 -- "pass" --> K5["5. Migracja<br/>agent i skill standardów"]
+  K4 -- "różnica bez reguły,<br/>zła klauzula" --> K3
+  K4 -- "pass" --> K4A["4a. Mutanty<br/>M00 pass, zabite mutanty"]
+  K4A --> K5["5. Migracja<br/>agent i skill standardów"]
   K5 --> K6["6. Bramka na PR<br/>Portcullis, SARIF"]
   K6 --> K7["7. Replay legacy kontra kandydat<br/>sk replay, sk compare"]
-  K7 -- "regression" --> K8["8. Analiza różnic<br/>kod kandydata albo<br/>przegląd kontraktu"]
-  K8 --> K5
+  K7 -- "regression" --> K8["8. Analiza różnic<br/>kandydat albo kontrakt"]
+  K8 -- "poprawka kandydata" --> K5
+  K8 -- "zmiana kontraktu" --> K3
   K7 -- "pass albo review" --> K9["9. Pakiet dowodowy<br/>sk gate, sk evidence"]
   K9 --> K10["10. Publikacja i liczby<br/>scenariusze, różnice,<br/>regresje, mutanty"]

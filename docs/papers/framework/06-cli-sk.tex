@@ -17,6 +17,20 @@ dotnet tool install --global SecondKey.Cli   # once published; until then:
 dotnet run --project src/SecondKey.Cli -- --help
 \end{lstlisting}
 
+\path{scripts/e2e.sh} uruchamia \repopath{sk} bez \repopath{dotnet run}: buduje solution
+w~konfiguracji Release i~wywołuje zbudowane assembly bezpośrednio. Tak samo można postąpić
+ręcznie:
+
+\begin{lstlisting}
+dotnet build SecondKey.slnx --configuration Release
+dotnet src/SecondKey.Cli/bin/Release/net10.0/SecondKey.Cli.dll --help
+\end{lstlisting}
+
+\repopath{-{}-help} wymienia polecenia łańcucha i~kończy się kodem 0; nieznane polecenie
+albo nieznana opcja kończy się kodem 64. Opcja \repopath{-{}-config} jest zdefiniowana jako
+rekurencyjna, więc przyjmuje ją każde podpolecenie, np.
+\texttt{sk replay -{}-config contract/secondkey.yaml}.
+
 {\small
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.4cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4cm}@{}}
 \toprule
@@ -42,17 +56,43 @@ faza 02 (kod 70) \\
 każdemu poleceniu plik \repopath{secondkey.yaml}; domyślnie jest to \path{./secondkey.yaml},
 jeśli istnieje. Plik podany jawnie, którego nie ma, jest błędem konfiguracji (kod 3). Opcje z~wiersza poleceń mają pierwszeństwo przed plikiem; wyjątkiem są dwie opcje listowe
 \repopath{sk capture}, \repopath{-{}-session-key} i~\repopath{-{}-redact-header}, które
-dopisują się do list z~pliku. Ścieżka podana w~opcji jest rozwiązywana względem bieżącego
-katalogu, a~ścieżka z~pliku --- względem katalogu, w~którym leży plik. Polecenia poza
+dopisują się do list z~pliku. Te dwie opcje przyjmują jedną wartość na wystąpienie, więc
+powtarza się je przy każdej wartości. \repopath{-{}-sarif} (\repopath{sk gate},
+\repopath{sk evidence}) przyjmuje kilka wartości po jednej opcji i~zastępuje listę z~pliku.
+Ścieżka podana w~opcji jest rozwiązywana względem bieżącego katalogu, a~ścieżka z~pliku ---
+względem katalogu, w~którym leży plik. Względem katalogu pliku rozwiązywane są także
+wbudowane wartości domyślne: \path{.secondkey/traffic.skcap}, \path{.secondkey/run.skrun},
+\path{.secondkey/verdict.json} i~\path{.secondkey/evidence}. Z~\texttt{-{}-config
+contract/secondkey.yaml} polecenie \repopath{sk compare} bez \repopath{-{}-run} czyta więc
+\path{contract/.secondkey/run.skrun}, a~nie \path{./.secondkey/run.skrun}. Bez pliku
+konfiguracji punktem odniesienia jest bieżący katalog. Polecenia poza
 \repopath{sk validate} czytają konfigurację na początku, więc zepsuty plik jest zgłaszany
 niezależnie od uruchomionego polecenia. Błąd składni wiersza poleceń kończy się komunikatem
 „Run 'sk -{}-help' for usage.” i~kodem 64.
+
+\paragraph{Pliki wyjściowe.} \repopath{sk capture}, \repopath{sk replay}
+i~\repopath{sk compare} tworzą brakujące katalogi i~\textbf{nadpisują bez pytania}
+istniejący plik wyjściowy. Każde uruchomienie z~tą samą ścieżką \repopath{-{}-out}
+zastępuje nagranie, przebieg albo werdykt z~poprzedniego uruchomienia. Katalog wyjściowy
+chroni tylko \repopath{sk evidence} (sekcja~\ref{sec:cli-evidence}). \repopath{sk compare}
+niczego nie zapisuje, gdy kontrakt albo przebieg jest niepoprawny albo przebieg nie ma
+wyników, a~werdykt zapisuje dopiero wtedy, gdy przejdzie on sprawdzenie własnym schematem.
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/StubCommand.cs},
-\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs}}
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CaptureCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CompareCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/GateCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/EvidenceCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/CaptureWriter.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Runs/RunWriter.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Verdicts/VerdictFile.cs},
+\path{letsgolegacy.secondkey/scripts/e2e.sh},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/CommandLineTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/CompareCommandTests.cs}}
 
 \subsection{\texttt{sk capture}}\label{sec:cli-capture}
 
@@ -103,12 +143,23 @@ obcinana i~oznaczana jako obcięta \\
 \end{xltabular}
 }
 
+Proxy jest aplikacją ASP.NET Core z~forwarderem YARP. Z~systemem legacy łączy się bez
+proxy systemowego, nie wykonuje przekierowań (klient dostaje odpowiedź 3xx taką, jaką
+wysłał system legacy) i~nie przechowuje ciasteczek między żądaniami. Adres
+z~\repopath{-{}-listen} może mieć port 0. Proxy wybiera wtedy wolny port, a~komunikat
+startowy podaje adres, na którym faktycznie nasłuchuje.
+
 \paragraph{Sesje i~scenariusze.} Klucz sesji decyduje o~scenariuszach: \repopath{sk replay}
 odtwarza wymiany jednej sesji jako jeden scenariusz, po kolei. Wymiana należy do sesji, którą
 nazywa jej żądanie --- ciasteczkiem albo nagłówkiem o~tej nazwie --- a~przy pierwszej wizycie
 do tej, którą jej odpowiedź ustawia jako ciasteczko. Wymiana bez żadnego z~nich jest sesją
 samą dla siebie, więc bez klucza każda wymiana jest odtwarzana osobno. W~nagraniu sesja jest
-zapisana jako skrót, nigdy jako wartość ciasteczka.
+zapisana jako skrót, nigdy jako wartość ciasteczka. Klucze sesji są sprawdzane w~podanej
+kolejności, a~dla każdego klucza najpierw ciasteczko o~tej nazwie, potem nagłówek. Nazwy
+porównuje się bez rozróżniania wielkości liter, a~pusta wartość ciasteczka albo nagłówka nie
+wskazuje sesji. Sesja z~żądania ma pierwszeństwo przed sesją, którą odpowiedź ustawia
+w~\texttt{set-cookie}. Ta sama nazwa klucza z~tą samą wartością daje zawsze ten sam
+identyfikator sesji.
 
 \paragraph{Redakcja i~limit treści.} Wartości redagowanych nagłówków --- w~żądaniu i~w
 odpowiedzi --- są zastępowane przez \repopath{<redacted>} przed zapisem na dysk, a~nagłówek
@@ -136,7 +187,8 @@ błędzie konfiguracji.
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CaptureCommand.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Capture/RecordingProxy.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Capture/CaptureOptions.cs},
-\path{letsgolegacy.secondkey/src/SecondKey.Capture/SessionTracker.cs}}
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/SessionTracker.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Capture.Tests/ProxyLifecycleTests.cs}}
 
 \subsection{Zatrzymywanie \texttt{sk capture}}\label{sec:cli-stop}
 
@@ -203,6 +255,10 @@ samo dla kandydata \\
 \end{xltabular}
 }
 
+\repopath{-{}-timeout} i~\repopath{timeoutSeconds} to liczba całkowita sekund. Inaczej niż
+adresy i~\repopath{scenarioMode} wartość ta nie jest sprawdzana ani przy parsowaniu, ani
+przy wczytaniu pliku: replay stosuje ją wprost jako limit każdego żądania.
+
 \paragraph{Czego replay nie wysyła.} Z~nagranego żądania pomijane są nagłówki
 \texttt{host}, \texttt{content-length}, \texttt{transfer-encoding}, \texttt{connection},
 \texttt{keep-alive}, \texttt{upgrade}, \texttt{te}, \texttt{trailer},
@@ -210,6 +266,19 @@ samo dla kandydata \\
 \texttt{accept-encoding} i~\texttt{expect}, a~także każda wartość \repopath{<redacted>}.
 Ścieżka adresu bazowego strony poprzedza ścieżkę każdego żądania. Odpowiedzi są
 dekompresowane, a~replay nie używa proxy systemowego.
+
+\paragraph{Treść żądania i~odpowiedzi.} Replay odtwarza treść żądania z~nagrania, a~nie
+z~oryginalnych bajtów:
+\begin{itemize}
+  \item treść zapisaną jako JSON wysyła jako ponownie zserializowany JSON;
+  \item tekst wysyła w~kodowaniu z~jego \texttt{content-type}, a~bez charsetu w~UTF-8;
+  \item base64 wysyła jako zdekodowane bajty.
+\end{itemize}
+Capture obcina powyżej \repopath{maxBodyBytes} także treść żądania, choć system legacy
+dostaje ją całą. Taka treść jest odtwarzana obcięta: replay wysyła tylko jej nagrany
+początek. Nagłówki \texttt{content-*} trafiają do żądania tylko razem z~treścią,
+a~\texttt{content-length} wynika z~wysyłanej treści. Odpowiedzi obu stron trafiają do
+\repopath{*.skrun} w~całości, bez limitu \repopath{maxBodyBytes}.
 
 \paragraph{Brak odpowiedzi i~podsumowanie.} Żądanie bez odpowiedzi jest zapisywane z~powodem --- \repopath{timeout}, \repopath{connection} albo \repopath{protocol} --- zamiast
 odpowiedzi. Polecenie wypisuje podsumowanie:
@@ -226,10 +295,33 @@ nie jest bezwzględnym URL http(s), daje kod 64 w~opcji i~kod 3 w~\repopath{seco
 niepoprawny capture albo nieustawiona zmienna środowiskowa z~connection stringiem --- kod 3. Przebieg
 przerwany przed końcem nie ma \repopath{run.end} i~komparator go nie przyjmie.
 
+Wyniki bez odpowiedzi nie zmieniają kodu wyjścia. \repopath{sk replay} kończy się kodem 0
+także wtedy, gdy podsumowanie mówi \texttt{<n> without an answer} przy $n > 0$. Każda taka
+wymiana trafia potem do werdyktu jako regresja \repopath{missing-result}. Bench odrzuca
+taki przebieg w~skrypcie 8 (sekcja~\ref{sec:procedura-krok4}); samo \repopath{sk replay}
+tego nie robi. Rodzaje błędu:
+\begin{itemize}
+  \item \repopath{timeout}: strona nie odpowiedziała w~limicie \repopath{-{}-timeout}, który
+        obejmuje także odczyt całej treści odpowiedzi; komunikat ma postać
+        \texttt{no answer within <n> s};
+  \item \repopath{connection}: nie udało się połączyć ze stroną;
+  \item \repopath{protocol}: każdy inny błąd HTTP, np. odpowiedź, która nie jest HTTP.
+\end{itemize}
+Przy nieudanym resecie polecenie wypisuje na standardowe wyjście błędów \texttt{sk replay:
+a side could not be reset; those scenarios were not replayed on it and the run is not a
+fair comparison.}
+
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey/docs/adr/0003-verdict-classes.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
-\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/BodyCodec.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Capture/RecordingProxy.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/ReplayHttpTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/ReplayEngineTests.cs},
+\path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/8-replay.ps1}}
 
 \subsection{Reset stanu}\label{sec:cli-reset}
 
@@ -261,6 +353,20 @@ w~\repopath{secondkey.yaml}, a~bez niego polecenie działa w~bieżącym katalogu
 \repopath{reset} wskazuje dokładnie jeden rodzaj: żaden albo dwa to niepoprawna
 konfiguracja (kod 3), sprawdzana już przy wczytaniu pliku.
 
+Przy \repopath{http} ścieżka bez początkowego ukośnika dostaje go automatycznie i~może
+nieść zapytanie (\texttt{/\_\_sk/reset?all=true}). Reset przez opcję
+\repopath{-{}-legacy-reset-http} albo \repopath{-{}-candidate-reset-http} zawsze używa
+\texttt{POST}. Szczegół porażki trafia do \repopath{state.reset} i~do każdego wyniku
+\repopath{reset-failed} w~postaci:
+\begin{itemize}
+  \item \texttt{<METODA> <url> answered <status>}, gdy strona odpowiedziała kodem spoza
+        2xx;
+  \item \texttt{<METODA> <url> failed: <komunikat>}, gdy połączenie się nie udało;
+  \item \texttt{'<polecenie>' exited <kod>: <wyjście błędów>} przy \repopath{command}.
+\end{itemize}
+Standardowe wyjście polecenia jest pomijane. \repopath{sk} nie ogranicza czasu polecenia
+resetu: czeka, aż proces się zakończy, a~przerwać go może tylko anulowanie (Ctrl+C).
+
 \paragraph{Ograniczenia resetu snapshotem.} \repopath{sqlServerSnapshot} przywraca bazę SQL
 Server z~database snapshotu; według komentarza w~kodzie snapshoty baz danych są w~każdej
 edycji SQL Server od 2016 SP1. Trzeba wiedzieć, co robi, a~czego nie:
@@ -288,10 +394,24 @@ edycji SQL Server od 2016 SP1. Trzeba wiedzieć, co robi, a~czego nie:
 Przywrócenie ma limit 120 sekund; nieudane przywrócenie to nieudany reset z~komunikatem SQL
 Server.
 
+Reset łączy się z~bazą \texttt{master} bez puli połączeń. \texttt{Initial Catalog}
+z~connection stringu jest pomijany, a~resetowaną bazę wskazuje wyłącznie klucz
+\repopath{database}. Przed każdym przywróceniem \repopath{sk} czyści własne pule
+połączeń, w~tym połączenia sondy. Błąd SQL Server przy tworzeniu snapshotu albo przy
+przywracaniu, także brak połączenia z~serwerem, jest nieudanym resetem z~komunikatem
+\texttt{restoring '<baza>' from '<snapshot>' failed: <komunikat SQL Server>}: replay
+dochodzi do końca i~kończy się kodem 4. Inaczej działa nazwa bazy, której na serwerze nie
+ma: przerywa cały replay od razu, kodem 4 z~komunikatem \texttt{error: database '<baza>'
+was not found or has no data files}, a~przebieg zostaje bez \repopath{run.end}.
+
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Replay/Resets/IStateReset.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Replay/Resets/SqlServerSnapshotReset.cs},
-\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs}}
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/ResetTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/SqlServerTests.cs}}
 
 \subsection{Sonda \texttt{sqlServer} i~korelacja}\label{sec:cli-sonda}
 
@@ -309,6 +429,36 @@ zawartością. Tabele bez zmian są pomijane. Sonda za każdym razem czyta całe
 przeznaczona dla małej, zasianej bazy sandboksu, nie dla bazy wielkości produkcyjnej.
 Klauzule czytają jej wynik przez korzeń \repopath{db} (sekcja~\ref{sec:formaty}).
 
+Sonda łączy się connection stringiem ze zmiennej \repopath{connectionStringEnv} tak, jak
+jest, i~czyta tabele w~bazie, którą ten connection string wskazuje. Reset natomiast zawsze
+łączy się z~\texttt{master}. Nazwa \texttt{dbo.Order} jest cytowana część po części
+(\texttt{[dbo].[Order]}), a~kolumny klucza głównego są brane z~katalogu SQL Server
+w~kolejności klucza. Pierwszy odczyt następuje po udanym resecie strony; po nieudanym resecie
+sonda nie działa. Błąd SQL Server w~sondzie przerywa replay kodem 4. Wartości kolumn,
+odczytane przez \texttt{Microsoft.Data.SqlClient}, trafiają do \repopath{db} jako JSON:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.8cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Wartość (typ .NET) & W~\repopath{db} \\
+\midrule
+\texttt{DBNull} & \texttt{null} \\
+\texttt{string} & napis \\
+\texttt{bool} & \texttt{true} albo \texttt{false} \\
+\texttt{byte}, \texttt{short}, \texttt{int}, \texttt{long} & liczba całkowita \\
+\texttt{decimal}, \texttt{float}, \texttt{double} & liczba, np. \texttt{5.25} \\
+\texttt{DateTime} & napis ISO 8601 („o”), np. kolumna \texttt{datetime2}:
+\texttt{"2026-09-26T10:00:00.0000000"} \\
+\texttt{DateTimeOffset} & napis ISO 8601 z~przesunięciem,
+np. \texttt{"2026-09-26T10:00:00.0000000+02:00"} \\
+\texttt{Guid} & napis, np. \texttt{"6f1c2b9e-4a53-4c8e-9d3a-2b7f5e8a1c40"} \\
+\texttt{byte[]} & napis base64, np. \texttt{"AQID"} \\
+każdy inny typ, np. \texttt{TimeSpan} & napis w~kulturze niezmiennej,
+np. \texttt{"01:30:00"} \\
+\bottomrule
+\end{tabularx}
+}
+
 \paragraph{Korelacja.} Wartość, którą generuje serwer, a~późniejsze żądania muszą ją odesłać
 --- typowo token anti-forgery w~ukrytym polu formularza --- jest w~nagraniu nieaktualna. Reguła
 korelacji (\repopath{replay.correlation}, tylko w~pliku) bierze pierwszą grupę
@@ -317,9 +467,41 @@ ją do pola \repopath{formField} późniejszych żądań \path{application/x-www
 albo do nagłówka \repopath{header}, jeśli nagrane żądanie ten nagłówek miało. Obowiązuje
 ostatnia poznana wartość; reguła, która niczego nie poznała, niczego nie zmienia.
 
+Ograniczenia reguły korelacji, z~kodu replay:
+\begin{itemize}
+  \item Przeszukiwane są tylko odpowiedzi, których treść zapisano jako tekst: HTML, inne
+        \texttt{text/*}, XML, formularze. Odpowiedź JSON (\texttt{application/json},
+        \texttt{*+json}) jest zapisywana jako JSON i~reguła jej nie czyta. Nie czyta też
+        treści base64.
+  \item \repopath{regex} bez grupy niczego nie poznaje i~niczego nie zgłasza.
+  \item \repopath{formField} jest podmieniane tylko tam, gdzie pole już jest, i~to w~każdym
+        jego wystąpieniu; reguła nigdy pola nie dodaje. Nazwy pól porównuje się po
+        zdekodowaniu (\texttt{+} to spacja) i~z~rozróżnieniem wielkości liter, a~wartość
+        jest kodowana procentowo (spacja jako \texttt{\%20}). Treści JSON
+        i~\texttt{text/plain} reguła nie zmienia.
+  \item \repopath{header} jest podmieniany niezależnie od wielkości liter w~nazwie, ale
+        tylko wtedy, gdy nagrane żądanie miało ten nagłówek. Reguła, która ma
+        \repopath{formField} i~\repopath{header}, stosuje oba.
+  \item Wyrażenie jest kompilowane bez zależności od kultury, z~limitem czasu dopasowania
+        równym jednej sekundzie. Dopasowanie, które ten limit przekroczy, przerywa replay
+        kodem 4.
+  \item Wyrażenia nie sprawdza ani wczytanie \repopath{secondkey.yaml}, ani
+        \repopath{sk validate secondkey.yaml}. Niepoprawne wyrażenie zatrzymuje dopiero
+        \repopath{sk replay}, zanim cokolwiek zapisze, kodem 4 z~komunikatem
+        \texttt{error: …}.
+\end{itemize}
+
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Replay/Probes/SqlServerTableProbe.cs},
-\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs}}
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Capture/BodyCodec.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/ProbeValueTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/SqlServerTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/ReplayHttpTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Replay.Tests/ReplayEngineTests.cs}}
 
 \subsection{\texttt{sk compare}}\label{sec:cli-compare}
 
@@ -389,12 +571,29 @@ linia \texttt{blocks:} z~położeniem, regułą i~komunikatem każdego blokując
 Syntetyczny log \path{samples/gate/portcullis.sarif} ma dwa ostrzeżenia i~wyciszony błąd, więc
 bramka przechodzi.
 
+Log musi mieć \texttt{version} równe \texttt{2.1.0} i~tablicę \texttt{runs}, a~każdy
+przebieg w~nim nazwę narzędzia w~\texttt{tool.driver.name}. Inaczej polecenie kończy się
+kodem 3 z~komunikatem \texttt{not a SARIF 2.1.0 log}, \texttt{a SARIF log has a runs
+array}, \texttt{every run names its tool} albo \texttt{not valid JSON: …}.
+\begin{itemize}
+  \item Identyfikator reguły pochodzi z~\texttt{ruleId}, potem z~\texttt{rule.id}, potem
+        z~\texttt{ruleIndex} w~regułach drivera; w~ostateczności to \texttt{(no rule)}.
+  \item Komunikat pochodzi z~\texttt{message.text}, potem z~\texttt{message.id}; inaczej to
+        \texttt{(no message)}.
+  \item Położenie pochodzi z~pierwszej lokalizacji: ścieżka (URI \texttt{file://} zamieniony
+        na ścieżkę) i~numer linii.
+\end{itemize}
+Liczba \texttt{<n> finding(s)} w~wyjściu nie obejmuje wyciszonych znalezisk. Reguły są
+wypisywane od blokujących, potem według narzędzia i~identyfikatora.
+
 \zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
 \path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/GateCommand.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Evidence/Sarif/SarifLog.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Evidence/Sarif/GateSummary.cs},
-\path{letsgolegacy.secondkey/samples/gate/portcullis.sarif}}
+\path{letsgolegacy.secondkey/samples/gate/portcullis.sarif},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/GateEvidenceCommandTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/SarifTests.cs}}
 
 \subsection{\texttt{sk evidence}}\label{sec:cli-evidence}
 
@@ -431,6 +630,24 @@ innym jest odrzucany (kod 64, „… holds no evidence pack; choose an empty or 
 Wyjście wymienia katalog, pliki pakietu oraz linię \texttt{behaviour: <outcome> · gate:
 <wynik> · PDF: <stan>}.
 
+\paragraph{Kolejność sprawdzeń.} Zanim cokolwiek zapisze, \repopath{sk evidence} waliduje
+werdykt, kontrakt i~każdy log SARIF oraz porównuje SHA-256 kontraktu i~przebiegu
+z~\repopath{inputs} werdyktu. Porażka któregokolwiek sprawdzenia nie tworzy nawet katalogu
+wyjściowego. Komunikat niezgodności podaje oba skróty: \texttt{not the contract the verdict
+was computed from: its SHA-256 is <skrót>, the verdict names <skrót>}; tak samo dla
+przebiegu. Gdy w~katalogu leży poprzedni pakiet, polecenie najpierw usuwa pliki z~jego
+manifestu, a~dopiero potem sprawdza, czy coś zostało. Obcy plik obok poprzedniego pakietu
+zostaje, pliki pakietu są już usunięte, a~polecenie kończy się kodem 64 z~komunikatem
+\texttt{… holds files the previous pack did not write; choose an empty or new directory}.
+Manifest, który wskazuje ścieżkę poza katalogiem, jest odrzucany (\texttt{… lists '…',
+which is outside the pack}) i~nic nie zostaje usunięte. Plik \repopath{manifest.json}, który
+nie jest manifestem pakietu, traktuje się tak, jakby go nie było. Przy
+\repopath{-{}-pdf required} porażka PDF kończy polecenie kodem 4 po zapisaniu kopii wejść
+i~\repopath{index.html}, ale przed zapisaniem \path{statement.intoto.json}
+i~\repopath{manifest.json}. Taki katalog nie ma manifestu, więc kolejne
+\repopath{sk evidence} do niego kończy się kodem 64, dopóki się go nie opróżni albo nie
+wybierze innego katalogu.
+
 \paragraph{PDF.} \repopath{-{}-pdf auto} (domyślnie) drukuje raport, gdy na maszynie jest
 przeglądarka oparta na Chromium, a~gdy jej nie ma, mówi o~tym i~zapisuje pakiet bez PDF;
 \repopath{-{}-pdf required} czyni brak PDF porażką (kod 4); \repopath{-{}-pdf off} pomija PDF.
@@ -438,8 +655,13 @@ Wartość spoza tych trzech kończy się kodem 64 w~opcji i~kodem 3 w~\repopath{
 Przeglądarka jest szukana kolejno:
 
 \begin{enumerate}
-  \item \repopath{SK\_CHROME\_PATH} --- jeśli jest ustawiona, plik musi istnieć, inaczej to
-        błąd, a~nie ciche przejście dalej;
+  \item \repopath{SK\_CHROME\_PATH}: jeśli jest ustawiona i~niepusta, plik musi istnieć,
+        a~wyszukiwanie nie przechodzi wtedy dalej, do \texttt{PATH}. Przy
+        \repopath{-{}-pdf auto} pakiet powstaje bez PDF, polecenie kończy się kodem 0,
+        a~wyjście mówi \texttt{PDF: not written — SK\_CHROME\_PATH is set to '<ścieżka>',
+        which does not exist}. Przy \repopath{-{}-pdf required} ta sama sytuacja kończy
+        polecenie kodem 4 z~komunikatem \texttt{error: SK\_CHROME\_PATH is set to …}. Pusta
+        wartość znaczy to samo, co brak zmiennej;
   \item \texttt{PATH}, katalog po katalogu: \texttt{google-chrome},
         \texttt{google-chrome-stable}, \texttt{chrome}, \texttt{microsoft-edge},
         \texttt{microsoft-edge-stable}, \texttt{msedge}, \texttt{chromium},
@@ -456,12 +678,54 @@ sandboksem, bo sandbox jest niedostępny dla roota w~kontenerach i~na niektóryc
 renderuje wyłącznie własną statyczną stronę pakietu, która nie może uruchomić skryptu ani
 wykonać żądania. Plik, który nie zaczyna się od \texttt{\%PDF-}, nie liczy się jako PDF.
 
+Gdy PDF nie powstał, linia wyjścia ma postać \texttt{PDF: not written — <powód>} (tryb
+\texttt{auto}); w~trybie \texttt{required} ten sam powód stoi po \texttt{error:}. Powody
+z~kodu:
+
+{\small
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{7.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Powód & Kiedy \\
+\midrule
+\texttt{switched off (-{}-pdf off)} & PDF wyłączony \\
+\texttt{no Chromium-based browser found; install Chrome, Edge or Chromium, or set
+SK\_CHROME\_PATH} & wyszukiwanie niczego nie znalazło \\
+\texttt{SK\_CHROME\_PATH is set to '…', which does not exist} & zmienna wskazuje brakujący
+plik \\
+\texttt{<przeglądarka> did not finish within 60 s: <ostatnia linia>} & przeglądarka nie
+skończyła w~ciągu minuty \\
+\texttt{<przeglądarka> exited with <kod> and wrote no PDF: <ostatnia linia>} & kod różny od
+0 albo plik, który nie zaczyna się od \texttt{\%PDF-} \\
+\texttt{<przeglądarka> could not be run: <komunikat>} & procesu nie dało się uruchomić \\
+\bottomrule
+\end{tabularx}
+}
+
+Przeglądarka dostaje flagi \texttt{-{}-headless=new}, \texttt{-{}-disable-gpu},
+\texttt{-{}-no-sandbox}, \texttt{-{}-no-first-run}, \texttt{-{}-no-default-browser-check},
+\texttt{-{}-disable-extensions}, \texttt{-{}-disable-background-networking},
+\texttt{-{}-disable-component-update}, \texttt{-{}-disable-default-apps},
+\texttt{-{}-disable-sync}, \texttt{-{}-disable-breakpad}, \texttt{-{}-disable-dev-shm-usage},
+\texttt{-{}-password-store=basic}, \texttt{-{}-use-mock-keychain}, \texttt{-{}-mute-audio}
+i~\texttt{-{}-hide-scrollbars}. Do druku dostaje \texttt{-{}-no-pdf-header-footer},
+\texttt{-{}-print-to-pdf-no-header} i~\texttt{-{}-print-to-pdf=<ścieżka>}. Zmienna
+\texttt{DBUS\_SESSION\_BUS\_ADDRESS=disabled:} sprawia, że każde wywołanie D-Bus zawodzi od
+razu, zamiast czekać na swój limit czasu; drukowanie magistrali nie potrzebuje. Każdy wydruk
+dostaje tymczasowy profil \path{sk-pdf-*}, usuwany po wydruku. Przed wydrukiem stary
+\repopath{report.pdf} jest usuwany, więc PDF z~poprzedniego przebiegu nigdy nie uchodzi za
+nowy. Przeglądarka zatrzymana po przekroczeniu limitu czasu jest kończona razem
+z~procesami, które uruchomiła. Anulowanie (Ctrl+C) też ją zatrzymuje, ale nie jest
+zgłaszane jako przekroczenie czasu.
+
 \zrodla{\path{letsgolegacy.secondkey/docs/formats/evidence.md},
 \path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/EvidenceCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Evidence/EvidencePack.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Evidence/PdfRenderer.cs},
-\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/GateEvidenceCommandTests.cs}}
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/GateEvidenceCommandTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/EvidencePackTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Evidence.Tests/PdfRendererTests.cs}}
 
 \subsection{\texttt{sk validate}, \texttt{sk mine} i~\texttt{sk mutate}}\label{sec:cli-validate}
 
@@ -474,11 +738,21 @@ błąd „not a~Second Key artifact: expected *.skcap, *.skrun, a~contract *.yam
 \repopath{<plik>: valid} albo liczba błędów i~ich lista. Kod 0, gdy wszystkie pliki są
 poprawne, w~przeciwnym razie 3.
 
+Rozpoznawanie po nazwie ma konsekwencje. Plik konfiguracji o~innej nazwie niż
+\repopath{secondkey.yaml} jest walidowany jako kontrakt i~dostaje błędy schematu kontraktu.
+\repopath{manifest.json}, \path{statement.intoto.json} i~logi \texttt{*.sarif} nie są
+artefaktami, które \repopath{sk validate} zna: dostają błąd „not a~Second Key artifact”
+i~kod 3. Log SARIF sprawdza \repopath{sk gate}, a~pakiet sprawdza się skrótami z~manifestu
+(sekcja~\ref{sec:formaty-pakiet}). Wynik walidacji, także błędy, trafia na standardowe
+wyjście, a~nie na wyjście błędów. \repopath{sk validate} bez żadnego pliku jest błędem
+wiersza poleceń (kod 64).
+
 \repopath{sk mine} (C2) i~\repopath{sk mutate} (C9) istnieją w~planie, ale nie w~tej wersji.
 Czytają konfigurację, wypisują na przykład „sk mine: not available in this build --- planned
 under C2, phase 02 (docs/WORKPLAN.md).” i~kończą się kodem \textbf{70}.
 
 \zrodla{\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ValidateCommand.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/ValidateCommandTests.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/StubCommand.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
 \path{letsgolegacy.secondkey/docs/formats/README.md}}
@@ -519,10 +793,86 @@ URL http(s) → 64. Ta sama zła wartość daje więc 64 w~wierszu poleceń i~3 
 poprawia się ją w~innym miejscu; anulowanie → 4 z~komunikatem „cancelled”; każdy inny wyjątek, np. brak
 pliku wejściowego, → 4 z~komunikatem \texttt{error: …}.
 
+\paragraph{Komunikaty i~co z~nimi zrobić.} Komunikaty błędów trafiają na standardowe
+wyjście błędów; wyjątkiem jest \repopath{sk validate}. Zestawienie z~kodu poleceń:
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{6.4cm} l >{\raggedright\arraybackslash}X@{}}
+\toprule
+Komunikat & Kod & Przyczyna i~działanie \\
+\midrule
+\endfirsthead
+\toprule
+Komunikat & Kod & Przyczyna i~działanie \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\texttt{Run 'sk -{}-help' for usage.} & 64 & nieznane polecenie albo opcja, wartość spoza
+dozwolonych w~opcji, brak pliku w~\repopath{sk validate}; wcześniejsza linia mówi, co jest
+źle, np. \texttt{-{}-legacy: '<v>' is not an absolute http(s) URL} \\
+\texttt{<plik>: no such configuration file} & 3 & \repopath{-{}-config} wskazuje plik,
+którego nie ma \\
+\texttt{<plik>: version <n> is not supported; this build reads version 1} & 3 &
+\repopath{version} różne od 1 \\
+\texttt{<plik>: not valid YAML: …} & 3 & błąd składni YAML \\
+\texttt{<plik>: <klucz>: '<wartość>' is not an absolute http(s) URL} & 3 & zły adres
+w~\repopath{secondkey.yaml} \\
+\texttt{<plik>: <klucz>: '<wartość>' is not one of …} & 3 & \repopath{scenarioMode} albo
+\repopath{evidence.pdf} spoza dozwolonych wartości \\
+\texttt{<plik>: replay.<strona>.reset: give exactly one of http, sqlServerSnapshot, command
+(found <n>)} & 3 & \repopath{reset} bez dokładnie jednego rodzaju \\
+komunikat deserializacji z~nazwą klucza & 3 & nieznany klucz (literówka) albo brak
+wymaganego klucza w~resecie, sondzie lub korelacji \\
+\texttt{environment variable <NAZWA> is not set (see secrets.env.example)} & 3 & zmiennej
+z~\repopath{connectionStringEnv} nie ma w~środowisku procesu; wyeksportuj ją \\
+\texttt{<plik>: <n> error(s)} i~lista błędów & 3 & artefakt nie przechodzi walidacji; ten
+sam raport daje \repopath{sk validate <plik>} \\
+\texttt{sk capture: no target — …} & 64 & brak \repopath{-{}-target}
+i~\repopath{capture.target} \\
+\texttt{sk replay: needs a capture and both base URLs — …} & 64 & brak capture albo
+adresu którejś strony \\
+\texttt{sk replay: a side could not be reset; …} & 4 & reset się nie udał; szczegół jest
+w~zdarzeniach \repopath{state.reset} przebiegu \\
+\texttt{sk compare: needs a contract — …} & 64 & brak \repopath{-{}-contract}
+i~\repopath{compare.contract} \\
+\texttt{sk compare: <przebieg> has no results; nothing was compared, so nothing can pass}
+& 3 & przebieg bez wyników \\
+\texttt{sk gate: needs at least one SARIF log — …} & 64 & brak \repopath{-{}-sarif}
+i~\repopath{gate.sarif} \\
+\texttt{not a SARIF 2.1.0 log} i~pokrewne & 3 & plik nie jest logiem SARIF 2.1.0 \\
+\texttt{sk evidence: needs the contract — …} & 64 & brak kontraktu w~opcji i~w~pliku \\
+\texttt{not the contract the verdict was computed from: …}, \texttt{not the run the
+verdict was computed from: …} & 3 & podane pliki nie są wejściami werdyktu \\
+\texttt{sk evidence: … holds no evidence pack; …}, \texttt{… holds files the previous pack
+did not write; …}, \texttt{… which is outside the pack} & 64 & katalog wyjściowy nie
+nadaje się na pakiet; wybierz pusty albo nowy \\
+\texttt{sk mine: not available in this build — …} & 70 & polecenie planowane na fazę 02 \\
+\texttt{cancelled} & 4 & polecenie inne niż \repopath{sk capture} przerwane przez Ctrl+C
+albo SIGTERM; wynik może być niekompletny, np. przebieg bez \repopath{run.end} \\
+\texttt{error: database '<baza>' was not found or has no data files} & 4 & zła nazwa
+w~\repopath{reset.sqlServerSnapshot.database} \\
+\texttt{error: …} & 4 & każdy inny wyjątek, np. brak pliku wejściowego,
+\repopath{-{}-pdf required} bez PDF, niepoprawny regex korelacji \\
+\end{xltabular}
+}
+
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/ExitCodes.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/SecondKeyCli.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CaptureCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/CompareCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/GateCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/EvidenceCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/StubCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/EvidencePack.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/Sarif/SarifLog.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Replay/Resets/SqlServerSnapshotReset.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Artifacts/Validation/ValidationReport.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/CommandLineTests.cs},
+\path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/ConfigurationTests.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/GateEvidenceCommandTests.cs}}
 
 \subsection{Plik \texttt{secondkey.yaml}}\label{sec:cli-konfiguracja}
@@ -590,6 +940,12 @@ wartość), \texttt{formField}, \texttt{header} \\
 \end{xltabular}
 }
 
+Typy wartości: \repopath{version} jest liczbą całkowitą, \repopath{maxBodyBytes} liczbą
+całkowitą bajtów, a~\repopath{timeoutSeconds} liczbą całkowitą sekund.
+\repopath{sessionKeys}, \repopath{redactHeaders}, \repopath{tables} i~\repopath{sarif} są
+listami napisów, \repopath{correlation} jest listą obiektów, a~każda pozostała wartość jest
+napisem. Wartość innego typu jest błędem konfiguracji (kod 3).
+
 \paragraph{Ścisłość.} Plik jest ścisły: nieznany klucz jest błędem (np. literówka
 \repopath{resett} albo \repopath{scenarioModes}), a~brak wymaganego klucza w~sekcji resetu
 też. Pusty plik to pusta konfiguracja. YAML jest typowany tak samo jak w~kontrakcie (YAML 1.2
@@ -600,11 +956,24 @@ Wartości, których typ klucza nie ogranicza --- adresy (bezwzględne http(s)),
 rodzaj) --- są sprawdzane przy wczytaniu pliku, więc \repopath{sk validate secondkey.yaml}
 i~każde polecenie odrzucają ten sam plik tak samo, kodem 3.
 
+Wczytanie pliku, a~więc i~\repopath{sk validate secondkey.yaml}, nie sprawdza wszystkiego,
+co może zatrzymać polecenie później:
+\begin{itemize}
+  \item czy zmienne z~\repopath{connectionStringEnv} są ustawione --- sprawdza to dopiero
+        \repopath{sk replay} (kod 3);
+  \item czy wyrażenia \repopath{replay.correlation[].regex} się kompilują --- dopiero
+        \repopath{sk replay} (kod 4);
+  \item czy pliki wskazane ścieżkami istnieją --- brak pliku wejściowego daje kod 4;
+  \item jakie są wartości \repopath{timeoutSeconds} i~\repopath{maxBodyBytes}.
+\end{itemize}
+
 \paragraph{Sekrety.} \finding{Sekrety nigdy nie mieszkają w~tym pliku.} Connection string
 jest wskazywany nazwą zmiennej środowiskowej, która go przechowuje
 (\repopath{connectionStringEnv}), a~\path{secrets.env.example} wymienia każdą taką zmienną.
 Zmienna nieustawiona albo pusta zatrzymuje polecenie z~jej nazwą („environment variable
-SK\_LEGACY\_DB is not set (see secrets.env.example)”) i~kodem 3.
+SK\_LEGACY\_DB is not set (see secrets.env.example)”) i~kodem 3. Zmienne są czytane ze
+środowiska procesu \repopath{sk}; \path{.env}, który tworzy \path{scripts/setup.sh}, nie
+jest wczytywany automatycznie (sekcja~\ref{sec:rdzen-setup}).
 
 \paragraph{Ścieżki.} Ścieżki względne rozwiązuje się względem katalogu, w~którym leży plik,
 także \repopath{reset.command.workingDirectory}. Na Windows ścieżkę pisze się z~ukośnikami (\path{C:/sk/traffic.skcap}) albo w~apostrofach (\path{'C:\sk\traffic.skcap'}): w~cudzysłowie YAML czyta ukośnik wsteczny jako
@@ -613,8 +982,10 @@ początek sekwencji ucieczki, więc \path{"C:\sk\a.skcap"} nie jest ścieżką, 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Configuration/SecondKeyConfig.cs},
 \path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ReplayCommand.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Cli/Commands/ValidateCommand.cs},
 \path{letsgolegacy.secondkey/tests/SecondKey.Cli.Tests/ConfigurationTests.cs},
-\path{letsgolegacy.secondkey/secrets.env.example}}
+\path{letsgolegacy.secondkey/secrets.env.example},
+\path{letsgolegacy.secondkey/scripts/setup.sh}}
 
 \subsection{Demonstracja end-to-end na sample shop}\label{sec:cli-e2e}
 
@@ -624,6 +995,20 @@ Dwa polecenia z~README uruchamiają cały łańcuch lokalnie:
 ./scripts/setup.sh     # once: checks the tools, installs the secret-scanning commit hook
 ./scripts/e2e.sh       # the whole chain on the sample shop
 \end{lstlisting}
+
+\paragraph{Wymagania.} Skrypt potrzebuje:
+\begin{itemize}
+  \item .NET 10 SDK;
+  \item \texttt{curl} do żądań przez proxy i~do oczekiwania na \texttt{/health};
+  \item \texttt{python3} do sprawdzenia werdyktu i~pakietu;
+  \item wolnych portów 5080, 5081 i~8080 albo innych, ustawionych
+        w~\repopath{E2E\_LEGACY\_PORT}, \repopath{E2E\_CANDIDATE\_PORT}
+        i~\repopath{E2E\_PROXY\_PORT};
+  \item do PDF: przeglądarki opartej na Chromium. Bez niej, przy domyślnym
+        \repopath{SK\_PDF=auto}, pakiet powstaje bez PDF.
+\end{itemize}
+\path{scripts/setup.sh} nie sprawdza ani \texttt{curl}, ani \texttt{python3}
+(sekcja~\ref{sec:rdzen-setup}).
 
 \paragraph{Sample shop.} \path{samples/SampleShop} to mała aplikacja ASP.NET Core, która gra
 obie role demonstracji fazy 01. Wariant wybiera \repopath{SAMPLESHOP\_VARIANT}
@@ -647,6 +1032,16 @@ legacy dokładnie tak, jak prawdziwa migracja, więc każda klasa werdyktu ma co
         je maski); strona HTML koszyka ma u~obu wariantów inny markup, który kontraktu nie
         obchodzi.
 \end{itemize}
+
+Katalog sklepu ma cztery produkty: \texttt{ZEB-03} „Zebra mug” (7.25), \texttt{APL-01}
+„apple pie” (12.50), \texttt{ECL-02} „éclair box” (19.99) i~\texttt{ANG-04} „Ångström
+ruler” (3.10). Kupony to \texttt{WELCOME5} (5) i~\texttt{BIGSALE} (150). Strona legacy
+ogranicza rabat do wartości koszyka, kandydat nie. Nieznany produkt albo kupon daje 400
+z~\texttt{unknown-product} albo \texttt{unknown-coupon}. Udane zamówienie odpowiada
+\texttt{201 Created} z~nagłówkiem \texttt{Location: /orders/<id>} i~treścią
+\texttt{\{orderId, createdAt, total\}}, a~\texttt{/products} zwraca też \texttt{generatedAt}.
+Strona HTML koszyka u~legacy niesie ukryte pole \texttt{token} z~wartością generowaną przy
+każdym żądaniu, a~u~kandydata stopkę „Shop 2.0”.
 
 \paragraph{Przebieg \texttt{scripts/e2e.sh}.} Skrypt buduje solution w~konfiguracji Release,
 uruchamia stronę legacy (niezmienna globalizacja) i~kandydata (ICU), czeka na
@@ -679,6 +1074,62 @@ reguły o~kolejności listy produktów: kandydat sortuje te same nazwy inaczej, 
 że kolejność nie ma znaczenia, więc różnica musi wyjść jako regresja, której nikt nie
 wyjaśnił.
 
+\paragraph{Kontrakt demonstracji.} \path{samples/contract.yaml} (\repopath{sample-shop-live},
+rewizja 1, system \texttt{SampleShop}, właściciel \texttt{second-line-risk}) porównuje
+nagłówki \texttt{content-type} i~\texttt{location}, a~strony HTML wyłącznie przez ekstrakty.
+Ekstraktory działają na \texttt{GET /cart} i~mają typ \texttt{decimal}:
+\texttt{cartTotal} (\texttt{span.order-total}) i~\texttt{cartLineTotals}
+(\texttt{table.lines td.line-total}, \texttt{all: true}). Normalizacja ignoruje
+\path{response.body.json.generatedAt}, dopuszcza różnicę 0,01
+w~\path{response.body.json.total} i~\path{response.body.json.items[*].lineTotal} oraz
+maskuje znaczniki czasu i~GUID-y. Klauzule:
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5cm} l >{\raggedright\arraybackslash}p{2.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Klauzula & Rodzaj & Pochodzenie, status & Co mówi \\
+\midrule
+\endfirsthead
+\toprule
+Klauzula & Rodzaj & Pochodzenie, status & Co mówi \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\path{TOTAL-NEVER-NEGATIVE} & never & designed, accepted & \texttt{response.body.json.total}
+nigdy poniżej 0 \\
+\path{CART-PAGE-TOTAL-NEVER-NEGATIVE} & never & designed, accepted &
+\texttt{extract.cartTotal} na \texttt{GET /cart} nigdy poniżej 0 \\
+\path{CART-PAGE-SHOWS-TOTAL-AND-LINES} & must & designed, accepted & strona koszyka ma sumę
+i~co najmniej jedną linię \\
+\path{CHECKOUT-NEVER-5XX} & never & incident, accepted & \texttt{POST /checkout} nigdy
+nie odpowiada kodem $\geq 500$ \\
+\path{CREATED-ORDER-HAS-LOCATION} & never & designed, accepted & odpowiedź 201
+na \texttt{POST /checkout} nigdy nie jest bez nagłówka \texttt{location} \\
+\path{NO-CARD-NUMBER-IN-RESPONSES} & never & review, accepted & żadna odpowiedź JSON nie ma
+pola \texttt{cardNumber} na żadnej głębokości \\
+\path{PRODUCTS-PRICED} & must & mined, proposed & każdy produkt z~\texttt{GET /products}
+ma cenę $> 0$; jako \repopath{proposed} o~niczym nie decyduje \\
+\end{xltabular}
+}
+
+\paragraph{Zachowanie skryptu i~diagnostyka.} \finding{Na starcie skrypt usuwa cały katalog
+\repopath{\$E2E\_DIR} (\texttt{rm -rf}) i~tworzy go od nowa}, więc \repopath{E2E\_DIR} nie
+może wskazywać katalogu z~innymi plikami. W~tym katalogu skrypt zapisuje logi
+\path{logs/legacy.log}, \path{logs/candidate.log} i~\path{logs/capture.log} oraz słoiki
+ciasteczek w~\path{jars/}. \repopath{sk} wywołuje jako \texttt{dotnet}
+\path{src/SecondKey.Cli/bin/Release/net10.0/SecondKey.Cli.dll}. Na odpowiedź
+\texttt{/health} każdej strony i~na linię \texttt{sk capture: recording} czeka do 60~s,
+a~na samodzielne zatrzymanie capture do 30~s. Dla każdego żądania wypisuje metodę,
+ścieżkę, słoik i~kod odpowiedzi; kod 500 nie jest porażką skryptu, bo należy do scenariusza.
+Przy porażce skrypt wypisuje \texttt{e2e: <powód>}, np. \texttt{<url> did not answer
+'<wariant>' within 60 s}, \texttt{the capture proxy did not start}, \texttt{the capture did
+not stop after 10 exchanges} albo \texttt{sk compare exited <kod>; the sample must fail (1)},
+a~po nim ostatnie 20 linii każdego logu. Na wyjściu zatrzymuje procesy, które uruchomił.
+Podsumowanie w~\repopath{\$GITHUB\_STEP\_SUMMARY} ma nagłówek „End-to-end verdict on the
+sample shop”, wynik, liczbę wymian i~scenariuszy, tabelę liczebności klas i~liczbę plików
+pakietu.
+
 \paragraph{Co skrypt sprawdza.} Na końcu skrypt w~Pythonie sprawdza, że werdykt zawiera to,
 do czego próbka jest zbudowana:
 
@@ -707,6 +1158,7 @@ się wywracać na pustym koszyku, przedstawione osobie jako poprawka.
 
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/scripts/e2e.sh},
+\path{letsgolegacy.secondkey/scripts/setup.sh},
 \path{letsgolegacy.secondkey/samples/SampleShop/Program.cs},
 \path{letsgolegacy.secondkey/samples/contract.yaml},
 \path{letsgolegacy.secondkey/samples/gate/portcullis.sarif},
@@ -735,8 +1187,9 @@ się wywracać na pustym koszyku, przedstawione osobie jako poprawka.
         pożądana. Klauzula \repopath{violated-both} to defekt, który migracja zachowała; nie
         oblewa przebiegu.
   \item \textbf{Integralność} sprawdza się niezależnie od Second Key: skróty z~\repopath{manifest.json}, walidacja \repopath{verdict.json} i~kontraktu oraz ponowne
-        \repopath{sk compare} na \repopath{run.skrun} z~pakietu, które daje ten sam werdykt,
-        poza \repopath{createdAt} (sekcja~\ref{sec:formaty}).
+        \repopath{sk compare} na \repopath{run.skrun} z~pakietu, które daje ten sam werdykt
+        poza \repopath{createdAt}, o~ile liczy go ten sam build \repopath{sk}, a~wejścia miały
+        przy porównaniu te same nazwy (sekcja~\ref{sec:formaty-pakiet}).
 \end{enumerate}
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},

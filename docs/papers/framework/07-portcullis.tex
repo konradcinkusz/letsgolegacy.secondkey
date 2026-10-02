@@ -1,6 +1,6 @@
 % ============================================================================
 % Rozdział: Portcullis -- bramka na pull request (komponent C5).
-% Źródło: migawka letsgolegacy.portcullis @ 6a018a2 (2026-09-26).
+% Źródło: migawka letsgolegacy.portcullis @ d045f07 (2026-09-26).
 % ============================================================================
 \section{Portcullis --- bramka na pull request}\label{sec:portcullis}
 
@@ -11,7 +11,7 @@ zmienionych przez PR, i~zapisuje je jako SARIF 2.1.0 z~plikiem baseline znanych
 findingów. Repozytorium \repopath{letsgolegacy.portcullis} jest osobnym narzędziem
 z~własnym cyklem wydań; rdzeń Second Key czyta wyłącznie jego wynik.
 
-Rozdział opisuje migawkę z~commitu \repopath{6a018a2} (2026-09-26). W~tym stanie
+Rozdział opisuje migawkę z~commitu \repopath{d045f07} (2026-09-26). W~tym stanie
 \textbf{nic nie zostało wydane}: nie istnieje żaden tag \repopath{v*}, w~nuget.org nie ma
 żadnego pakietu, a~w~GHCR żadnego obrazu. Wersja \repopath{0.1.0}
 w~\repopath{Directory.Build.props} to numer, który poniesie pierwsze wydanie, a~nie wersja,
@@ -29,10 +29,12 @@ Portcullis zamienia takie decyzje w~analyzery Roslyn, więc build zatrzymuje si�
 README odróżnia Portcullis od narzędzi, które odpowiadają na inne pytania: SonarQube
 ocenia jakość kodu, Snyk szuka podatności, CodeClimate mierzy złożoność. NetArchTest
 i~ArchUnitNET sprawdzają zadeklarowaną architekturę, ale jako biblioteki testowe oparte na
-refleksji, które zespół podłącza sam. Portcullis przyjmuje odwrotne założenia: tylko .NET,
-analiza na modelu semantycznym Roslyn (rozwiązuje prawdziwe symbole i~wskazuje linię
-zamiast dopasowywać tekst), dostarczanie jako diagnostyki kompilatora w~czasie builda plus
-bramka merge.
+refleksji, które zespół podłącza sam. Najbliższe porównanie to według README opublikowane
+narzędzie, które także egzekwuje reguły zespołu wobec kodu pisanego przez AI, ale przez
+funkcje sprawdzające w~TypeScript dołączone do ADR, z~założenia niezależne od języka.
+Portcullis przyjmuje odwrotne założenia: tylko .NET, analiza na modelu semantycznym Roslyn
+(rozwiązuje prawdziwe symbole i~wskazuje linię zamiast dopasowywać tekst), dostarczanie jako
+diagnostyki kompilatora w~czasie builda plus bramka merge, a~nie krok sprawdzający w~CLI.
 
 \paragraph{Dwie właściwości, które odróżniają go od lintera.}
 \begin{enumerate}[leftmargin=*]
@@ -57,9 +59,10 @@ pliki:
 \begin{itemize}[leftmargin=*]
   \item \textbf{wejście z~C4} -- pakiet standardów (\repopath{standards/}, repozytorium
         \path{letsgolegacy.secondkey-standards}) jest konsumowany przez agenta
-        migracyjnego i~przez bramkę C5; pakiet cytuje dosłownie cztery identyfikatory
-        reguł migracyjnych \repopath{PORTCULLIS\_MIG\_*} (sekcja~\ref{sec:standardy}),
-        dlatego \repopath{RuleRegistryTests} je przypina;
+        migracyjnego i~przez bramkę C5; lista \repopath{portcullisRules} pakietu wymienia
+        trzynaście identyfikatorów Portcullis (sekcja~\ref{sec:standardy-generator}), w~tym
+        dosłownie cztery identyfikatory reguł migracyjnych \repopath{PORTCULLIS\_MIG\_*} --
+        te \repopath{RuleRegistryTests} przypina, a~pozostałe sprawdza tylko co do formatu;
   \item \textbf{wyjście do C10} -- plik SARIF 2.1 wchodzi do evidence pack (pakietu
         dowodowego) składanego przez C10; polecenie
         \repopath{sk gate} rdzenia streszcza SARIF per reguła i~kończy się kodem 1, gdy
@@ -84,7 +87,9 @@ P1--P15; ich uzasadnienie jest w~\repopath{docs/rules/MIGRATION.md}
 \zrodla{\path{letsgolegacy.portcullis/README.md}, \path{letsgolegacy.portcullis/docs/WORKPLAN.md},
 \path{letsgolegacy.portcullis/CHANGELOG.md}, \path{letsgolegacy.portcullis/docs/rules/MIGRATION.md},
 \path{letsgolegacy.secondkey/README.md}, \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
-\path{letsgolegacy.secondkey/docs/reference-notes.md}, \path{letsgolegacy.secondkey/docs/cli.md}}
+\path{letsgolegacy.secondkey/docs/reference-notes.md}, \path{letsgolegacy.secondkey/docs/cli.md},
+\path{letsgolegacy.secondkey-standards/catalog/pack.json},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/RuleRegistryTests.cs}}
 
 \subsection{Budowa repozytorium i~przebieg skanu}\label{sec:portcullis-budowa}
 
@@ -207,6 +212,20 @@ rozróżniając odziedziczone od nowych:
         strzela”).
 \end{itemize}
 
+SPEC §1.1 zapisuje też egzekwowany kształt tego formatu, sprawdzony na generatorze
+(\path{scripts/build-marketplace.mjs}), niezależnym walidatorze
+(\path{scripts/validate-marketplace.mjs}) i~wygenerowanych artefaktach:
+\repopath{marketplace.json} w~dwóch identycznych kopiach (pola \repopath{name},
+\repopath{metadata.description}, \repopath{metadata.version}, \repopath{owner.name}
+i~niepusta tablica \repopath{plugins[]}, której \repopath{source} zaczyna się od
+\repopath{./}), \repopath{plugin.json} w~dwóch kopiach (\repopath{\$schema} z~dokładnym
+adresem schematu 1.0.0, \repopath{name} i~\repopath{version} równe wpisowi marketplace),
+front matter \repopath{SKILL.md} (\repopath{name} równe nazwie folderu,
+\repopath{description} od 10 do 1024 znaków z~frazą „use when”) oraz jedyny pisany ręcznie
+plik \path{catalog/marketplace.catalog.json}. Format pakuje skille i~agentów ładowanych przez
+asystenta, a~nie pojedyncze, wykonywalne reguły analizy statycznej -- dlatego
+\repopath{ruleId}, \repopath{defaultSeverity} i~\repopath{roslynAnalyzer} są nowe.
+
 \paragraph{Identyfikatory z~podkreśleniami.} Konwencji z~łącznikami nie da się zgłosić
 przez potok Roslyn, którego używa skaner. \repopath{Diagnostic.Create} przyjmuje taki
 identyfikator, ale \repopath{ReportDiagnostic} wewnątrz analyzera odrzuca go wyjątkiem
@@ -296,6 +315,51 @@ Portcullis; \repopath{1} to werdykt. Kod 2 zwracają też: ścieżka skanu, któ
 istniejącym katalogiem (skan, który się nie odbył, nie może dać zielonej bramki), baseline,
 którego nie da się użyć, oraz pliki SARIF lub baseline, których nie da się zapisać.
 
+\paragraph{Wywołanie \texttt{portcullis}.} Narzędzie ma jedno polecenie, \repopath{scan}.
+Ścieżka skanu stoi zaraz po nim, a~flagi idą po ścieżce, w~dowolnej kolejności:
+
+\begin{lstlisting}
+portcullis scan <path> [--provenance-range <commitOrRange>] [--provenance-repo <path>]
+                       [--sarif <file>] [--baseline <file> [--write-baseline]]
+\end{lstlisting}
+
+\begingroup\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Opcja} & \textbf{Działanie} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Opcja} & \textbf{Działanie} \\
+\midrule
+\endhead
+\texttt{--provenance-range <commitOrRange>} & Zawęża bramkę do linii zmienionych w~zakresie (\texttt{gate.scope} \texttt{diff}) i~eskaluje linie przypisane AI; bez niej zakres \texttt{all}. Gdy git nie rozwiąże zakresu, bramka wraca do \texttt{all} i~podaje powód. \\
+\texttt{--provenance-repo <path>} & Repozytorium git, w~którym leży \texttt{<path>} (domyślnie \texttt{<path>}). Względem niego SARIF zapisuje lokalizacje -- także bez \texttt{--provenance-range}. \\
+\texttt{--sarif <file>} & Dodatkowo log SARIF 2.1.0 z~findingami, które liczą się przeciw zmianie; brakujący katalog pliku jest tworzony. \\
+\texttt{--baseline <file>} & Plik czytany przed skanem; findingi z~jego fingerprintami są raportowane, ale nie blokują i~nie trafiają do SARIF. \\
+\texttt{--write-baseline} & Bez wartości; wymaga \texttt{--baseline}. Zapisuje wszystkie findingi skanu do tego pliku (tworząc katalog) zamiast go czytać i~ocenia przebieg względem nowego pliku. \\
+\bottomrule
+\end{xltabular}
+\endgroup
+
+Błąd użycia kończy się kodem 2, komunikatem \texttt{portcullis: <powód>} i~tekstem pomocy na
+stderr: brak polecenia albo polecenie inne niż \repopath{scan}, brak ścieżki, flaga w~miejscu
+ścieżki, dodatkowy argument pozycyjny, nieznana flaga (także literówka), flaga bez wartości,
+\repopath{--write-baseline} bez \repopath{--baseline}. Stdout niesie wyłącznie dokument JSON
+(camelCase, z~wcięciami, z~wypisanymi wartościami \repopath{null}); jest drukowany dopiero po
+zapisaniu baseline i~SARIF, więc przebieg zakończony kodem 2 z~powodu zapisu nie ma go wcale.
+Na stderr trafiają:
+
+\begin{lstlisting}
+portcullis: wrote <N> finding(s) to the baseline '<file>'; this run is judged against it.
+portcullis: warning: <path> could not be read: <error>
+portcullis: warning: <path> is empty or contains only 'null'.
+portcullis: warning: scanning with the built-in default conventions instead.
+portcullis: warning: could not scope the gate to '<range>' — <reason>
+portcullis: warning: falling back to gating on the whole scan (Gate.Scope "all").
+portcullis: note: <N> of the baseline's <M> entries matched no finding (fixed, or changed enough to be a new finding); --write-baseline would drop them.
+\end{lstlisting}
+
 \subsubsection{Interfejs sygnału pochodzenia}
 
 Typy interfejsu są zdefiniowane w~pliku
@@ -371,6 +435,12 @@ Bilans: 6~Expressible (P2, P4, P9, P10, P11, P15), 5~Deferred (P1, P3, P5, P8, P
 P1 i~P5 są rozdzielone (częściowo Expressible) i~tabela SPEC mówi to wprost, zamiast
 wymuszać jeden werdykt.
 
+Werdykt „Expressible” dotyczy zasady, a~nie każdego mechanizmu z~uzasadnienia. Żadna reguła
+z~\repopath{RuleRegistry.All} nie sprawdza sufitu linii \repopath{Program.cs} (P9),
+obecności \repopath{MigrateAsync} (P4) ani referencji pakietów OpenTelemetry i~kodu
+filtrującego trace health checków (P15). Korolarz P2a (\repopath{AddServiceDefaults()}
+wywoływane przez każdą usługę) realizuje reguła P15.
+
 \subsubsection{Co jest findingiem, a~co blokuje}
 
 \begin{itemize}[leftmargin=*]
@@ -400,7 +470,14 @@ wymuszać jeden werdykt.
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Provenance/ProvenanceModels.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/RuleRegistry.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Cli/Program.cs},
-\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/RuleRegistryTests.cs}}
+\path{letsgolegacy.portcullis/src/Portcullis.Cli/ScanCommandOptions.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Findings/BaselineFile.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Configuration/PortcullisConfigFile.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/ObservabilityBuildTimeAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/PersistencePortabilityAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/ProgramManifestLayeringAnalyzer.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/RuleRegistryTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Cli.Tests/ScanCommandOptionsTests.cs}}
 
 \subsection{Reguły zasad architektury i~reguły pokrycia konwencji}\label{sec:portcullis-reguly}
 
@@ -423,19 +500,62 @@ w~zwykłym C\# nic tych ról nie deklaruje; nazwy są konfigurowalne
 \midrule
 \endhead
 \path{PORTCULLIS_P2_KERNEL_LOC_CEILING} & \texttt{error} & Suma linii plików \texttt{*.cs} we wszystkich folderach jądra przekracza sufit (domyślnie 800). & Konwencja \texttt{kernelFolders}, \texttt{kernelLineCeiling}; jedno zgłoszenie w~pierwszej linii największego pliku, komunikat podaje folder, sumę, sufit i~największy plik. \\
-\path{PORTCULLIS_P2_KERNEL_ENTITY_REFERENCE} & \texttt{error} & Plik jądra odwołuje się do typu zadeklarowanego w~folderze encji. & Semantyczny: nazwa wiązana z~typem (albo składowa, lokalna, parametr tego typu), którego lokalizacja w~źródle leży w~\texttt{entityFolders}; raz na typ w~pliku. \\
+\path{PORTCULLIS_P2_KERNEL_ENTITY_REFERENCE} & \texttt{error} & Plik jądra odwołuje się do typu zadeklarowanego w~folderze encji. & Semantyczny: nazwa wiązana z~typem, z~jego konstruktorem (\texttt{new}) albo ze składową, lokalną lub parametrem tego typu, którego lokalizacja w~źródle leży w~\texttt{entityFolders}; raz na typ w~pliku. \\
 \path{PORTCULLIS_P4_ENSURE_CREATED_OUTSIDE_TEST} & \texttt{error} & \texttt{X.Database.EnsureCreated()} lub \texttt{EnsureCreatedAsync()} bez nadrzędnego \texttt{if}, którego warunek wywołuje \texttt{IsInMemory()}. & Składniowy (typy EF Core nie rozwiązują się w~skanie). Strażnik w~stylu wczesnego \texttt{return} nie jest rozpoznawany. \\
 \path{PORTCULLIS_P4_SEED_DATA_IN_MODEL} & \texttt{warning} & Wywołanie \texttt{HasData(...)} w~metodzie \texttt{OnModelCreating}. & Składniowy; komunikat podaje klasę. \\
 \path{PORTCULLIS_P9_CONTROLLER_NO_DBCONTEXT} & \texttt{error} & Kontroler używa typu, którego nazwa kończy się na \texttt{DbContext}. & Składniowy. Kontroler: nazwa klasy kończy się na \texttt{Controller}, atrybut zawiera \texttt{ApiController} albo baza to \texttt{ControllerBase}/\texttt{Controller}. Raz na nazwę typu w~klasie. \\
-\path{PORTCULLIS_P9_ORPHAN_ENTITY} & \texttt{warning} & Encja z~właściwości \texttt{DbSet<T>} klasy dziedziczącej po \texttt{DbContext}, zadeklarowana w~źródle, bez żadnego odwołania poza własnym plikiem. & Semantyczny; sama deklaracja \texttt{DbSet<T>} nie liczy się jako użycie. Zgłoszenie w~deklaracji encji. \\
+\path{PORTCULLIS_P9_ORPHAN_ENTITY} & \texttt{warning} & Encja z~właściwości \texttt{DbSet<T>} klasy, której lista baz zawiera typ o~nazwie dokładnie \texttt{DbContext}, zadeklarowana w~źródle, bez żadnego odwołania poza własnym plikiem. & Kontekst i~właściwość rozpoznawane składniowo, po nazwie: klasa dziedzicząca po innej bazie (np. własnej klasie pośredniej) i~właściwość z~kwalifikowaną nazwą \texttt{DbSet} nie są sprawdzane. Odwołania -- semantycznie; sama deklaracja \texttt{DbSet<T>} nie liczy się jako użycie. Zgłoszenie w~deklaracji encji. \\
 \path{PORTCULLIS_P10_CUSTOM_BASE_CLASS} & \texttt{warning} & Klasa dziedziczy po klasie zadeklarowanej w~skanowanym kodzie. & Semantyczny: baza o~\texttt{TypeKind.Class}, różna od \texttt{object}, z~lokalizacją w~źródle. Bazy nierozwiązane (np. \texttt{ControllerBase} w~skanie CLI) i~bazy z~metadanych są pomijane. \\
 \path{PORTCULLIS_P11_VENDOR_SDK_OUTSIDE_ADAPTER} & \texttt{warning} & Dyrektywa \texttt{using} importuje przestrzeń nazw dostawcy poza adapterem. & Składniowy; dopasowanie na granicy segmentu kropki, bez wielkości liter. Pomijane pliki w~\texttt{adapterFolders} i~pliki punktu wejścia (composition root). \\
-\path{PORTCULLIS_P15_MISSING_SERVICE_DEFAULTS} & \texttt{warning} & Plik punktu wejścia buduje hosta, a~nigdzie nie wywołuje \texttt{AddServiceDefaults()}. & Składniowy: plik o~nazwie z~\texttt{entryPointFileNames}, wywołanie \texttt{CreateBuilder} lub \texttt{CreateApplicationBuilder}; zgłoszenie w~miejscu fabryki. \\
+\path{PORTCULLIS_P15_MISSING_SERVICE_DEFAULTS} & \texttt{warning} & Plik punktu wejścia buduje hosta, a~w~tym samym pliku nie wywołuje \texttt{AddServiceDefaults()}. & Składniowy: plik o~nazwie z~\texttt{entryPointFileNames}, wywołanie \texttt{CreateBuilder} lub \texttt{CreateApplicationBuilder}; wywołania \texttt{AddServiceDefaults()} szuka tylko w~tym pliku; zgłoszenie w~miejscu fabryki. \\
 \path{PORTCULLIS_CONVENTION_UNMATCHED} & \texttt{warning} & Konwencja skonfigurowana jawnie nie pasuje do żadnej ścieżki skanu. & Kategoria \texttt{Meta}; bez lokalizacji, raz na konwencję. \\
 \path{PORTCULLIS_NO_CONVENTION_MATCHED} & \texttt{warning} & Nic nie skonfigurowano i~żadna z~czterech konwencji nie pasuje. & Kategoria \texttt{Meta}; bez lokalizacji, najwyżej raz. \\
 \bottomrule
 \end{xltabular}
 \endgroup
+
+\paragraph{Tytuły i~komunikaty.} Tytuł deskryptora to opis reguły w~SARIF
+(\repopath{shortDescription} i~\repopath{fullDescription}); komunikat to tekst pojedynczego
+findingu. Tabela obejmuje też cztery reguły migracyjne (sekcja~\ref{sec:portcullis-migracja}).
+
+\begingroup\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Identyfikator} & \textbf{Tytuł} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Identyfikator} & \textbf{Tytuł (cd.)} \\
+\midrule
+\endhead
+\path{PORTCULLIS_P2_KERNEL_LOC_CEILING} & \texttt{Shared kernel exceeds its line-count ceiling} \\
+\path{PORTCULLIS_P2_KERNEL_ENTITY_REFERENCE} & \texttt{Shared kernel references a business entity type} \\
+\path{PORTCULLIS_P4_ENSURE_CREATED_OUTSIDE_TEST} & \texttt{Database.EnsureCreated() used without an InMemory guard} \\
+\path{PORTCULLIS_P4_SEED_DATA_IN_MODEL} & \texttt{Seed data supplied via HasData inside OnModelCreating} \\
+\path{PORTCULLIS_P9_CONTROLLER_NO_DBCONTEXT} & \texttt{Controller references a DbContext directly} \\
+\path{PORTCULLIS_P9_ORPHAN_ENTITY} & \texttt{EF Core entity is unreachable from any controller} \\
+\path{PORTCULLIS_P10_CUSTOM_BASE_CLASS} & \texttt{Class inherits from a custom base class} \\
+\path{PORTCULLIS_P11_VENDOR_SDK_OUTSIDE_ADAPTER} & \texttt{Vendor SDK type referenced outside the adapter boundary} \\
+\path{PORTCULLIS_P15_MISSING_SERVICE_DEFAULTS} & \texttt{Service entry point never calls AddServiceDefaults()} \\
+\path{PORTCULLIS_CONVENTION_UNMATCHED} & \texttt{A configured architecture convention matched no files} \\
+\path{PORTCULLIS_NO_CONVENTION_MATCHED} & \texttt{No architecture convention matched anything, so the convention-driven rules checked nothing} \\
+\path{PORTCULLIS_MIG_SYSTEM_WEB} & \texttt{System.Web API used in code that targets modern .NET} \\
+\path{PORTCULLIS_MIG_HTTPCONTEXT_CURRENT} & \texttt{Request state read through System.Web.HttpContext.Current} \\
+\path{PORTCULLIS_MIG_SYNC_OVER_ASYNC} & \texttt{Blocking wait on a task (sync over async)} \\
+\path{PORTCULLIS_MIG_CONFIGURATION_MANAGER} & \texttt{Settings read through the .NET Framework configuration API} \\
+\bottomrule
+\end{xltabular}
+\endgroup
+
+Komunikaty reguł zasad zawierają odwołanie do zasady, np. \texttt{(architecture-standards P9)}.
+Plik w~komunikatach P2, P11 i~P15 to ścieżka, którą dostał kompilator -- w~skanie CLI
+bezwzględna ścieżka na maszynie, która skanowała. Komunikat
+\path{PORTCULLIS_P2_KERNEL_ENTITY_REFERENCE} mówi o~folderze \path{Domain/Entities},
+a~\path{PORTCULLIS_P11_VENDOR_SDK_OUTSIDE_ADAPTER} o~folderze
+\path{Infrastructure/Adapters/Integrations} bez względu na skonfigurowane nazwy, a~komunikat
+\path{PORTCULLIS_NO_CONVENTION_MATCHED} zawsze radzi \repopath{portcullis.json}, także
+w~kanale pakietu analyzerów, gdzie konfiguracją jest \repopath{.globalconfig}
+(sekcja~\ref{sec:portcullis-konfiguracja}).
 
 \paragraph{Szczegóły reguł zasad.}
 \begin{itemize}[leftmargin=*]
@@ -472,7 +592,9 @@ if (context.Database.IsInMemory()) { await context.Database.EnsureCreatedAsync(.
         granicy segmentu (\repopath{Azure} łapie \repopath{Azure.Storage.Blobs}, nie łapie
         \repopath{AzureFoo}).
   \item \textbf{P15.} Plik bez wywołania fabryki hosta (np. zwykłe narzędzie konsolowe)
-        nie jest punktem wejścia usługi i~nie jest sprawdzany.
+        nie jest punktem wejścia usługi i~nie jest sprawdzany. Reguła przegląda tylko
+        drzewo składniowe pliku punktu wejścia: \repopath{AddServiceDefaults()} wywołane
+        w~metodzie z~innego pliku nie jest widoczne i~plik zostaje zgłoszony.
 \end{itemize}
 
 \paragraph{Pokrycie konwencji (\texttt{Meta}).} Każda reguła konwencyjna reaguje na
@@ -498,6 +620,10 @@ niczego. Decyzje:
         liczy się jako spełniona;
   \item o~tym, czy zespół „coś skonfigurował”, decydują tylko klucze tych czterech
         konwencji -- samo ustawienie \repopath{kernelLineCeiling} nie wycisza raportu;
+  \item klucze reguł migracyjnych (\repopath{migrationExemptFolders},
+        \repopath{systemWebAllowedTypes}) nie są sprawdzane: to wyjątki, a~nie konwencje,
+        od których reguły zależą, a~wyjątek, który nie pasuje do żadnego folderu, czyni
+        bramkę surowszą, a~nie pustą;
   \item diagnostyki nie mają lokalizacji; skaner mapuje je na pustą ścieżkę, a~komentarz na
         PR pokazuje je pod nagłówkiem „Repository-wide”.
 \end{itemize}
@@ -511,6 +637,17 @@ niczego. Decyzje:
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/AntiCorruptionEdgeAnalyzer.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/ObservabilityBuildTimeAnalyzer.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/ConventionCoverageAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/SystemWebUsageAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/HttpContextCurrentAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/SyncOverAsyncAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/ConfigurationManagerAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Scanner.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Sarif/SarifReport.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/ConventionCoverageAnalyzerTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/KernelBoundaryAnalyzerTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/ProgramManifestLayeringAnalyzerTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/AntiCorruptionEdgeAnalyzerTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/ObservabilityBuildTimeAnalyzerTests.cs},
 \path{letsgolegacy.portcullis/docs/CONFIGURATION.md}, \path{letsgolegacy.portcullis/docs/MUTATIONS.md}}
 
 \subsection{Reguły migracyjne}\label{sec:portcullis-migracja}
@@ -907,8 +1044,13 @@ skanowana ścieżka; trzeba go podać, gdy skanuje się podkatalog, np. \repopat
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Rozwiązanie zakresu.} \repopath{A..B} i~\repopath{A...B} są porównywane
         wprost jako dwa refy (bez semantyki merge-base dla trzech kropek -- świadome
-        uproszczenie). Pojedynczy commit to zakres od pierwszego rodzica (dla merge'a --
-        linia główna, jak widok PR w~GitHub) albo od pustego drzewa dla commita bez rodzica.
+        uproszczenie). Pojedynczy commit (\texttt{git rev-parse --verify}, rodzice
+        z~\texttt{git rev-list --parents -n 1}) to zakres od pierwszego rodzica (dla
+        merge'a -- linia główna, jak widok PR w~GitHub) albo od pustego drzewa dla commita
+        bez rodzica. Linie, które weszły do merge'a wyłącznie od innego niż pierwszy rodzica
+        i~zostały zachowane bez zmian, nie dostają wtedy żadnego zakresu; obejście --
+        zapytanie o~tę treść na historii drugiego rodzica -- nie jest wykonywane
+        automatycznie.
   \item \textbf{Diff.} \repopath{git diff --no-color -U0 <baza> <czubek>}. Przy
         \repopath{-U0} każdy hunk to dokładnie dodane lub zmienione linie; z~nagłówka
         \repopath{@@ -a,b +start,count @@} powstaje zakres \repopath{start..start+count-1}.
@@ -955,6 +1097,26 @@ Brak sygnału AI & \texttt{human} & 0,7 & \texttt{git-blame-authorship} \\
 Porażka blame albo odczytu commita & \texttt{unknown} & 0,0 & \texttt{no-attribution-signal} \\
 \bottomrule
 \end{xltabular}
+
+Kolejność rozpoznawania decyduje o~wierszu tabeli. Najpierw trailery \texttt{Co-authored-by}:
+pierwszy z~tożsamością narzędzia AI wyznacza narzędzie, a~każdy trailer bez takiej
+tożsamości liczy się jako współautor-człowiek. Gdy żaden nie wskazał narzędzia, liczą się
+nazwane trailery narzędzi (np. \texttt{Made-with: Cursor}), a~na końcu tożsamość autora
+commita. Autor commita nigdy nie jest liczony jako współautor-człowiek: commit człowieka
+z~trailerem narzędzia AI ma źródło \repopath{ai} (metoda \repopath{commit-trailer})
+i~eskaluje, a~\repopath{mixed} wymaga osobnego trailera \texttt{Co-authored-by}
+z~tożsamością człowieka. Sygnatury dwóch z~tych narzędzi w~kodzie klasyfikatora (porównania
+bez wielkości liter):
+\begin{itemize}[leftmargin=*]
+  \item \repopath{github-copilot} -- trailer \texttt{Co-authored-by: Copilot <copilot@github.com>},
+        który dodaje VS Code (zależnie od ustawienia \repopath{git.addAICoAuthor}), nazwa
+        \texttt{copilot}, nazwa zawierająca \texttt{copilot-swe-agent} (konto bota agenta,
+        \texttt{copilot-swe-agent[bot]}) albo adres zawierający
+        \path{copilot@users.noreply.github.com};
+  \item \repopath{cursor} -- adres w~domenie \path{cursor.com} (agent CLI i~SDK dopisuje
+        \texttt{Co-authored-by: Cursor <cursoragent@cursor.com>}), nazwa \texttt{cursor} albo
+        zawierająca \texttt{cursor agent} oraz trailer \texttt{Made-with: Cursor} (agent IDE).
+\end{itemize}
 
 \paragraph{Eskalacja poziomu.} Tylko zakresy \repopath{ai} eskalują, o~jeden stopień:
 \repopath{info} \textrightarrow{} \repopath{warning}, \repopath{warning} \textrightarrow{}
@@ -1050,6 +1212,14 @@ cztery stare błędy \repopath{CONTROLLER\_NO\_DBCONTEXT} poza diffem nie. Cały
 z~\repopath{Portcullis.CiComment} wyrenderował linię „Blocking this PR — 5 errors within
 this PR's own changed lines.” i~zakończył się kodem 1.
 
+Ponowiony scenariusz 2b (\texttt{-{}-provenance-range} \texttt{B..C}) nadal blokuje
+(\repopath{blocked: true}, \repopath{blockingErrorCount: 1}) -- eskalacja i~bramka się
+składają. Testy po M5A: 26 w~\path{Portcullis.CiComment.Tests} i~69
+w~\path{Portcullis.Engine.Tests}. Ta sama zmiana pierwszy raz przekazała zakres
+w~\repopath{portcullis-pr-check.yml} i~dodała tam \repopath{fetch-depth: 0}: eskalacja
+istniała i~była testowana od M4, ale wdrożony workflow nigdy nie podał jej zakresu, więc
+działała tylko w~ręcznych sesjach weryfikacji.
+
 \zrodla{\path{letsgolegacy.portcullis/docs/DIFF-GATE.md}, \path{letsgolegacy.portcullis/docs/SPEC.md},
 \path{letsgolegacy.portcullis/docs/M4-INTEGRATION.md}, \path{letsgolegacy.portcullis/docs/FINDINGS.md},
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Scanner.cs},
@@ -1061,7 +1231,11 @@ this PR's own changed lines.” i~zakończył się kodem 1.
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Provenance/AiToolClassifier.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Provenance/ProvenanceModels.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Cli/Program.cs},
-\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerGateTests.cs}}
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerGateTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerProvenanceTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Provenance/GitProvenanceProviderTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Provenance/GitOutputParsersTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Provenance/ChangedLinesTests.cs}}
 
 \subsection{Baseline znanych findingów i~wyciszenia}\label{sec:portcullis-baseline}
 
@@ -1198,7 +1372,10 @@ Konwencję wyciszania z~uzasadnieniem definiuje pakiet standardów C4
 \path{letsgolegacy.portcullis/src/Portcullis.Cli/Program.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Cli/ScanCommandOptions.cs},
 \path{letsgolegacy.portcullis/action.yml},
-\path{letsgolegacy.secondkey-standards/catalog/skill.template.md}}
+\path{letsgolegacy.secondkey-standards/catalog/skill.template.md},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Findings/FindingFingerprintTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Findings/BaselineFileTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerBaselineTests.cs}}
 
 \subsection{Konfiguracja}\label{sec:portcullis-konfiguracja}
 
@@ -1254,6 +1431,14 @@ ze starszą).
 }
 \end{lstlisting}
 
+Akcja i~przykłady GitLab, Azure DevOps i~kontenera skanują katalog \repopath{src}
+repozytorium (w~akcji: \texttt{\$GITHUB\_WORKSPACE/<path>}, wejście \repopath{path},
+domyślnie \repopath{src}), więc przy tych ustawieniach plik leży w~\path{src/portcullis.json},
+a~nie w~katalogu głównym repozytorium -- tam nie zostanie odczytany. Zespół, który używa obu
+kanałów (pakietu analyzerów w~buildzie i~CLI lub akcji na PR), zapisuje te same wartości
+w~dwóch plikach: \repopath{portcullis.json} w~katalogu skanu i~\repopath{.globalconfig};
+każdy kanał czyta tylko swój.
+
 \paragraph{\texttt{.globalconfig}.} Te same wartości jako płaskie klucze (pełna lista
 w~tabeli poniżej; przykład z~dokumentacji ustawia wszystkie osiem). To opcje
 \emph{globalne}: wartość w~zwykłej sekcji \repopath{[*.cs]} jest opcją per plik i~nie
@@ -1298,11 +1483,21 @@ portcullis_migration_exempt_folders = Legacy
         \repopath{Azure} łapie \repopath{using Azure;} i~\repopath{using Azure.Storage.Blobs;},
         nie łapie \repopath{using AzureFoo;}; wpisy wielosegmentowe
         (\repopath{Google.Cloud}) działają.
+  \item \textbf{Nazwy plików punktu wejścia}: porównywana jest sama nazwa pliku (ostatni
+        segment ścieżki), bez wielkości liter.
   \item \textbf{Ścieżki względem katalogu skanu}: checkout w~\repopath{\textasciitilde{}/Domain/}
         nie czyni wszystkich plików „encjami”, a~ścieżka workspace CI z~\repopath{Integrations}
         nie zwalnia całego drzewa z~reguły dostawców. Pakiet analyzerów nie zna katalogu
         skanu (kompilator podaje ścieżki bezwzględne), więc dopasowuje pełną ścieżkę, chyba
-        że ustawi się \repopath{portcullis\_path\_root}.
+        że ustawi się \repopath{portcullis\_path\_root}. Katalog jest odcinany tylko na
+        granicy separatora (\path{/repo/app} nie obcina \path{/repo/application/Foo.cs}),
+        a~ścieżka spoza niego zostaje bez zmian. Przykład dla pakietu w~CI:
+        \texttt{portcullis\_path\_root = /home/runner/work/my-repo/my-repo}; według
+        dokumentacji to rzadko potrzebna furtka, bo katalogi projektów rzadko kolidują
+        z~nazwami konwencji. Prefiks \repopath{portcullis\_} jest celowy: klucze
+        \repopath{.globalconfig} to płaska przestrzeń wspólna ze wszystkimi analyzerami
+        w~buildzie konsumenta, a~nazwa klucza -- jak identyfikator diagnostyki -- staje się
+        kontraktem z~chwilą wpisania jej do konfiguracji.
   \item \textbf{Konfiguracja zastępuje, nie rozszerza}: lista z~jednym elementem
         \repopath{Common} oznacza tylko \repopath{Common}; model addytywny uniemożliwiłby
         zawężenie konwencji. Jawnie pusta lista (w~JSON \repopath{kernelFolders} równe
@@ -1310,14 +1505,20 @@ portcullis_migration_exempt_folders = Legacy
         tłumienia ich diagnostyk, a~pominięcie klucza przywraca wartości domyślne.
   \item \textbf{Sufit linii}: wartość niebędąca dodatnią liczbą całkowitą przechodzi na
         domyślną (analyzer rzucający wyjątek dawałby \repopath{AD0001} i~wyłączał pozostałe
-        reguły) i~nie liczy się jako „skonfigurowana”.
+        reguły) i~nie liczy się jako „skonfigurowana”. W~\repopath{portcullis.json}
+        \repopath{kernelLineCeiling} jest liczbą: liczba niedodatnia przechodzi na domyślną
+        tylko w~tym kluczu, ale wartość innego typu JSON (np. łańcuch) psuje odczyt całego
+        pliku -- skan idzie wtedy na wartościach domyślnych wszystkich kluczy i~ustawia
+        \repopath{configuration.error}.
 \end{itemize}
 
 \paragraph{Poziom reguł.} W~kanale pakietu analyzerów poziom zmienia się zwykłą drogą
 Roslyn (\repopath{dotnet\_diagnostic.<ID>.severity}), także dla diagnostyk pokrycia.
 \textbf{W~kanale CLI, akcji i~kontenera to nie działa}: \repopath{portcullis scan} buduje
 własną kompilację i~raportuje każdą diagnostykę na jej \repopath{defaultSeverity}; nie da
-się z~CLI ani podnieść reguły do blokującej, ani jej wyciszyć.
+się z~CLI ani podnieść reguły do blokującej, ani jej wyciszyć. Diagnostyki, których poziom
+domyślny różni się od wagi w~standardach migracji, zestawia
+sekcja~\ref{sec:standardy-wagi-kanaly}.
 
 \paragraph{Co zostało użyte.} Wynik skanu ma obiekt \repopath{configuration}
 (\repopath{path} -- \repopath{null}, gdy pliku nie ma; \repopath{error} -- gdy plik jest, ale
@@ -1334,7 +1535,10 @@ można przedefiniować, czym jest wyciek typu dostawcy), zestawu reguł
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/PortcullisConventions.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/PathConventions.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Configuration/PortcullisConfigFile.cs},
-\path{letsgolegacy.portcullis/src/Portcullis.Rules/PACKAGE-README.md}}
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/PACKAGE-README.md},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Scanner.cs}, \path{letsgolegacy.portcullis/action.yml},
+\path{letsgolegacy.portcullis/docs/TUTORIAL.md},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Configuration/PortcullisConfigFileTests.cs}}
 
 \subsection{SARIF 2.1.0}\label{sec:portcullis-sarif}
 
@@ -1480,7 +1684,8 @@ nieliczbowe \repopath{--pr} to błąd użycia (kod 2). Wynik skanu musi mieć
 \repopath{violations} i~\repopath{summary}; nieczytelny albo niekompletny
 \repopath{--current} kończy się kodem 2, a~nieczytelny \repopath{--previous} -- ostrzeżeniem
 i~komentarzem bez diffu (na pierwszym pushu PR pamięci poprzedniego skanu nie ma, więc to
-zwykła ścieżka).
+zwykła ścieżka). \repopath{--output <path>} zapisuje do pliku ten sam Markdown, który
+narzędzie zawsze drukuje na stdout. Flaga bez wartości to również błąd użycia.
 
 \paragraph{Treść komentarza.}
 \begin{itemize}[leftmargin=*]
@@ -1502,6 +1707,31 @@ zwykła ścieżka).
 Pochodzenie AI nigdy nie pojawia się w~komentarzu: formatter nie widzi tego sygnału, widzi
 tylko jego skutek w~poziomie naruszenia.
 
+Adnotacja bramki ma siedem postaci (liczba pojedyncza albo mnoga zależnie od liczby; bez
+adnotacji zostaje zakres \texttt{all} bez zaakceptowanych błędów i~zakres \texttt{diff} bez
+błędów):
+
+\begingroup\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+\textbf{Stan bramki} & \textbf{Adnotacja} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Stan bramki} & \textbf{Adnotacja (cd.)} \\
+\midrule
+\endhead
+zakres zdegradowany & „Could not scope this gate to the PR's own changes — \emph{powód} Falling back to gating on the whole scan, so pre-existing violations count here.”; gdy baseline coś zaakceptował, zamiast kropki „, except the N the baseline accepts.” \\
+\texttt{all}, baseline zaakceptował błąd, blokuje & „Blocking — N errors not in the baseline; M more are accepted by it.” \\
+\texttt{all}, baseline zaakceptował błąd, nie blokuje & „Not blocking — the M errors above are accepted by the baseline.” \\
+\texttt{diff}, blokuje & „Blocking this PR — N errors within this PR's own changed lines.”, przy zaakceptowanych także „M more there are accepted by the baseline.” \\
+\texttt{diff}, nie blokuje, błędy poza diffem & „Not blocking this PR — the N errors above are outside this PR's own changed lines.” \\
+\texttt{diff}, nie blokuje, wszystkie zaakceptowane & „Not blocking this PR — the N errors above are accepted by the baseline.” \\
+\texttt{diff}, nie blokuje, oba powody & „Not blocking this PR — of the N errors above, A are accepted by the baseline and O are outside this PR's own changed lines.” \\
+\bottomrule
+\end{xltabular}
+\endgroup
+
 \paragraph{Diff między pushami.} Tożsamość naruszenia to pięć pól kontraktu:
 \repopath{ruleId}, \repopath{filePath}, \repopath{line}, \repopath{message},
 \repopath{severity}. Naruszenie, któremu zmienił się komunikat albo poziom, liczy się jako
@@ -1509,7 +1739,9 @@ jedno rozwiązane i~jedno nowe -- tak w~M4 pięć eskalowanych ostrzeżeń P10 p
 „rozwiązane” na poziomie \repopath{warning} i~„nowe” na \repopath{error}.
 \repopath{fingerprint} i~\repopath{baselined} celowo nie wchodzą do tożsamości: poprzedni
 skan pochodzi z~pamięci podręcznej, być może z~silnika sprzed fingerprintów, a~baseline
-może się zmienić między pushami.
+może się zmienić między pushami. Ponieważ \repopath{line} należy do tożsamości, naruszenie
+przesunięte przez edycję powyżej też pojawia się jako rozwiązane i~nowe -- inaczej niż
+fingerprint baseline, który numeru linii nie zawiera (sekcja~\ref{sec:portcullis-baseline}).
 
 \paragraph{Publikacja.} Kontekst pochodzi ze zmiennych środowiskowych GitHub Actions.
 Token i~repozytorium to \repopath{GITHUB\_TOKEN} oraz \repopath{GITHUB\_REPOSITORY}. Numer
@@ -1517,9 +1749,9 @@ PR pochodzi z~opcji \repopath{--pr} albo z~pola \repopath{pull\_request.number} 
 zdarzenia wskazanym przez \repopath{GITHUB\_EVENT\_PATH}. Adres API to
 \repopath{GITHUB\_API\_URL}, a~bez tej zmiennej \repopath{https://api.github.com/}. Bez pełnego
 kontekstu narzędzie tylko renderuje na stdout i~pisze „skipping comment publish” -- to tryb
-lokalnego suchego przebiegu. Publikacja używa REST API komentarzy issue: lista komentarzy
-PR (\repopath{per\_page=100}), wyszukanie znacznika, \repopath{PATCH} istniejącego albo
-\repopath{POST} nowego. Porażka publikacji (np. token tylko do odczytu w~PR z~forka, 403)
+lokalnego suchego przebiegu. Publikacja używa REST API komentarzy issue: lista komentarzy PR
+(jedno zapytanie z~\repopath{per\_page=100}, bez kolejnych stron), wyszukanie pierwszego
+komentarza ze znacznikiem, \repopath{PATCH} istniejącego albo \repopath{POST} nowego. Porażka publikacji (np. token tylko do odczytu w~PR z~forka, 403)
 daje ostrzeżenie i~nie zmienia werdyktu; propaguje się tylko anulowanie. Kod wyjścia:
 1, gdy bramka blokuje, 0 w~przeciwnym razie, 2 przy błędzie użycia, nieczytelnym
 \repopath{--current} albo błędzie renderowania.
@@ -1533,7 +1765,13 @@ daje ostrzeżenie i~nie zmienia werdyktu; propaguje się tylko anulowanie. Kod w
 \path{letsgolegacy.portcullis/src/Portcullis.CiComment/GitHubPublishContext.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.CiComment/GitHubPullRequestCommentClient.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.CiComment/Portcullis.CiComment.csproj},
-\path{letsgolegacy.portcullis/docs/M4-INTEGRATION.md}}
+\path{letsgolegacy.portcullis/src/Portcullis.CiComment/StickyCommentPublisher.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Findings/FindingFingerprint.cs},
+\path{letsgolegacy.portcullis/docs/M4-INTEGRATION.md}, \path{letsgolegacy.portcullis/docs/SPEC.md},
+\path{letsgolegacy.portcullis/tests/Portcullis.CiComment.Tests/CliOptionsTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.CiComment.Tests/CommentFormatterTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.CiComment.Tests/ViolationDiffTests.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.CiComment.Tests/StickyCommentPublisherTests.cs}}
 
 \subsection{Dystrybucja i~wersjonowanie}\label{sec:portcullis-dystrybucja}
 
@@ -1560,7 +1798,8 @@ maszynie programisty przed pushem. Dlatego reguły mają osobny projekt
 \repopath{netstandard2.0}: analyzer jest ładowany przez proces kompilatora, więc musi się
 załadować zarówno w~MSBuild .NET Framework (Visual Studio), jak i~w~\repopath{dotnet build}.
 Analyzer zbudowany na \repopath{net8.0} czy \repopath{net10.0} nie zgłasza błędu -- po cichu
-nie działa w~Visual Studio.
+nie działa w~Visual Studio. Według źródeł ten kształt kanału naśladuje
+\repopath{Roslynator.Analyzers}.
 
 \begingroup\small
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.0cm} >{\raggedright\arraybackslash}X@{}}
@@ -1588,7 +1827,8 @@ akcjami JavaScript pobierającymi binarkę. Obraz kontenera jest publikowany mim
 GitLab CI, Jenkinsa, Woodpeckera czy \repopath{docker run} w~Makefile obraz z~git
 i~narzędziem to najmniejsze tarcie. Native AOT odrzucono jako dziś niewykonalne (obsługa
 trimmingu w~Roslyn, \repopath{dotnet/roslyn\#68154}, ładowanie analyzerów pod AOT,
-\repopath{dotnet/runtime\#83355}).
+\repopath{dotnet/runtime\#83355}); najbliższe porównywalne narzędzie oparte na Roslyn,
+\repopath{CSharpier}, od lat chce Native AOT i~go nie ma.
 
 \paragraph{Dwa problemy znalezione przez konsumpcję pakietów.} Oba wyszły dopiero przy
 instalacji spakowanych artefaktów w~jednorazowym projekcie. (1)~Analyzer zbudowany na
@@ -1622,6 +1862,8 @@ CMD ["scan", "/workspace"]
 GitLab nadpisuje \repopath{ENTRYPOINT}, więc tam DLL
 wywołuje się jawnie. Pakiet GHCR powstaje przy pierwszym pushu jako \textbf{prywatny},
 niezależnie od widoczności repozytorium; trzeba go raz upublicznić w~ustawieniach pakietu.
+Obraz niesie etykiety OCI \path{org.opencontainers.image.*}: tytuł, opis, źródło (adres
+repozytorium) i~licencję MIT.
 
 \subsubsection{GitHub Action (\texttt{action.yml})}
 
@@ -1674,6 +1916,51 @@ ustalić), \repopath{result-path} (ścieżka surowego JSON). Kroki akcji:
         \repopath{blocked}.
 \end{enumerate}
 
+Kroki akcji wywołują \repopath{bash} i~\repopath{python3}, więc runner musi je mieć.
+Narzędzia trafiają do \path{$HOME/.dotnet/tools}, dopisanego do \repopath{GITHUB\_PATH},
+a~surowy wynik skanu do \path{$RUNNER_TEMP/portcullis-scan.json} (wyjście
+\repopath{result-path}). Krok egzekwujący przy blokadzie wypisuje
+\texttt{::error title=Portcullis::Blocked — N error-severity violation(s) in scope. See the pull request comment for details.},
+a~bez niej \texttt{Portcullis: not blocked (N error(s) reported, none in scope).}
+
+\paragraph{Sekcja „new / resolved” we własnym workflow.} Akcja nie zachowuje poprzedniego
+skanu. Linię „N new · M resolved since the last push” daje dopiero przechowanie JSON każdego
+skanu między pushami i~podanie go z~powrotem przez \repopath{--previous} -- tak robi
+\repopath{portcullis-pr-check.yml} z~\repopath{actions/cache}. Klucz zapisu zawiera commit
+(zawsze nowy, bo cache nie nadpisuje istniejącego klucza), a~\repopath{restore-keys} wraca do
+ostatniego wpisu tego PR; na pierwszym pushu pliku nie ma i~komentarz powstaje bez diffu:
+
+\begin{lstlisting}
+      - uses: actions/cache/restore@v6
+        with:
+          path: portcullis-last-scan.json
+          key: portcullis-scan-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+          restore-keys: |
+            portcullis-scan-pr-${{ github.event.pull_request.number }}-
+      # the scan writes portcullis-current-scan.json
+      - if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -s portcullis-last-scan.json ]; then
+            portcullis-ci-comment --current portcullis-current-scan.json \
+              --previous portcullis-last-scan.json --pr "${{ github.event.pull_request.number }}"
+          else
+            portcullis-ci-comment --current portcullis-current-scan.json \
+              --pr "${{ github.event.pull_request.number }}"
+          fi
+      - if: always()
+        run: cp portcullis-current-scan.json portcullis-last-scan.json
+      - if: always()
+        uses: actions/cache/save@v6
+        with:
+          path: portcullis-last-scan.json
+          key: portcullis-scan-pr-${{ github.event.pull_request.number }}-${{ github.sha }}
+\end{lstlisting}
+
+W~workflow repozytorium oba narzędzia są uruchamiane przez \repopath{dotnet run} ze źródeł,
+a~krok komentarza jest bramką: kończy się kodem 1, gdy bramka blokuje.
+
 \subsubsection{Wersjonowanie i~wydanie}
 
 Wersje stosują Semantic Versioning, a~CHANGELOG format Keep a~Changelog. Wersja jest jednym
@@ -1703,6 +1990,14 @@ sekret repozytorium \repopath{NUGET\_API\_KEY} (klucz z~nuget.org ograniczony wz
 \repopath{Portcullis.*}, żeby działał dla pakietów, które jeszcze nie istnieją) i~po
 pierwszym pushu obrazu -- upublicznienie pakietu GHCR.
 
+Ręczne uruchomienie (\repopath{workflow\_dispatch}) też sprawdza zgodność wejścia
+\repopath{version} z~\repopath{action.yml}, ale pomija joby publikacji. Bez sekretu
+\repopath{NUGET\_API\_KEY} job \emph{publish-nuget} kończy się błędem „NUGET\_API\_KEY secret
+is not set; nothing was published.” Obraz powstaje przez buildx z~cache GitHub Actions
+(\repopath{type=gha}), a~notyfikacja o~widoczności podaje drogę: \emph{Packages} →
+\emph{letsgolegacy.portcullis} → \emph{Package settings} → \emph{Change visibility}. Wydanie
+GitHub dostaje automatycznie generowane notatki i~pakiety jako załączniki.
+
 \zrodla{\path{letsgolegacy.portcullis/docs/DISTRIBUTION.md}, \path{letsgolegacy.portcullis/action.yml},
 \path{letsgolegacy.portcullis/Dockerfile}, \path{letsgolegacy.portcullis/Directory.Build.props},
 \path{letsgolegacy.portcullis/CONTRIBUTING.md}, \path{letsgolegacy.portcullis/CHANGELOG.md},
@@ -1710,7 +2005,10 @@ pierwszym pushu obrazu -- upublicznienie pakietu GHCR.
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/Portcullis.Rules.csproj},
 \path{letsgolegacy.portcullis/src/Portcullis.Cli/Portcullis.Cli.csproj},
 \path{letsgolegacy.portcullis/src/Portcullis.CiComment/Portcullis.CiComment.csproj},
-\path{letsgolegacy.portcullis/.github/workflows/release.yml}}
+\path{letsgolegacy.portcullis/.github/workflows/release.yml},
+\path{letsgolegacy.portcullis/.github/workflows/portcullis-pr-check.yml},
+\path{letsgolegacy.portcullis/src/Portcullis.Cli/PACKAGE-README.md},
+\path{letsgolegacy.portcullis/src/Portcullis.CiComment/PACKAGE-README.md}}
 
 \subsection{Polityka wersji Roslyn i~analyzer floor}\label{sec:portcullis-roslyn}
 
@@ -1812,7 +2110,11 @@ zerze reguł, pomijanie \repopath{bin} i~\repopath{obj}, pusty wynik zamiast wyj
 nieistniejącej ścieżki), skan repozytorium referencyjnego (156 plików, 0 reguł, 0 naruszeń,
 kod 0 -- przykład z~SPEC §3) i~skan własnego \repopath{src/} (6 plików). JSON porównano
 z~tabelą SPEC pole po polu. Wszystkie 11 wpisów fixture'a zweryfikowano niezależnie na
-źródłach repozytorium referencyjnego.
+źródłach repozytorium referencyjnego. Fixture w~publicznym repozytorium jest zredagowany:
+przed publikacją usunięto dosłowne fragmenty kodu i~prozę o~logice prywatnej aplikacji,
+a~zachowano tożsamość każdego wpisu (identyfikator, mapowanie reguły, nazwę encji,
+\repopath{plik:linia}, werdykt \repopath{roslynCheckable}) -- dokładnie to, co cytują
+BOOTSTRAP, MUTATIONS i~FINDINGS.
 
 Ustalenie sesji: z~trzech kategorii naruszeń, które założenia startowe wskazywały „jako
 minimum”, dwie już się nie odtwarzały -- naprawił je commit sprzed audytu, z~którego
@@ -1854,6 +2156,8 @@ repozytorium.
 15~naruszeń (4~błędy, 11~ostrzeżeń); trzy z~nich to dokładnie wpisy
 \repopath{CONSUMER-003}, \repopath{CONSUMER-005} i~\repopath{CONSUMER-006}
 (\path{PORTCULLIS_P9_ORPHAN_ENTITY}), 4~błędy to \path{PORTCULLIS_P9_CONTROLLER_NO_DBCONTEXT}.
+Zero zgłoszeń P2 to wynik zgodny, a~nie luka: folder jądra liczy 542 linie, poniżej sufitu
+800, i~nie odwołuje się do żadnego typu z~\repopath{Domain}.
 Z~pochodzeniem od pierwszego commita do \repopath{HEAD}: 9~błędów, 6~ostrzeżeń -- wszystkie
 5~ostrzeżeń \path{PORTCULLIS_P10_CUSTOM_BASE_CLASS} (klasy klienta web) eskalowały.
 Sprawdzono ręcznie przez \repopath{git blame} i~\repopath{git log}: jeden eskalowany plik
@@ -1876,7 +2180,10 @@ sprawdza, czy cały łańcuch -- reguły, eskalacja pochodzenia i~bramka CI -- d
 decyzję o~merge'u dla realistycznych kształtów PR. Dwa źródła dowodu: migawka repozytorium
 referencyjnego (156 plików, 6~reguł, 4~błędy, 14~ostrzeżeń: 4~\repopath{CONTROLLER\_NO\_DBCONTEXT},
 6~\repopath{ORPHAN\_ENTITY}, 5~\repopath{CUSTOM\_BASE\_CLASS}, 3~\repopath{VENDOR\_SDK\_OUTSIDE\_ADAPTER},
-zero P4 i~P15) oraz jednorazowe repozytorium robocze z~pięcioma commitami, każdy izolujący
+zero P4 i~P15 -- wynik zgodny: każda z~siedmiu usług wywołuje \repopath{AddServiceDefaults()}
+w~\repopath{Program.cs}, a~pomocnik bazy danych wywołuje \repopath{EnsureCreatedAsync}
+tylko w~strażniku \repopath{IsInMemory()}) oraz jednorazowe repozytorium robocze z~pięcioma
+commitami, każdy izolujący
 jedno zachowanie.
 
 \begingroup\small
@@ -1916,7 +2223,8 @@ zniszczyłaby fixture, z~którego korzystają wszystkie etapy.
 \path{letsgolegacy.portcullis/docs/DIFF-GATE.md}, \path{letsgolegacy.portcullis/CHANGELOG.md},
 \path{letsgolegacy.portcullis/fixtures/consumer-violations.json},
 \path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerTests.cs},
-\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerProvenanceTests.cs}}
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/ScannerProvenanceTests.cs},
+\path{letsgolegacy.portcullis/docs/MUTATIONS.md}}
 
 \subsection{Tutorial: procedura wdrożenia}\label{sec:portcullis-tutorial}
 
@@ -1926,7 +2234,9 @@ tagu \repopath{v*} każde \repopath{dotnet add package} i~\repopath{dotnet tool 
 kończy się „package not found”; działa ścieżka ze źródeł (krok~7). Poza przykładami
 z~kontenerem każde polecenie tutoriala uruchomiono przed zapisaniem.
 
-\paragraph{Krok 1. Wybór ścieżki.} Ścieżki się składają: większość zespołów używa pakietu
+\subsubsection{Krok 1. Wybór ścieżki}
+
+Ścieżki się składają: większość zespołów używa pakietu
 analyzerów do szybkiej informacji lokalnej i~akcji jako bramki.
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{5.2cm} l@{}}
@@ -1945,7 +2255,9 @@ Rozpoznanie przed decyzją & lokalne \texttt{portcullis scan} & jedno polecenie 
 \bottomrule
 \end{xltabular}
 
-\paragraph{Krok 2. Pakiet analyzerów.} \repopath{dotnet add package Portcullis.Analyzers}
+\subsubsection{Krok 2. Pakiet analyzerów}
+
+\repopath{dotnet add package Portcullis.Analyzers}
 wystarcza: przy następnym \repopath{dotnet build} naruszenia są zwykłymi diagnostykami
 kompilatora, np.:
 
@@ -1973,7 +2285,9 @@ zmiany kodu):
 Ta ścieżka nie ma zawężenia do diffu: każde naruszenie w~każdym pliku przy każdym buildzie
 (zob. krok~4).
 
-\paragraph{Krok 3. Bramka na pull request.} \emph{GitHub Actions} -- kompletna bramka
+\subsubsection{Krok 3. Bramka na pull request}
+
+\emph{GitHub Actions} -- kompletna bramka
 (wejścia i~wyjścia akcji: sekcja~\ref{sec:portcullis-dystrybucja}):
 
 \begin{lstlisting}
@@ -2000,7 +2314,7 @@ jobs:
 \repopath{fetch-depth: 0} nie jest opcjonalne: płytki klon nie zawiera commita bazowego PR,
 więc zawężenie do diffu nie może się odbyć; akcja wypisuje wtedy \repopath{::warning::}
 i~przechodzi na całe drzewo. SARIF do code scanning wymaga dziś własnego workflow z~CLI
-i~\repopath{github/codeql-action/upload-sarif} (sekcja~\ref{sec:portcullis-ci}). Wyjścia
+i~\repopath{github/codeql-action/upload-sarif} (krok~4a, sekcja~\ref{sec:portcullis-tutorial-sarif}). Wyjścia
 akcji pozwalają reagować w~kolejnych krokach:
 
 \begin{lstlisting}
@@ -2058,19 +2372,58 @@ docker run --rm -v "$PWD:/workspace" ghcr.io/konradcinkusz/letsgolegacy.portcull
   scan /workspace/src --provenance-range "$BASE..HEAD" --provenance-repo /workspace
 \end{lstlisting}
 
-\paragraph{Krok 4. Wdrożenie na kodzie z~istniejącymi naruszeniami.} Według tutoriala tu
+\subsubsection{Krok 3a. Konwencje: gdzie reguły mają patrzeć}\label{sec:portcullis-tutorial-konwencje}
+
+Reguły zasad rozpoznają jądro, encje, adaptery i~punkt wejścia po nazwach folderów i~plików
+(sekcja~\ref{sec:portcullis-konfiguracja}). Gdy repozytorium używa innych nazw niż
+domyślne, reguły P2 i~P15 nie oceniają niczego, a~wyjątek adaptera w~P11 nie obejmuje
+własnych adapterów; diagnostyki pokrycia to zgłaszają, ale same nie blokują. Przed
+włączeniem bramki:
+\begin{enumerate}[leftmargin=*]
+  \item Uruchom \repopath{portcullis scan} na katalogu, który będzie skanować bramka
+        (w~akcji: wejście \repopath{path}, domyślnie \repopath{src}).
+  \item Sprawdź wynik. \path{PORTCULLIS_NO_CONVENTION_MATCHED} -- nic nie skonfigurowano
+        i~żadna konwencja nie pasuje, więc reguły konwencyjne nic nie oceniły.
+        \path{PORTCULLIS_CONVENTION_UNMATCHED} -- skonfigurowana nazwa nic nie dopasowała
+        (zwykle literówka albo przemianowany folder).
+  \item Zapisz nazwy własnego układu: dla CLI, akcji i~kontenera -- \repopath{portcullis.json}
+        w~katalogu skanu (nie wyżej: plik nie jest szukany w~górę drzewa); dla pakietu
+        analyzerów -- \repopath{.globalconfig} albo \repopath{.editorconfig}
+        z~\repopath{is\_global = true}. Przy obu kanałach -- oba pliki z~tymi samymi
+        wartościami.
+  \item Ustaw tylko klucze, które się różnią: pozostałe zachowują wartości domyślne. Lista
+        zastępuje domyślną, a~jawnie pusta lista mówi „tego projektu to nie dotyczy”.
+  \item Uruchom skan ponownie: \repopath{configuration.path} ma wskazywać plik,
+        \repopath{configuration.error} ma być \repopath{null}, a~diagnostyki pokrycia mają
+        zniknąć. Zepsuty plik nie wyłącza bramki, ale skan idzie wtedy na wartościach
+        domyślnych, a~CLI ostrzega na stderr.
+\end{enumerate}
+
+\subsubsection{Krok 4. Wdrożenie na kodzie z~istniejącymi naruszeniami}
+
+Według tutoriala tu
 umiera większość wdrożeń bramek architektury: bramka blokująca na całym długu blokuje każdy
 PR i~w~ciągu tygodnia ktoś ją wyłącza. Trzy niezależne odpowiedzi, które się składają:
 \begin{enumerate}[leftmargin=*]
   \item \textbf{Zawężenie do diffu} (domyślnie w~akcji) -- wszystko jest raportowane,
         blokuje tylko to, co w~zmienionych liniach. Dług jest widoczny w~każdym PR, ale nie
-        jest niczyim alarmem, i~maleje w~miarę dotykania plików.
+        jest niczyim alarmem, i~maleje w~miarę dotykania plików. Prawdziwy przebieg na
+        repozytorium z~istniejącym błędem, w~którym PR zmienił jeden niezwiązany plik:
+\begin{lstlisting}
+summary: { errorCount: 1, warningCount: 2, infoCount: 0 }
+gate:    { blocked: false, scope: "diff", blockingErrorCount: 0 }
+exit 0
+\end{lstlisting}
+        Komentarz mówi wtedy: „Not blocking this PR — the 1 error above is outside this PR's
+        own changed lines.”
   \item \textbf{Stopniowe zaostrzanie w~\texttt{.editorconfig}} -- per reguła i~per
         ścieżka (kanał pakietu analyzerów). Sprawdzono: podniesienie
         \repopath{ORPHAN\_ENTITY} do \repopath{error} zepsuło przechodzący build, a~ustawienie
         \repopath{CONTROLLER\_NO\_DBCONTEXT} na \repopath{none} usunęło błąd. Rozsądny plan:
         pierwszego dnia wszystko na \repopath{suggestion}, potem po jednej regule --
-        naprawa, \repopath{warning}, \repopath{error}; każdy krok to jedna linia.
+        naprawa, \repopath{warning}, \repopath{error}; każdy krok to jedna linia. Skan CLI,
+        akcji i~kontenera tych nadpisań nie stosuje
+        (sekcja~\ref{sec:portcullis-konfiguracja}), więc tam działają tylko punkty 1 i~3.
   \item \textbf{Baseline} -- raz \repopath{--write-baseline}, commit pliku, potem
         \repopath{--baseline} w~każdym skanie (sekcja~\ref{sec:portcullis-baseline}).
 \end{enumerate}
@@ -2098,7 +2451,73 @@ dotnet_diagnostic.PORTCULLIS_P9_CONTROLLER_NO_DBCONTEXT.severity = none
 portcullis scan ./src --baseline portcullis-baseline.json --write-baseline
 \end{lstlisting}
 
-\paragraph{Krok 5. Odczyt wyniku.} \repopath{summary} to to, co \textbf{znaleziono};
+\subsubsection{Krok 4a. SARIF w~GitHub code scanning}\label{sec:portcullis-tutorial-sarif}
+
+Akcja nie przyjmuje jeszcze \repopath{--sarif} ani \repopath{--baseline}, więc SARIF
+publikuje osobny workflow, który wywołuje CLI. Tak robi to repozytorium na własnych PR
+(\path{.github/workflows/portcullis-sarif.yml}, skrót bez kroku podsumowania):
+
+\begin{lstlisting}
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  sarif:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+      - run: dotnet build src/Portcullis.Cli --configuration Release
+      - env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set +e
+          dotnet run --no-build --configuration Release --project src/Portcullis.Cli -- \
+            scan "$GITHUB_WORKSPACE/src" \
+            --provenance-range "$BASE_SHA..$HEAD_SHA" \
+            --provenance-repo "$GITHUB_WORKSPACE" \
+            --baseline "$GITHUB_WORKSPACE/portcullis-baseline.json" \
+            --sarif portcullis.sarif \
+            > portcullis-scan.json
+          scan_exit=$?
+          set -e
+          if [ "$scan_exit" -gt 1 ] || [ ! -s portcullis.sarif ] || [ ! -s portcullis-scan.json ]; then
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: portcullis-sarif
+          path: |
+            portcullis.sarif
+            portcullis-scan.json
+      - if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: portcullis.sarif
+          category: portcullis
+\end{lstlisting}
+
+Workflow raportuje i~nigdy nie blokuje: kod 1 (bramka blokuje) jest tylko zapisywany, a~job
+zawodzi przy kodzie większym niż 1 albo braku SARIF lub JSON. Upload jest pomijany dla PR
+z~forka (token tylko do odczytu); artefakt powstaje mimo to. Bramka zostaje w~osobnym
+workflow, bo tylko job SARIF potrzebuje \repopath{security-events: write}. Workflow podaje
+\repopath{--baseline}, więc plik z~kroku~4 musi być zatwierdzony -- brak pliku to kod 2
+i~błąd joba; bez tej flagi SARIF obejmuje wszystkie findingi na zmienionych liniach.
+W~repozytorium konsumenta budowanie i~\repopath{dotnet run} zastępuje zainstalowane narzędzie
+\repopath{portcullis} (\texttt{dotnet tool install -g Portcullis.Cli}, jak w~przykładzie
+Azure DevOps); do pierwszego wydania działa tylko ścieżka ze źródeł (krok~7).
+
+\subsubsection{Krok 5. Odczyt wyniku}
+
+\repopath{summary} to to, co \textbf{znaleziono};
 \repopath{gate} to to, co \textbf{blokuje}; różnica to istniejący dług. Pełny schemat --
 sekcja~\ref{sec:portcullis-spec}. Kody wyjścia: 0 -- nie blokuje, 1 -- blokuje, 2 -- błędne
 użycie; tylko 2 oznacza awarię Portcullis, 1 to werdykt.
@@ -2116,7 +2535,7 @@ użycie; tylko 2 oznacza awarię Portcullis, 1 to werdykt.
 }
 \end{lstlisting}
 
-\paragraph{Krok 6. Rozwiązywanie problemów.}
+\subsubsection{Krok 6. Rozwiązywanie problemów}
 
 \begingroup\small
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.6cm} >{\raggedright\arraybackslash}X@{}}
@@ -2134,12 +2553,22 @@ Pakiet się instaluje, ale diagnostyk nie ma & Sprawdź, czy DLL leży w~\texttt
 \texttt{warning CS9057: ... references version 4.x of the compiler, which is newer} & Roslyn SDK jest starszy niż ten, na którym zbudowano Portcullis. \texttt{Portcullis.Analyzers} celuje w~Roslyn 4.8 (wersja SDK .NET 8) właśnie po to, żeby tego uniknąć; objaw oznacza SDK starszy niż .NET 8. \\
 \texttt{docker pull} obrazu GHCR zwraca „unauthorized” & Pakiet GHCR powstaje przy pierwszym pushu jako prywatny, niezależnie od widoczności repozytorium; trzeba go raz upublicznić w~ustawieniach pakietu. \\
 Reguły nie strzelają na kodzie, który na pewno jest zły & Portcullis parsuje źródła bezpośrednio, nie przez MSBuild, więc typ z~pakietu NuGet lub innego projektu się nie rozwiązuje; część reguł na tym polega, inne są przez to stępione (README, „Honest limits”). \\
-Reguła strzela na poprawnym kodzie & To błąd do zgłoszenia, nie do obchodzenia -- hałaśliwa bramka jest gorsza niż brakująca reguła. Wycisz ją w~\texttt{.editorconfig} (krok~4) i~otwórz issue z~fragmentem kodu. \\
+Reguła strzela na poprawnym kodzie & To błąd do zgłoszenia, nie do obchodzenia -- hałaśliwa bramka jest gorsza niż brakująca reguła. Wycisz ją w~\texttt{.editorconfig} (krok~4) i~otwórz issue z~fragmentem kodu. Wyciszenie działa tylko w~kanale pakietu analyzerów: skan CLI, akcji i~kontenera nadpisań \texttt{dotnet\_diagnostic.*.severity} nie stosuje, więc w~bramce finding akceptuje baseline albo inna droga z~listy wyciszeń (sekcja~\ref{sec:portcullis-baseline}). \\
+\texttt{portcullis: '<path>' is not a directory that exists — nothing was scanned.} (kod 2) & Ścieżka skanu nie istnieje albo nie jest katalogiem; w~akcji wejście \texttt{path} jest względne wobec katalogu głównego repozytorium. Skan się nie odbył, więc bramka nie jest zielona. \\
+\texttt{portcullis: the baseline file '...' does not exist. ...} (kod 2) & Zapisz baseline raz z~\texttt{--write-baseline} i~zatwierdź plik albo usuń \texttt{--baseline}. Inne komunikaty o~baseline (niepoprawny JSON, inna \texttt{schemaVersion} lub \texttt{fingerprintVersion}, brak tablicy \texttt{findings}, wpis bez fingerprintu) też kończą się kodem 2; poprawką jest regeneracja pliku. \\
+\texttt{portcullis: warning: ... could not be read: ...} i~\texttt{scanning with the built-in default conventions instead.} & \texttt{portcullis.json} jest uszkodzony; skan poszedł na wartościach domyślnych wszystkich kluczy. Popraw plik i~sprawdź \texttt{configuration.error}. \\
+W~wyniku jest \path{PORTCULLIS_NO_CONVENTION_MATCHED} albo \path{PORTCULLIS_CONVENTION_UNMATCHED} & Reguły konwencyjne nic nie sprawdziły albo skonfigurowana nazwa nic nie dopasowała; krok~3a. \\
+\texttt{portcullis: note: N of the baseline's M entries matched no finding ...} & Wpisy baseline są nieaktualne (dług spłacony albo linia przepisana). Nie blokują; \texttt{--write-baseline} je usuwa. \\
+\texttt{portcullis: warning: could not publish the sticky comment (...)} & PR z~forka (token tylko do odczytu) albo token bez \texttt{pull-requests: write}. Werdykt bez zmian. \\
+\texttt{... — skipping comment publish.} & Brak \texttt{GITHUB\_TOKEN}, \texttt{GITHUB\_REPOSITORY} albo numeru PR (\texttt{--pr} lub zdarzenie \texttt{pull\_request} w~\texttt{GITHUB\_EVENT\_PATH}); poza CI to zwykły suchy przebieg. \\
+\texttt{::error title=Portcullis::\allowbreak portcullis exited 2 (usage error).} w~akcji & CLI zakończyło się kodem większym niż 1 -- błędem użycia, a~nie werdyktem; przyczyna jest w~komunikacie \texttt{portcullis:} na stderr w~logu kroku. \\
 \bottomrule
 \end{xltabular}
 \endgroup
 
-\paragraph{Krok 7. Przed pierwszym wydaniem: uruchomienie ze źródeł.} Wymaga tylko SDK
+\subsubsection{Krok 7. Przed pierwszym wydaniem: uruchomienie ze źródeł}
+
+Wymaga tylko SDK
 .NET 10:
 
 \begin{lstlisting}
@@ -2160,14 +2589,34 @@ dotnet run --project /path/to/letsgolegacy.portcullis/src/Portcullis.Cli -- \
 dotnet pack src/Portcullis.Rules/Portcullis.Rules.csproj -c Release -o ./artifacts
 \end{lstlisting}
 
-\paragraph{Krok 8. Czego jeszcze nie da się zrobić.} Kształt reguły jest stały, choć
+Pełny zestaw poleceń z~README i~\repopath{CONTRIBUTING.md} dodaje testy i~skan samego
+Portcullis:
+\begin{lstlisting}
+dotnet test portcullis.sln
+dotnet run --project src/Portcullis.Cli -- scan ./src
+\end{lstlisting}
+Ten sam przewodnik jest też stroną \path{docs/index.html} -- według README powierzchnią dla
+czytelników z~zewnątrz, gdy dla \path{/docs} włączy się GitHub Pages.
+
+\subsubsection{Krok 8. Czego jeszcze nie da się zrobić}
+
+Kształt reguły jest stały, choć
 konwencje są konfigurowalne; wdrożono sześć z~piętnastu zasad; obraz kontenera i~workflow
 wydania nie były wykonane; awaria git degraduje bramkę do całego drzewa zamiast ją
 przepuszczać. Jeśli coś w~tutorialu nie działa tak, jak napisano, to błąd dokumentacji wart
 zgłoszenia.
 
 \zrodla{\path{letsgolegacy.portcullis/docs/TUTORIAL.md}, \path{letsgolegacy.portcullis/action.yml},
-\path{letsgolegacy.portcullis/docs/SARIF.md}}
+\path{letsgolegacy.portcullis/docs/SARIF.md},
+\path{letsgolegacy.portcullis/.github/workflows/portcullis-sarif.yml},
+\path{letsgolegacy.portcullis/docs/CONFIGURATION.md}, \path{letsgolegacy.portcullis/docs/DISTRIBUTION.md},
+\path{letsgolegacy.portcullis/src/Portcullis.Rules/ConventionCoverageAnalyzer.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Cli/Program.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Findings/BaselineFile.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.Engine/Configuration/PortcullisConfigFile.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.CiComment/Program.cs},
+\path{letsgolegacy.portcullis/README.md}, \path{letsgolegacy.portcullis/CONTRIBUTING.md},
+\path{letsgolegacy.portcullis/docs/index.html}}
 
 \subsection{Testy mutacyjne reguł}\label{sec:portcullis-mutacje}
 
@@ -2179,13 +2628,18 @@ mechanizm, od którego reguła zależy, przestał działać.
 \paragraph{Metoda.} Mutanty żyją w~kodzie testów (\path{tests/Portcullis.Engine.Tests/Rules/Mutants/}),
 nigdy w~produkcyjnym \repopath{RuleRegistry.All}. Każdy mutant jest podstawiany w~tym samym
 miejscu rejestracji -- \repopath{Compilation.WithAnalyzers} z~jednym analyzerem -- i~przechodzi
-tę samą ścieżkę \repopath{GetAnalyzerDiagnosticsAsync}, co skaner. Mutant używa prawdziwego
+tę samą ścieżkę \repopath{GetAnalyzerDiagnosticsAsync}, co skaner. Każdy wariant wyłącza
+albo osłabia dokładnie jedną regułę i~niczym się nie zdradza: metoda zabrania flag,
+komentarzy i~konwencji nazw, które ogłaszałyby, że wariant jest zepsuty. Mutant używa prawdziwego
 \repopath{DiagnosticDescriptor} (ten sam identyfikator i~kategoria), więc jego milczenie to
 czysta luka wykrywania. Dla każdego wariantu test najpierw sprawdza, że prawdziwa reguła
 łapie naruszenie w~fixture (bez tego „mutant nie złapał” nic by nie znaczyło), potem, że
 mutant go nie łapie. Mutanty reguł migracyjnych wołają wewnętrzne pomocniki
 \repopath{MigrationSymbols} (\repopath{InternalsVisibleTo}), więc różnią się od reguły jednym
-mechanizmem, a~nie reimplementacją. Dwa warianty są odwrócone: dla reguły, której sensem jest
+mechanizmem, a~nie reimplementacją. \path{SyncOverAsyncGenericAwaitersDroppedMutant} odtwarza
+tylko ścieżkę wywołania i~pomija oba celowo niezgłaszane kształty, w~których task na pewno
+się zakończył -- mogą one tylko wyciszyć zgłoszenie, więc ich brak nie tłumaczy, dlaczego
+mutant nie łapie. Dwa warianty są odwrócone: dla reguły, której sensem jest
 semantyka albo cisza, liczy się błąd „strzela, gdy nie powinna”.
 
 \begingroup\footnotesize
@@ -2235,6 +2689,9 @@ migracyjnych. Poziom mutacji \repopath{Standard}, zbiór testów -- cały
 \repopath{cleartext}, \repopath{html}, \repopath{json}, jedyne wykluczenie to
 \repopath{ignore-methods} dla \repopath{EnableConcurrentExecution} (usunięcia tego wywołania
 żaden test nie zaobserwuje, więc takie mutanty są z~definicji równoważne).
+Konfiguracja wskazuje projekt \repopath{Portcullis.Rules.csproj}; projekt testów
+referencjonuje go bezpośrednio, choć dostaje go już przez \repopath{Portcullis.Engine}, bo
+Stryker.NET mutuje tylko projekt referencjonowany wprost przez projekt testów.
 
 \begin{lstlisting}
 dotnet tool restore
@@ -2285,7 +2742,9 @@ mniejszym problemem:
         generowany, przestrzeń tylko z~tym samym początkiem nazwy -- \repopath{System.WebHooks},
         dyrektywa \repopath{using}, która niczego nie wiąże, aliasy i~\repopath{using static}
         typów spoza System.Web, składowa instancyjna o~nazwie \repopath{Current},
-        \repopath{ConfigureAwait} na szybkiej ścieżce i~w~kontynuacji). Helper testów oblewa
+        \repopath{ConfigureAwait} na szybkiej ścieżce i~w~kontynuacji, osłona ukończenia
+        na tej samej składowej innego obiektu, własne \repopath{ContinueWith} potoku
+        i~dokładny kształt komunikatu dla właściwości i~metod). Helper testów oblewa
         teraz każdy test, w~którym analyzer rzucił wyjątek -- Roslyn zgłasza to jako
         \repopath{AD0001} zamiast oblać test, więc reguła, która się wywróciła, wyglądała
         jak reguła, która milczy.
@@ -2298,8 +2757,16 @@ mechanizmów są łapane. Nie dowodzi braku fałszywych alarmów na prawdziwym z
 (sekcja~\ref{sec:bench}). Strona silnika w~kanale CLI (\path{src/Portcullis.Engine/Semantics/})
 jest ćwiczona end-to-end przez \repopath{ScannerMigrationTests}, ale nie jest w~zakresie
 Strykera. Podobnie wcześniej: \path{PORTCULLIS_P9_ORPHAN_ENTITY} łapie trzy z~dziewięciu
-wpisów fixture'a sprawdzalnych Roslynem; pozostałe omija przez grubszą definicję
-„sieroty” -- to granica zakresu, zapisana jako taka, nie błąd.
+wpisów fixture'a sprawdzalnych Roslynem (\repopath{CONSUMER-003}, \repopath{CONSUMER-005},
+\repopath{CONSUMER-006}). Zapis przebiegu tłumaczy część pozostałych sześciu:
+\repopath{CONSUMER-004} i~\repopath{CONSUMER-009} są osiągalne przez właściwość nawigacyjną
+sąsiedniej klasy, więc według grubszej definicji „sieroty” (zero odwołań poza plikiem
+deklaracji, a~nie zero odwołań z~kontrolera) są używane; \repopath{CONSUMER-007} jest tylko
+zapisywana, a~zapis też jest odwołaniem -- wykrycie wymagałoby innego sprawdzenia (czy
+\repopath{DbSet<T>} ma jakikolwiek odczyt). Przyczyn pominięcia \repopath{CONSUMER-008}
+i~\repopath{CONSUMER-011} nie zweryfikowano ponownie i~zapis mówi to wprost, zamiast podawać
+wyjaśnienie; dla \repopath{CONSUMER-010} przyczyny nie podaje. To granica zakresu, zapisana
+jako taka, nie błąd.
 
 \zrodla{\path{letsgolegacy.portcullis/docs/MUTATIONS.md},
 \path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/MutationTests.cs},
@@ -2308,7 +2775,11 @@ wpisów fixture'a sprawdzalnych Roslynem; pozostałe omija przez grubszą defini
 \path{letsgolegacy.portcullis/.config/dotnet-tools.json},
 \path{letsgolegacy.portcullis/.github/workflows/mutation.yml},
 \path{letsgolegacy.portcullis/src/Portcullis.Rules/MigrationSymbols.cs},
-\path{letsgolegacy.portcullis/CONTRIBUTING.md}}
+\path{letsgolegacy.portcullis/CONTRIBUTING.md},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/Mutants/},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Rules/AnalyzerTestHelper.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Portcullis.Engine.Tests.csproj},
+\path{letsgolegacy.portcullis/fixtures/consumer-violations.json}}
 
 \subsection{Testy i~workflowy CI}\label{sec:portcullis-ci}
 
@@ -2323,7 +2794,8 @@ wpisów fixture'a sprawdzalnych Roslynem; pozostałe omija przez grubszą defini
         schematu, \repopath{portcullis.json};
   \item \repopath{Portcullis.CiComment.Tests} -- formatowanie komentarza, diff naruszeń,
         znacznik sticky, publikacja (create/update), opcje; dane z~\path{fixtures/mock-engine-output}
-        (ręczne wyniki zgodne z~SPEC §3, z~pierwotnymi identyfikatorami z~łącznikami);
+        (ręczne wyniki zgodne z~SPEC §3; od 2026-09-26 z~identyfikatorami, które reguły
+        faktycznie rejestrują, w~formie z~podkreśleniami -- sekcja~\ref{sec:portcullis-spec});
   \item \repopath{Portcullis.Cli.Tests} -- ścisłe parsowanie opcji (flaga bez wartości
         i~literówka w~nazwie flagi to błąd, a~nie po cichu pominięty zakres bramki) oraz
         testy procesu CLI dla SARIF i~baseline.
@@ -2369,7 +2841,11 @@ Pierwszym PR, na którym przebiegł workflow SARIF, był PR, który go dodał.
 \path{letsgolegacy.portcullis/.github/workflows/secret-scan.yml},
 \path{letsgolegacy.portcullis/docs/SARIF.md}, \path{letsgolegacy.portcullis/CONTRIBUTING.md},
 \path{letsgolegacy.portcullis/tests/Portcullis.Cli.Tests/ScanCommandOptionsTests.cs},
-\path{letsgolegacy.portcullis/src/Portcullis.Cli/ScanCommandOptions.cs}}
+\path{letsgolegacy.portcullis/src/Portcullis.Cli/ScanCommandOptions.cs},
+\path{letsgolegacy.portcullis/fixtures/mock-engine-output/},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/PrincipleViolations.cs},
+\path{letsgolegacy.portcullis/tests/Portcullis.Cli.Tests/SarifAndBaselineEndToEndTests.cs},
+\path{letsgolegacy.portcullis/docs/MUTATIONS.md}}
 
 \subsection{Bezpieczeństwo}\label{sec:portcullis-bezpieczenstwo}
 
@@ -2378,7 +2854,8 @@ wydanie nie istnieje, więc nie ma do czego backportować poprawek. Podatność 
 prywatnie: preferowane jest prywatne zgłaszanie podatności GitHub (Security → Advisories →
 Report a~vulnerability), a~gdy jest niedostępne -- publiczne issue z~prośbą o~prywatny kanał,
 bez szczegółów. Najbardziej pomagają: wejście, które wyzwala problem (fragment C\#, układ
-repozytorium, plik workflow), to, co zyskuje atakujący, i~wersja lub commit. Potwierdzenie
+repozytorium, plik workflow), to, co zyskuje atakujący, i~wersja lub commit. Dowód koncepcji
+jest mile widziany, ale nie jest wymagany do zgłoszenia. Potwierdzenie
 w~ciągu tygodnia; poprawka trafia najpierw na \repopath{main}, a~gdy będą wydania -- wydanie
 z~poprawką i~advisory z~podziękowaniem.
 
@@ -2484,11 +2961,40 @@ CI: werdykt przed i~po na prawdziwym diffie) oraz znane ograniczenia. Szablony i
 rozróżniają fałszywy alarm, inny błąd i~propozycję reguły; podatność idzie prywatnie przez
 \repopath{SECURITY.md}.
 
+\paragraph{Licencja, kodeks i~zgłoszenia.} Silnik, reguły, CLI i~akcja są na licencji MIT
+(\repopath{LICENSE}); wkład przyjmuje się na tej samej licencji. Wyjątkiem jest schemat SARIF
+osadzony w~testach (sekcja~\ref{sec:portcullis-sarif}): podlega zasadom OASIS, a~nie licencji
+MIT repozytorium. Udział w~projekcie oznacza akceptację kodeksu postępowania
+(\repopath{CODE\_OF\_CONDUCT.md}, Contributor Covenant 2.1); naruszenia zgłasza się
+opiekunowi prywatnym kanałem -- nadaje się do tego prywatne zgłaszanie podatności
+w~repozytorium, także gdy sprawa nie dotyczy bezpieczeństwa. Najbardziej użyteczny raport
+błędu zawiera minimalny fragment C\#, identyfikator reguły, oczekiwane i~faktyczne
+zachowanie; fałszywe alarmy mają wysoki priorytet, bo reguła podnosząca fałszywe alarmy
+jest gorsza niż brak reguły. Szablony issue pytają o~to, czego wymaga poprawka:
+\begin{itemize}[leftmargin=*]
+  \item \emph{fałszywy alarm} -- identyfikator reguły, najmniejszy fragment C\# ze ścieżką
+        pliku w~repozytorium (większość reguł opiera się na konwencjach, więc ścieżka jest
+        częścią wejścia), uzasadnienie, konfiguracja (\repopath{portcullis.json} i~linie
+        \repopath{dotnet\_diagnostic.*} z~\repopath{.editorconfig} lub \repopath{.globalconfig}
+        albo informacja, że ich nie ma), kanał uruchomienia i~wersja lub commit;
+  \item \emph{inny błąd} -- co się stało, czego oczekiwano, polecenie z~prawdziwym wynikiem
+        (gdy chodzi o~werdykt -- obiekt \repopath{gate} z~JSON skanu), kanał (także build ze
+        źródeł), wersja lub commit, system i~SDK;
+  \item \emph{propozycja reguły} -- kod do złapania, najbliższy poprawny kod, którego reguła
+        nie może zgłosić, dlaczego to architektura, a~nie styl, i~czy rozstrzyga to jeden
+        przebieg Roslyn na pojedynczej kompilacji (bez symboli innych projektów, historii git
+        i~wiedzy z~innych repozytoriów).
+\end{itemize}
+Wybór szablonu odsyła też do prywatnego zgłoszenia podatności, tutoriala i~SPEC.
+
 \zrodla{\path{letsgolegacy.portcullis/CONTRIBUTING.md}, \path{letsgolegacy.portcullis/.github/pull_request_template.md},
 \path{letsgolegacy.portcullis/.github/ISSUE_TEMPLATE/config.yml},
 \path{letsgolegacy.portcullis/.github/ISSUE_TEMPLATE/false_positive.yml},
 \path{letsgolegacy.portcullis/.github/ISSUE_TEMPLATE/bug_report.yml},
-\path{letsgolegacy.portcullis/.github/ISSUE_TEMPLATE/rule_proposal.yml}}
+\path{letsgolegacy.portcullis/.github/ISSUE_TEMPLATE/rule_proposal.yml},
+\path{letsgolegacy.portcullis/README.md}, \path{letsgolegacy.portcullis/LICENSE},
+\path{letsgolegacy.portcullis/CODE_OF_CONDUCT.md},
+\path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/Sarif/THIRD-PARTY-NOTICE.md}}
 
 \subsection{Historia zmian (CHANGELOG)}\label{sec:portcullis-changelog}
 
@@ -2505,7 +3011,10 @@ a~\repopath{0.1.0} to numer przyszłego pierwszego wydania.
         i~zweryfikowane lokalnie, nieopublikowane); komentarz sticky; pipeline wydań
         sterowany tagami z~bramką zgodności \repopath{action.yml}; dokumentacja dla czytelników
         z~zewnątrz; zestaw reguł migracyjnych (R2, Stryker 100\%, 214 z~214); SARIF 2.1.0
-        z~filtrem zmienionych linii i~plikiem baseline (R3).
+        z~filtrem zmienionych linii i~plikiem baseline (R3); wyjście \repopath{gate-scope}
+        akcji (\repopath{diff} albo \repopath{all} -- zakres, w~którym policzono
+        \repopath{blocking-error-count}; krok skanu już je wyliczał, ale \repopath{action.yml}
+        go nie deklarował, więc żaden późniejszy krok nie mógł go odczytać).
   \item \textbf{Changed}: import do \repopath{letsgolegacy.portcullis} jako komponent C5 (R0),
         bez historii repozytorium-poprzednika i~bez wewnętrznych notatek planistycznych;
         projekty \repopath{net8.0} przeszły na \repopath{net10.0}, analyzery zostały na
@@ -2519,7 +3028,10 @@ a~\repopath{0.1.0} to numer przyszłego pierwszego wydania.
         \repopath{ProvenanceStatus}); CLI respektuje konfigurację (wcześniej
         \repopath{options: null}); ścieżka komentarza PR nie wywraca się na zniekształconym
         wyniku; dwa findingi w~jednej linii mają stałą kolejność między przebiegami; dwa zdania
-        pozostałe po zmianie nazwy.
+        pozostałe po zmianie nazwy; \repopath{scanStartedUtc} to moment rozpoczęcia skanu
+        (wcześniej odczytywany po jego zakończeniu, wbrew SPEC §3); README pakietu komentarza
+        nie twierdzi już, że akcja podaje poprzedni skan -- akcja nie przekazuje
+        \repopath{--previous}, więc jej komentarz nie ma linii nowych i~rozwiązanych.
   \item \textbf{Known limitations}: analiza pojedynczej kompilacji w~CLI (pakiet analyzerów
         tego ograniczenia nie ma); dziewięć z~piętnastu zasad niewdrożonych; projekt
         nieopublikowany.

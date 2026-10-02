@@ -1,13 +1,21 @@
 \section{Klauzule kontraktu bench nopCommerce}\label{app:klauzule}
 
-Tabela wymienia wszystkie 76~klauzul pliku \path{contract/contract.yaml} bench nopCommerce
-(sekcja~\ref{sec:bench}) w~kolejności z~pliku: 61~rodzaju \texttt{must} i~15~rodzaju
-\texttt{never}. Kolumna „Zakres \texttt{when}” podaje metodę, wyrażenie regularne ścieżki
-i~wyrażenia parametrów zapytania (w~większości sondy \texttt{probe}) w~postaci, w~jakiej
-odczytuje je parser YAML; klauzula bez \texttt{when} obejmuje każde żądanie. Tytuły są
-przepisane z~pliku bez zmian, a~asercje, uzasadnienia \texttt{why} z~numerami reguł
-R01--R46 planu ruchu i~proweniencja (u~wszystkich klauzul \texttt{origin: designed},
-\texttt{status: accepted}) pozostają w~pliku źródłowym.
+Pierwsza tabela dodatku wymienia wszystkie 76~klauzul pliku \path{contract/contract.yaml}
+bench nopCommerce (sekcja~\ref{sec:bench}) w~kolejności z~pliku: 61~rodzaju \texttt{must}
+i~15~rodzaju \texttt{never}. Kolumna „Zakres \texttt{when}” podaje metodę, wyrażenie
+regularne ścieżki i~wyrażenia parametrów zapytania (w~większości sondy \texttt{probe})
+w~postaci, w~jakiej odczytuje je parser YAML; klauzula bez \texttt{when} obejmuje każde
+żądanie. Tytuły są przepisane z~pliku bez zmian. Asercje każdej klauzuli, reguły planu
+z~pola \texttt{why} i~scenariusz podaje tabela~\ref{tab:klauzule-asercje}, a~pozytywnego
+bliźniaka każdej klauzuli \texttt{never} -- tabela~\ref{tab:klauzule-blizniaki};
+proweniencja (u~wszystkich klauzul \texttt{origin: designed}, \texttt{status: accepted},
+\texttt{author: bench}, \texttt{date: 2026-09-26}) pozostaje w~pliku źródłowym. Plik zna
+dwa rodzaje klauzul, \texttt{must} i~\texttt{never}; udział nieobecności 19,7\% to
+15~klauzul \texttt{never} na 76. Klauzula \texttt{never} opisuje sytuację zakazaną: nie
+jest spełniona, gdy dla któregoś żądania w~zakresie wszystkie jej asercje są spełnione
+naraz (sekcja~\ref{sec:formaty-kontrakt}). Operator \texttt{absent} występuje też
+w~czterech asercjach trzech klauzul \texttt{must}: \path{COUPON-WITH-U180E-REFUSED},
+\path{ONCE5-REFUSED-THE-SECOND-TIME} i~\path{COUPON-123-APPLIED-CHANGES-NOTHING}.
 
 {\footnotesize
 \begin{xltabular}{\linewidth}{@{}r >{\raggedright\arraybackslash}p{3.1cm} l >{\raggedright\arraybackslash}p{4.2cm} >{\raggedright\arraybackslash}X@{}}
@@ -100,5 +108,157 @@ Lp. & Id & \texttt{kind} & Zakres \texttt{when} & Tytuł (\texttt{title}) \\
 \end{xltabular}
 }
 
+Tabela~\ref{tab:klauzule-asercje} podaje asercje każdej klauzuli w~kolejności z~pliku, po
+jednej w~wierszu: selektor, operator, wartość i~kwantyfikator, jeśli jest. Napisy stoją
+w~cudzysłowach w~postaci, w~jakiej wczytuje je parser YAML, a~liczby i~wartości logiczne
+tak, jak zapisuje je plik. Ostatnia kolumna podaje reguły planu wymienione w~\texttt{why}
+(„bliźniak” -- klauzulę, którą \texttt{why} nazywa pozytywnym bliźniakiem reguły; „plan §…”
+-- sekcję planu ruchu) oraz scenariusz: sondę z~zakresu \texttt{when}, a~dla klauzul bez
+sondy -- scenariusze, które plan podaje dla reguły, albo zakres.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}r >{\raggedright\arraybackslash}p{3.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.4cm}@{}}
+\caption{Asercje, reguły i~scenariusze klauzul kontraktu bench nopCommerce}\label{tab:klauzule-asercje}\\
+\toprule
+Lp. & Id & Asercje: \texttt{select}, \texttt{op}, \texttt{value} & Reguły (\texttt{why}); scenariusz \\
+\midrule
+\endfirsthead
+\toprule
+Lp. & Id & Asercje: \texttt{select}, \texttt{op}, \texttt{value} & Reguły (\texttt{why}); scenariusz \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+1 & \path{STOREFRONT-ANSWERS-WITH-FOOTER} & \path{response.status} \texttt{equals} \texttt{200} \newline \path{extract.footer} \texttt{equals} \texttt{\textquotedbl{}Powered by nopCommerce\textquotedbl{}} & R01; plan: T01--T04, T06, T27 \\
+2 & \path{HOME-LISTS-THE-FOUR-HOME-PAGE-PRODUCTS} & \path{extract.homeProducts} \texttt{countEquals} \texttt{4} \newline \path{extract.homeProducts} \texttt{contains} \texttt{\textquotedbl{}Build your own computer\textquotedbl{}} \newline \path{extract.homeProducts} \texttt{contains} \texttt{\textquotedbl{}Apple MacBook Pro 13-inch\textquotedbl{}} \newline \path{extract.homeProducts} \texttt{contains} \texttt{\textquotedbl{}HTC One M8 Android L 5.0 Lollipop\textquotedbl{}} \newline \path{extract.homeProducts} \texttt{contains} \texttt{\textquotedbl{}\$25 Virtual Gift Card\textquotedbl{}} & R02; T01 \\
+3 & \path{COMPUTERS-LISTS-ITS-SUBCATEGORIES} & \path{extract.subcategories} \texttt{countEquals} \texttt{3} \newline \path{extract.subcategories} \texttt{contains} \texttt{\textquotedbl{}Desktops\textquotedbl{}} \newline \path{extract.subcategories} \texttt{contains} \texttt{\textquotedbl{}Notebooks\textquotedbl{}} \newline \path{extract.subcategories} \texttt{contains} \texttt{\textquotedbl{}Software\textquotedbl{}} & R01; T03 \\
+4 & \path{NOTEBOOKS-BY-PRICE-ASCENDING} & \path{extract.listingProducts} \texttt{equals} \texttt{[\textquotedbl{}HP Spectre XT Pro UltraBook\textquotedbl{}, \textquotedbl{}Lenovo Thinkpad X1 Carbon Laptop\textquotedbl{}, \textquotedbl{}Asus N551JK-XO076H Laptop\textquotedbl{}, \textquotedbl{}Samsung Series 9 NP900X4C Premium Ultrabook\textquotedbl{}, \textquotedbl{}Apple MacBook Pro 13-inch\textquotedbl{}]} & R03; T02 \\
+5 & \path{NOTEBOOKS-BY-NAME} & \path{extract.listingProducts} \texttt{equals} \texttt{[\textquotedbl{}Apple MacBook Pro 13-inch\textquotedbl{}, \textquotedbl{}Asus N551JK-XO076H Laptop\textquotedbl{}, \textquotedbl{}HP Spectre XT Pro UltraBook\textquotedbl{}, \textquotedbl{}Lenovo Thinkpad X1 Carbon Laptop\textquotedbl{}, \textquotedbl{}Samsung Series 9 NP900X4C Premium Ultrabook\textquotedbl{}]} & R03; T02 \\
+6 & \path{NOTEBOOKS-PAGE-TWO-OF-THREE-PER-PAGE} & \path{extract.listingProducts} \texttt{equals} \texttt{[\textquotedbl{}Lenovo Thinkpad X1 Carbon Laptop\textquotedbl{}, \textquotedbl{}Samsung Series 9 NP900X4C Premium Ultrabook\textquotedbl{}]} & R04; T02 \\
+7 & \path{UNPUBLISHED-NEVER-LISTED} & \path{extract.listingProducts} \texttt{contains} \texttt{\textquotedbl{}HP Envy 6-1180ca 15.6-Inch Sleekbook\textquotedbl{}} & R05; T02, T06 \\
+8 & \path{UNPUBLISHED-PAGE-NEVER-SERVED} & \path{response.status} \texttt{equals} \texttt{200} & R05; T05 \\
+9 & \path{UNPUBLISHED-PAGE-NOT-FOUND} & \path{response.status} \texttt{equals} \texttt{404} & R05 (bliźniak); T05 \\
+10 & \path{LENOVO-PAGE-NAME-SKU-PRICE} & \path{extract.productName} \texttt{equals} \texttt{\textquotedbl{}Lenovo IdeaCentre 600 All-in-One PC\textquotedbl{}} \newline \path{extract.productSku} \texttt{equals} \texttt{\textquotedbl{}LE\_IC\_600\textquotedbl{}} \newline \path{extract.productPrice} \texttt{equals} \texttt{500} & R06; T04 \\
+11 & \path{MACBOOK-PAGE-NAME-SKU-PRICE} & \path{extract.productName} \texttt{equals} \texttt{\textquotedbl{}Apple MacBook Pro 13-inch\textquotedbl{}} \newline \path{extract.productSku} \texttt{equals} \texttt{\textquotedbl{}AP\_MBP\_13\textquotedbl{}} \newline \path{extract.productPrice} \texttt{equals} \texttt{1800} & R06; T04 \\
+12 & \path{COMPUTER-PAGE-ATTRIBUTE-ADJUSTMENTS} & \path{extract.productPrice} \texttt{equals} \texttt{1200} \newline \path{extract.attributeOptions} \texttt{contains} \texttt{\textquotedbl{}2.5 GHz Intel Pentium Dual-Core E2200 [+\$15.00]\textquotedbl{}} \newline \path{extract.attributeOptions} \texttt{contains} \texttt{\textquotedbl{}400 GB [+\$100.00]\textquotedbl{}} & R06; T04 \\
+13 & \path{SEARCH-FINDS-MACBOOK-BY-NAME-CASE-AND-SKU} & \path{extract.listingProducts} \texttt{contains} \texttt{\textquotedbl{}Apple MacBook Pro 13-inch\textquotedbl{}} & R07; T06 \\
+14 & \path{SEARCH-TERM-MINIMUM-LENGTH} & \path{extract.searchWarning} \texttt{equals} \texttt{\textquotedbl{}Search term minimum length is 3 characters\textquotedbl{}} \newline \path{extract.listingProducts} \texttt{countEquals} \texttt{0} & R08; T06 \\
+15 & \path{LISTING-ADD-TO-CART-SUCCEEDS} & \path{response.body.json.success} \texttt{equals} \texttt{true} & R09; plan: T07; każde dodanie z~listy \\
+16 & \path{T07-CART-HOLDS-ONE-LENOVO} & \path{extract.cartProducts} \texttt{equals} \texttt{[\textquotedbl{}Lenovo IdeaCentre 600 All-in-One PC\textquotedbl{}]} \newline \path{extract.cartQuantities} \texttt{equals} \texttt{[1]} & R09, R10; T07 \\
+17 & \path{QUANTITY-ABOVE-STOCK-REFUSED} & \path{response.body.json.success} \texttt{equals} \texttt{false} \newline \path{response.body.json.message} \texttt{contains} \texttt{\textquotedbl{}Your quantity exceeds stock on hand. The maximum quantity that can be added is 3.\textquotedbl{}} & R10; T07 \\
+18 & \path{QUANTITY-BELOW-MINIMUM-REFUSED} & \path{response.body.json.success} \texttt{equals} \texttt{false} \newline \path{response.body.json.message} \texttt{contains} \texttt{\textquotedbl{}The minimum quantity allowed for purchase is 2.\textquotedbl{}} & R11; T08 \\
+19 & \path{REQUIRED-ATTRIBUTE-REFUSED} & \path{response.body.json.success} \texttt{equals} \texttt{false} \newline \path{response.body.json.message} \texttt{contains} \texttt{\textquotedbl{}Please select HDD\textquotedbl{}} & R12; T09 \\
+20 & \path{T09-ATTRIBUTES-PRICED-INTO-UNIT-PRICE} & \path{extract.cartUnitPrices} \texttt{equals} \texttt{[1435]} \newline \path{extract.cartLineTotals} \texttt{equals} \texttt{[1435]} \newline \path{extract.cartSubtotal} \texttt{equals} \texttt{1435} & R13; T09 \\
+21 & \path{T10-QUANTITY-UPDATE-REPRICES} & \path{extract.cartQuantities} \texttt{equals} \texttt{[3, 1]} \newline \path{extract.cartLineTotals} \texttt{equals} \texttt{[1500, 24]} \newline \path{extract.cartSubtotal} \texttt{equals} \texttt{1524} & R13; T10-quantity \\
+22 & \path{T10-REMOVE-CHECKBOX-DELETES-LINE} & \path{extract.cartProducts} \texttt{equals} \texttt{[\textquotedbl{}Lenovo IdeaCentre 600 All-in-One PC\textquotedbl{}]} & R14; T10-remove \\
+23 & \path{T10-QUANTITY-ZERO-EMPTIES-CART} & \path{extract.cartEmpty} \texttt{equals} \texttt{\textquotedbl{}Your Shopping Cart is empty!\textquotedbl{}} \newline \path{extract.cartProducts} \texttt{countEquals} \texttt{0} & R14; T10-zero \\
+24 & \path{CART-UNIT-PRICES-WRITTEN-IN-USD} & \path{extract.cartUnitPriceTexts[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}\textbackslash{}\$[0-9]\{1,3\}(,[0-9]\{3\})*\textbackslash{}.[0-9]\{2\}\$\textquotedbl{}} & R46; T07, T09 \\
+25 & \path{SAVE10-TAKES-10-PERCENT-OF-SUBTOTAL} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}The coupon code was applied\textquotedbl{}]} \newline \path{extract.cartSubtotal} \texttt{equals} \texttt{1000} \newline \path{extract.cartSubtotalDiscount} \texttt{equals} \texttt{\textquotedbl{}(\$100.00)\textquotedbl{}} & R15, R27; T11 \\
+26 & \path{COUPON-TRIMMED-AND-CASE-INSENSITIVE} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}The coupon code was applied\textquotedbl{}]} \newline \path{extract.cartSubtotalDiscount} \texttt{equals} \texttt{\textquotedbl{}(\$100.00)\textquotedbl{}} & R17; T12 \\
+27 & \path{COUPON-WITH-U180E-REFUSED} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}The coupon code you entered couldn't be applied to your order\textquotedbl{}]} \newline \path{extract.cartSubtotalDiscount} \texttt{absent} & plan §6; T12B \\
+28 & \path{EXPIRED-COUPON-MESSAGE} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}Sorry, this offer is expired\textquotedbl{}]} & R18; T13-expired \\
+29 & \path{FUTURE-COUPON-MESSAGE} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}Sorry, this offer is not started yet\textquotedbl{}]} & R18; T13-future \\
+30 & \path{UNKNOWN-COUPON-MESSAGE} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}The coupon code you entered couldn't be applied to your order\textquotedbl{}]} & R18; T13-unknown \\
+31 & \path{REFUSED-COUPON-NEVER-DISCOUNTS} & \path{extract.cartSubtotalDiscount} \texttt{exists} & R19; T13-expired, T13-future, T13-unknown \\
+32 & \path{REFUSED-COUPON-NEVER-SAYS-APPLIED} & \path{extract.couponMessages} \texttt{contains} \texttt{\textquotedbl{}The coupon code was applied\textquotedbl{}} & R18, R19; T13-expired, T13-future, T13-unknown \\
+33 & \path{TAKE50-CAPPED-AT-ORDER-TOTAL} & \path{extract.cartSubtotal} \texttt{equals} \texttt{24} \newline \path{extract.cartShipping} \texttt{equals} \texttt{10} \newline \path{extract.cartTax} \texttt{equals} \texttt{0} \newline \path{extract.cartTotalDiscount} \texttt{equals} \texttt{\textquotedbl{}(\$34.00)\textquotedbl{}} \newline \path{extract.cartTotal} \texttt{equals} \texttt{0} & R20; T14 \\
+34 & \path{CART-TOTAL-NEVER-NEGATIVE} & \path{extract.cartTotal} \texttt{lt} \texttt{0} & R20; każda strona \path{/cart} \\
+35 & \path{PCT20MAX100-STOPS-AT-MAXIMUM} & \path{extract.cartSubtotal} \texttt{equals} \texttt{3600} \newline \path{extract.cartSubtotalDiscount} \texttt{equals} \texttt{\textquotedbl{}(\$100.00)\textquotedbl{}} & R21; T15 \\
+36 & \path{SHIPFREE-ZEROES-SHIPPING} & \path{extract.cartSubtotal} \texttt{equals} \texttt{500} \newline \path{extract.cartShipping} \texttt{equals} \texttt{0} & R22; T16 \\
+37 & \path{GIFT-CARD-IN-CART-COUPON-MESSAGE} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}Sorry, this discount cannot be used with gift cards in the cart\textquotedbl{}]} & R23; T17 \\
+38 & \path{GIFT-CARD-CART-NEVER-DISCOUNTED} & \path{extract.cartSubtotalDiscount} \texttt{exists} & R23; T17 \\
+39 & \path{MEMBERS15-NEVER-FOR-A-GUEST} & \path{extract.cartSubtotalDiscount} \texttt{exists} & R24; T18A \\
+40 & \path{MEMBERS15-GUEST-NEVER-TOLD-APPLIED} & \path{extract.couponMessages} \texttt{contains} \texttt{\textquotedbl{}The coupon code was applied\textquotedbl{}} & R24; T18A \\
+41 & \path{MEMBERS15-GUEST-GETS-AN-EMPTY-MESSAGE} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}\textquotedbl{}]} & R24, plan §4a; T18A \\
+42 & \path{MEMBERS15-FOR-A-REGISTERED-CUSTOMER} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}The coupon code was applied\textquotedbl{}]} \newline \path{extract.cartSubtotalDiscount} \texttt{equals} \texttt{\textquotedbl{}(\$75.00)\textquotedbl{}} & R24 (bliźniak); T18B \\
+43 & \path{ONCE5-REFUSED-THE-SECOND-TIME} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}Sorry, you've used this discount already\textquotedbl{}]} \newline \path{extract.cartTotalDiscount} \texttt{absent} & R25; T19 \\
+44 & \path{COUPON-123-APPLIED-CHANGES-NOTHING} & \path{extract.couponMessages} \texttt{equals} \texttt{[\textquotedbl{}The coupon code was applied\textquotedbl{}]} \newline \path{extract.cartSubtotal} \texttt{equals} \texttt{500} \newline \path{extract.cartSubtotalDiscount} \texttt{absent} \newline \path{extract.cartTotalDiscount} \texttt{absent} & R26; T20 \\
+45 & \path{TAX-US-NY-10001} & \path{extract.cartSubtotal} \texttt{equals} \texttt{500} \newline \path{extract.cartShipping} \texttt{equals} \texttt{10} \newline \path{extract.cartTax} \texttt{equals} \texttt{45} & R28; T21 \\
+46 & \path{TAX-US-NY-ANY-ZIP} & \path{extract.cartTax} \texttt{equals} \texttt{44.38} & R28; T22A \\
+47 & \path{TAX-US-CALIFORNIA} & \path{extract.cartTax} \texttt{equals} \texttt{36.25} & R28; T22B \\
+48 & \path{TAX-US-ANY-STATE} & \path{extract.cartTax} \texttt{equals} \texttt{25} & R28; T22C \\
+49 & \path{TAX-NO-RATE-GERMANY} & \path{extract.cartTax} \texttt{equals} \texttt{0} & R28; T22D \\
+50 & \path{TAX-ZIP-MATCH-IGNORES-CASE} & \path{extract.cartTax} \texttt{equals} \texttt{65} & R29; T23 \\
+51 & \path{TAX-FOLLOWS-BILLING-ADDRESS} & \path{extract.cartTax} \texttt{equals} \texttt{45} & R30; T22F \\
+52 & \path{TAX-EXEMPT-NEVER-TAXED} & \path{extract.cartTax} \texttt{gt} \texttt{0} & R32; T22E \\
+53 & \path{TAX-EXEMPT-CART-PRICED} & \path{extract.cartSubtotal} \texttt{equals} \texttt{3600} \newline \path{extract.cartTax} \texttt{equals} \texttt{0} & R32 (bliźniak); T22E \\
+54 & \path{ESTIMATE-OFFERS-FIXED-RATES-AND-PICKUP} & \path{extract.shippingEstimates} \texttt{equals} \texttt{[\textquotedbl{}Ground (\$10.00)\textquotedbl{}, \textquotedbl{}Next Day Air (\$40.00)\textquotedbl{}, \textquotedbl{}2nd Day Air (\$25.00)\textquotedbl{}, \textquotedbl{}Pickup (\$1.99)\textquotedbl{}]} & R33; T24 \\
+55 & \path{CHECKOUT-OFFERS-THE-SAME-RATES} & \path{response.body.json.goto_section} \texttt{equals} \texttt{\textquotedbl{}shipping\_method\textquotedbl{}} \newline \path{extract.checkoutGround} \texttt{equals} \texttt{\textquotedbl{}Ground (\$10.00)\textquotedbl{}} \newline \path{extract.checkoutSecondDayAir} \texttt{equals} \texttt{\textquotedbl{}2nd Day Air (\$25.00)\textquotedbl{}} \newline \path{extract.checkoutNextDayAir} \texttt{equals} \texttt{\textquotedbl{}Next Day Air (\$40.00)\textquotedbl{}} & R33; T24 \\
+56 & \path{FREE-SHIPPING-PRODUCTS-SHIP-FREE} & \path{extract.shippingEstimates} \texttt{equals} \texttt{[\textquotedbl{}Ground (\$0.00)\textquotedbl{}, \textquotedbl{}Next Day Air (\$0.00)\textquotedbl{}, \textquotedbl{}2nd Day Air (\$0.00)\textquotedbl{}, \textquotedbl{}Pickup (\$1.99)\textquotedbl{}]} & R34, plan §4a; T25 \\
+57 & \path{NO-FREE-SHIPPING-AT-EXACTLY-1000} & \path{extract.shippingEstimates} \texttt{contains} \texttt{\textquotedbl{}Ground (\$10.00)\textquotedbl{}} & R35; T26-1000 \\
+58 & \path{FREE-SHIPPING-OVER-1000} & \path{extract.shippingEstimates} \texttt{contains} \texttt{\textquotedbl{}Ground (\$0.00)\textquotedbl{}} & R35; T26-1024 \\
+59 & \path{GUEST-ORDER-NUMBERED} & \path{extract.placedOrderNumber} \texttt{equals} \texttt{6} & R38; T27 \\
+60 & \path{GUEST-ORDER-TOTALS} & \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Sub-Total: ?\textbackslash{}\$500\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Shipping: ?\textbackslash{}\$10\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Tax: ?\textbackslash{}\$45\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Order Total: ?\textbackslash{}\$555\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderStatus} \texttt{equals} \texttt{\textquotedbl{}Order Status: Pending\textquotedbl{}} & R36, R37, R41; T27 \\
+61 & \path{BAD-CARD-NUMBER-REFUSED} & \path{response.body.json.update_section.html} \texttt{contains} \texttt{\textquotedbl{}Wrong card number\textquotedbl{}} & R39 (bliźniak); T28 \\
+62 & \path{BAD-CARD-NEVER-REACHES-CONFIRM} & \path{response.body.json.goto_section} \texttt{equals} \texttt{\textquotedbl{}confirm\_order\textquotedbl{}} & R39; T28 \\
+63 & \path{REGISTERED-ORDER-TOTALS} & \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Sub-Total: ?\textbackslash{}\$1,000\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Discount: ?\textbackslash{}(\textbackslash{}\$100\textbackslash{}.00\textbackslash{})\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Shipping: ?\textbackslash{}\$40\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Tax: ?\textbackslash{}\$81\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) \newline \path{extract.orderTotals[*]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}Order Total: ?\textbackslash{}\$1,021\textbackslash{}.00\$\textquotedbl{}} (\texttt{quantifier: any}) & R31, R36; T28 \\
+64 & \path{ORDER-EMPTIES-THE-CART} & \path{extract.cartEmpty} \texttt{equals} \texttt{\textquotedbl{}Your Shopping Cart is empty!\textquotedbl{}} & R40; T28-after \\
+65 & \path{ORDER-LOWERS-STOCK} & \path{response.body.json.success} \texttt{equals} \texttt{false} \newline \path{response.body.json.message} \texttt{contains} \texttt{\textquotedbl{}Your quantity exceeds stock on hand. The maximum quantity that can be added is 1.\textquotedbl{}} & R40; T28 \\
+66 & \path{HISTORY-LISTS-OWN-ORDERS-ONLY} & \path{extract.historyOrders} \texttt{equals} \texttt{[\textquotedbl{}Order Number: 1\textquotedbl{}]} & R42; T29 \\
+67 & \path{OWN-ORDER-DETAILS-SHOWN} & \path{response.status} \texttt{equals} \texttt{200} \newline \path{extract.orderNumber} \texttt{equals} \texttt{\textquotedbl{}Order \#1\textquotedbl{}} & R43; T29 \\
+68 & \path{OWN-ORDER-PDF-INVOICE} & \path{response.status} \texttt{equals} \texttt{200} \newline \path{response.headers.content-type[0]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}application/pdf\textquotedbl{}} & R43; T29 \\
+69 & \path{OTHERS-ORDER-NEVER-SHOWN} & \path{response.status} \texttt{equals} \texttt{200} & R44; T30A, T30B \\
+70 & \path{OTHERS-ORDER-NEVER-NAMES-ITS-OWNER} & \path{response.body.text} \texttt{contains} \texttt{\textquotedbl{}Arthur\textquotedbl{}} & R44; T30A, T30B \\
+71 & \path{OTHERS-ORDER-SENDS-TO-LOGIN} & \path{response.status} \texttt{equals} \texttt{302} \newline \path{response.headers.location[0]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}/login\textbackslash{}?ReturnUrl=\textquotedbl{}} & R44, R45 (bliźniak); T30A, T30B \\
+72 & \path{GUEST-NEVER-GETS-ORDER-HISTORY} & \path{response.status} \texttt{equals} \texttt{200} & R45; T30A \\
+73 & \path{NOBODY-REORDERS-OTHERS-ORDER} & \path{response.headers.location[0]} \texttt{matches} \texttt{\textquotedbl{}\textasciicircum{}/cart\textquotedbl{}} & R45; T30A \\
+74 & \path{SIGN-IN-RETURNS-HOME} & \path{response.status} \texttt{equals} \texttt{302} \newline \path{response.headers.location[0]} \texttt{equals} \texttt{\textquotedbl{}/\textquotedbl{}} & plan: T18, T19, T29 \\
+75 & \path{REGISTRATION-COMPLETES} & \path{extract.registrationResult} \texttt{equals} \texttt{\textquotedbl{}Your registration completed\textquotedbl{}} & plan: T28 \\
+76 & \path{NEVER-A-SERVER-ERROR} & \path{response.status} \texttt{gte} \texttt{500} & bez reguły; każde żądanie \\
+\end{xltabular}
+}
+
+Każda klauzula \texttt{never} ma według README kontraktu pozytywnego bliźniaka w~tym samym
+scenariuszu, żeby nieobecność nie była spełniona dlatego, że nic się nie wydarzyło.
+Tabela~\ref{tab:klauzule-blizniaki} podaje bliźniaka, którego nazywają źródła; gdzie żadne
+go nie nazywa, wymienia klauzule \texttt{must} na tych samych żądaniach.
+
+{\footnotesize
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} l >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}X@{}}
+\caption{Klauzule \texttt{never} i~ich pozytywni bliźniacy}\label{tab:klauzule-blizniaki}\\
+\toprule
+Klauzula \texttt{never} & Reguła & Scenariusz & Pozytywny bliźniak (według źródeł) \\
+\midrule
+\endfirsthead
+\toprule
+Klauzula \texttt{never} & Reguła & Scenariusz & Pozytywny bliźniak (według źródeł) \\
+\midrule
+\endhead
+\bottomrule
+\endlastfoot
+\path{UNPUBLISHED-NEVER-LISTED} & R05 & T02, T06 & \path{UNPUBLISHED-PAGE-NOT-FOUND} -- bliźniak
+  reguły R05 w~mapie reguł README kontraktu \\
+\path{UNPUBLISHED-PAGE-NEVER-SERVED} & R05 & T05 & \path{UNPUBLISHED-PAGE-NOT-FOUND}
+  (\texttt{why}: „R05's positive twin”; klauzula \texttt{never} potrzebuje odpowiedzi na to
+  żądanie) \\
+\path{REFUSED-COUPON-NEVER-DISCOUNTS} & R19 & T13-expired, T13-future, T13-unknown & źródła go
+  nie nazywają; te same żądania sprawdzają \path{EXPIRED-COUPON-MESSAGE},
+  \path{FUTURE-COUPON-MESSAGE} i~\path{UNKNOWN-COUPON-MESSAGE} \\
+\path{REFUSED-COUPON-NEVER-SAYS-APPLIED} & R18, R19 & T13-expired, T13-future, T13-unknown &
+  jak wyżej \\
+\path{CART-TOTAL-NEVER-NEGATIVE} & R20 & każda strona \path{/cart} & źródła go nie nazywają;
+  w~T14 \path{TAKE50-CAPPED-AT-ORDER-TOTAL} stwierdza na tej stronie sumę 0.00 \\
+\path{GIFT-CARD-CART-NEVER-DISCOUNTED} & R23 & T17 & \path{GIFT-CARD-IN-CART-COUPON-MESSAGE} na
+  tym samym żądaniu (\texttt{why}: klient dostaje powód, „the rule itself is the never clause
+  below”) \\
+\path{MEMBERS15-NEVER-FOR-A-GUEST} & R24 & T18A & \path{MEMBERS15-FOR-A-REGISTERED-CUSTOMER}
+  w~T18B (\texttt{why}: „R24's positive twin”; plan §9: zarejestrowana połowa T18) \\
+\path{MEMBERS15-GUEST-NEVER-TOLD-APPLIED} & R24 & T18A & jak wyżej \\
+\path{TAX-EXEMPT-NEVER-TAXED} & R32 & T22E & \path{TAX-EXEMPT-CART-PRICED} (\texttt{why}:
+  klauzula \texttt{never} potrzebuje koszyka, który w~ogóle pokazuje wiersz podatku) \\
+\path{BAD-CARD-NEVER-REACHES-CONFIRM} & R39 & T28 & \path{BAD-CARD-NUMBER-REFUSED}
+  (\texttt{why}: „R39's positive twin”); plan §9: poprawna karta w~T28; README kontraktu:
+  odrzucona karta obok złożonego zamówienia \\
+\path{OTHERS-ORDER-NEVER-SHOWN} & R44 & T30A, T30B & \path{OTHERS-ORDER-SENDS-TO-LOGIN}
+  (\texttt{why}: bliźniak klauzul \texttt{never} R44 i~R45); plan §9: przekierowanie T30 na
+  \path{/login}, a~R43 to T29, inny scenariusz \\
+\path{OTHERS-ORDER-NEVER-NAMES-ITS-OWNER} & R44 & T30A, T30B & jak wyżej \\
+\path{GUEST-NEVER-GETS-ORDER-HISTORY} & R45 & T30A & \path{OTHERS-ORDER-SENDS-TO-LOGIN} \\
+\path{NOBODY-REORDERS-OTHERS-ORDER} & R45 & T30A & \path{OTHERS-ORDER-SENDS-TO-LOGIN} \\
+\path{NEVER-A-SERVER-ERROR} & -- & każde żądanie & źródła go nie nazywają \\
+\end{xltabular}
+}
+
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/contract/contract.yaml},
-\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md}}
+\path{letsgolegacy.secondkey-nopcommerce-bench/contract/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md}}

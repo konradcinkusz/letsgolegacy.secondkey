@@ -13,6 +13,12 @@
  * (PUPPETEER_EXECUTABLE_PATH or CHROME_BIN) instead of downloading a second one; the
  * sandbox flags are the working set for CI and dev containers, which commonly run as root.
  *
+ * The standard's recipe reads `mmdc -i … -o ….pdf --pdfFit -b transparent`. Neither flag is
+ * passed here, on purpose: the pinned @mermaid-js/mermaid-cli 12 has no --pdfFit, because it
+ * fits a PDF to the diagram unless --pdf-paper-format is given; and without -b the PDF keeps
+ * the renderer's default white background, which on the page's white is the same thing.
+ * Re-check both against `mmdc --help` when the renderer is bumped.
+ *
  * Usage: node scripts/render-diagrams.mjs [slug-filter...]
  */
 

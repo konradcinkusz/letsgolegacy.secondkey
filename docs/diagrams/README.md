@@ -26,7 +26,14 @@ top-to-bottom layout, short labels, and a size bound in the `\includegraphics` c
 
 The labels are Polish, with technical names kept in English, because the only document
 that includes these diagrams is written in Polish. There is no English set, so nothing can
-drift between two. If an English edition of the document is ever added, it decides then
+drift between two language copies here.
+
+One diagram does have a second source elsewhere: `a7-topologia-bench.mmd` redraws, in
+Polish, the topology that the bench's own
+[`docs/TOPOLOGY.md`](https://github.com/konradcinkusz/letsgolegacy.secondkey-nopcommerce-bench/blob/main/docs/TOPOLOGY.md)
+carries as inline Mermaid. That is an accepted drift: the bench's diagram is the source of
+truth, nothing compares the two across repositories, and a change to the bench's topology
+has to be redrawn here by hand when the document is brought up to date. If an English edition of the document is ever added, it decides then
 whether to translate the diagrams: a translated set means a second `.mmd` per diagram and a
 drift the build cannot see; a shared set means English readers get Polish boxes. That
 decision belongs here, written down, when it is taken.
