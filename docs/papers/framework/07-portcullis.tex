@@ -767,7 +767,7 @@ zespołu, a~także \repopath{nameof(Task<int>.Result)}.
 którego reguła nie śledzi): \repopath{.Result} po \repopath{await Task.WhenAll(...)}
 (zalecenie: zrobić \repopath{await} na zakończonym tasku, to nic nie kosztuje), po wczesnym
 \repopath{return} na \repopath{!IsCompleted}, po sprawdzeniu
-\path{Status == TaskStatus.RanToCompletion} oraz w~kontynuacji
+\repopath{Status == TaskStatus.RanToCompletion} oraz w~kontynuacji
 \path{Task.Factory.ContinueWhenAll} lub \path{ContinueWhenAny} (wyjątek obejmuje tylko
 \repopath{ContinueWith}). Blokujące czekanie w~miejscu, które nie może być asynchroniczne
 (konstruktor, \repopath{Dispose}, getter), nadal jest blokującym czekaniem i~jest zgłaszane.

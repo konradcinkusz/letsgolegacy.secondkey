@@ -28,7 +28,9 @@
 \def\houselang{polish}
 \IfFileExists{version.tex}{\input{version.tex}}{\def\docversion{build lokalny}}
 \newcommand{\paperstatus}{Faza 01 --- \docversion}
-\newcommand{\headerleft}{letsgolegacy --- dokumentacja techniczna frameworku}
+% Lewy nagłówek jest krótszy niż tytuł: prawy (status, commit z datą, \today słownie)
+% ma w buildzie CI do ~276 pt, a obie strony muszą zmieścić się w 472 pt szerokości.
+\newcommand{\headerleft}{letsgolegacy --- dokumentacja frameworku}
 \newcommand{\pdftitleline}{letsgolegacy: dokumentacja techniczna frameworku}
 \newcommand{\pdfauthorline}{letsgolegacy}
 \input{house-preamble}

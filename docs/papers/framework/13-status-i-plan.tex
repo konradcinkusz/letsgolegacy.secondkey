@@ -26,8 +26,11 @@ standardy & C4-a (standardy w Markdown z metadanymi), C4-b (generator z trybem
 \repopath{--check}), C4-c (drift check) zrobione; R4 (skill dla modernize-dotnet)
 scalony, zrobiony wtedy, gdy P6 potwierdzi, że agent go podjął. Żadna wersja nie jest
 jeszcze otagowana. \\
-bench nopCommerce & P1--P5 zrobione; P6 (praca człowieka z GitHub Copilot), P7, P8, P9
-(bramka fazy 01), P10 zaplanowane. \\
+bench nopCommerce & P1--P5 zrobione. P9 (bramka fazy 01) w toku: zabite mutanty
+zrobione (\#8, 11 z 11); pakiet dowodowy kandydata, różnice i regresje czekają na
+P6--P8. P10 (log godzin) w toku: godziny agenta do P5 i dla mutantów P9 są w logu, część
+oszacowana po fakcie; godzin człowieka jeszcze nie ma. P6 (praca człowieka z GitHub
+Copilot), P7 i P8 zaplanowane. \\
 legacy-risk-scan & L18 scalony; zrobiony, gdy job \repopath{verify} w
 \path{deploy.yml} przejdzie po włączeniu źródła GitHub Pages „GitHub Actions” w
 ustawieniach repozytorium. \\
@@ -60,6 +63,7 @@ Co & Wynik zapisany przez CI \\
 P3 --- rozgrzewka na eShopLegacyMVC & pakiet dowodowy wyprodukowany przez cały łańcuch (capture, A/A replay, werdykt, bramka, pakiet) \\
 P4 --- zestaw ruchu nopCommerce & 38 scenariuszy (30 zaplanowanych, niektóre jako kilka sesji), 290 wymian \\
 P5 --- kontrakt i dowód A/A & werdykt \repopath{pass}: 76 z 76 zaakceptowanych klauzul utrzymanych, 0 niesprawdzonych; 15 klauzul \repopath{never} (udział nieobecności 19,7\,\%); 290 wymian w 38 scenariuszach: 272 \repopath{equal}, 18 \repopath{equal-under-contract}, 0 regresji, 0 fix candidates \\
+P9 --- zabite mutanty & 11 z 11: każdy z M01--M11 daje w \repopath{sk compare} wynik \repopath{fail}, a każda klauzula zarejestrowana dla mutanta z góry na nim zregresowała; M00 (kalibracja: źródło bez zmian) \repopath{pass} --- 290 wymian, 269 \repopath{equal}, 21 \repopath{equal-under-contract}, 0 regresji \\
 Testy mutacyjne rdzenia & \repopath{SecondKey.Replay} (bez kodu SQL Server) wzrosło z 60,7\,\% do 89,5\,\% w drugiej rewizji analizy fazy 01 \\
 \bottomrule
 \end{xltabular}
@@ -68,6 +72,7 @@ Testy mutacyjne rdzenia & \repopath{SecondKey.Replay} (bez kodu SQL Server) wzro
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
 
 \subsection{Droga do bramki fazy 01}\label{sec:status-droga}
@@ -76,9 +81,10 @@ Pozostała ścieżka krytyczna przechodzi przez bench: P6 (migracja przez agenta
 człowieka) → P7 (replay legacy kontra kandydat; \repopath{verdict.json} istnieje, a różnica
 NLS → ICU jest znaleziona albo jej brak udokumentowany) → P8 (reguły Portcullis na PR
 kandydata; SARIF w pakiecie) → P9 (publikacja pakietu, kontraktu i liczb: scenariusze,
-różnice, regresje, zabite mutanty). P10 zbiera godziny wdrożenia dla P4--P7. Runbook P6
-jest napisany przed pierwszym uruchomieniem; zapis pierwszego przebiegu stanie się jego
-przykładem.
+różnice, regresje, zabite mutanty). Zabite mutanty już są (podrozdział~\ref{sec:bench-p9}),
+więc z liczb P9 brakuje już tylko tych, które przynosi kandydat. P10 zbiera godziny wdrożenia dla P4--P7; godziny
+człowieka przyjdą z P6. Runbook P6 jest napisany przed pierwszym uruchomieniem; zapis
+pierwszego przebiegu stanie się jego przykładem.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},

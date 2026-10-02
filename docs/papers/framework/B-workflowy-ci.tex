@@ -37,6 +37,7 @@ Plik & Triggery & Joby \\
 \multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.secondkey-nopcommerce-bench}}} \\
 \path{legacy-build.yml} & pull request, push, ręcznie & lint PSScriptAnalyzer; build nopCommerce (MSBuild); narzędzia łańcucha; legacy pod IIS z SQL Server (instalacja, smoke, konfiguracja, nagranie, replay A/A); werdykt i pakiet \\
 \path{warmup-eshop.yml} & pull request, push, ręcznie & narzędzia łańcucha; eShopLegacyMVC pod IIS (nagranie, replay A/A); werdykt, bramka i pakiet \\
+\path{mutants.yml} & pull request (paths), ręcznie & P9: plan (katalog i łatki na przypiętym drzewie); build legacy; narzędzia łańcucha; dwanaście jobów mutantów pod IIS (build z łatką, legacy, mutant obok, nagranie, replay legacy kontra mutant); dwanaście werdyktów; podsumowanie „N z 11 zabitych” (bez przechodzącego M00 błąd) \\
 \path{chain-tools.yml} & wywoływany z innych workflowów & \repopath{sk} i Portcullis z przypiętych commitów \\
 \path{secret-scan.yml} & pull request, push & gitleaks (cała historia, wersja przypięta skrótem) \\
 \midrule
