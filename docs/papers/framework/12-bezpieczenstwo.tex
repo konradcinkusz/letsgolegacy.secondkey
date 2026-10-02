@@ -122,9 +122,11 @@ reguły, a prawdziwe hasło --- z \repopath{Password} albo \repopath{pwd}, z
 \subsection{Prywatność strony legacy-risk-scan}\label{sec:bezpieczenstwo-risk-scan}
 
 Wklejony plik jest parsowany w przeglądarce i nigdzie nie jest wysyłany. Jedyne żądania
-wychodzące idą do publicznego API OSV.dev: jedno \repopath{querybatch}, którego ciało
-buduje jedna funkcja (\repopath{toQueries()} w \path{src/lib/osv.js}) --- ekosystem,
-nazwa i wersja pakietu, nic więcej --- i po jednym \repopath{GET} na każde advisory.
+wychodzące idą do publicznego API OSV.dev: zapytania \repopath{querybatch} po najwyżej
+1000 pakietów, których ciało buduje jedna funkcja (\repopath{toQueries()} w
+\path{src/lib/osv.js}) --- ekosystem, nazwa i wersja pakietu, nic więcej --- przy
+stronicowanej odpowiedzi ponowione z tokenem strony od OSV, i po jednym \repopath{GET} na
+każde advisory.
 Content security policy strony pozwala łączyć się tylko z samą stroną i z
 \repopath{api.osv.dev}. Brak analityki, ciasteczek i pamięci przeglądarki; zestaw testów
 e2e sprawdza to na zbudowanej stronie: cel każdego żądania, dokładne ciała żądań,

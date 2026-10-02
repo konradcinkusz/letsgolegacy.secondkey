@@ -1593,7 +1593,10 @@ architektonicznych (\path{PORTCULLIS_P2_KERNEL_LOC_CEILING},
 \path{PORTCULLIS_P11_VENDOR_SDK_OUTSIDE_ADAPTER}, \path{PORTCULLIS_P15_MISSING_SERVICE_DEFAULTS}).
 Reguły korzystają z~dziewięciu z~nich; na cztery pozostałe -- oba identyfikatory P2,
 \path{PORTCULLIS_P9_ORPHAN_ENTITY} i~\path{PORTCULLIS_P11_VENDOR_SDK_OUTSIDE_ADAPTER} -- nie
-mapuje się żadna reguła.
+mapuje się żadna reguła. \path{standards/README.md} mówi to wprost: lista jest słownikiem
+wszystkich reguł, które bramka dostarcza, zmapowanych albo nie; diagnostyka, której nie
+mapuje żadna reguła, nie trafia do generowanej konfiguracji, więc obowiązuje dla niej
+domyślna severity Portcullis.
 
 \subsubsection{Przebieg generowania}
 
@@ -1637,7 +1640,8 @@ Szczegóły emisji:
         (\emph{Severity}, \emph{Category}, \emph{Applies to}, \emph{Gate diagnostic},
         \emph{Principle} z~linkiem do kotwicy zasady w~konstytucji), wiersz
         „\texttt{Contents:}” z~nagłówkami sekcji reguły, treść reguły bez zmian i~stopkę
-        z~linkiem do pliku źródłowego pod tagiem wersji.
+        z~linkiem do pliku źródłowego pod tagiem wersji; taki link działa dopiero wtedy,
+        gdy wersja zostanie otagowana.
   \item \textbf{Konfiguracja analyzerów} (\repopath{AnalyzerConfigEmitter}).
         \repopath{.editorconfig} ma dla każdego wzorca \repopath{appliesTo} reguł z~diagnostyką
         sekcję \repopath{[wzorzec]} z~wierszami \texttt{\# <id> <tytuł>}
@@ -1953,9 +1957,12 @@ Format katalogu i~ograniczenia nazwy oraz opisu & specyfikacja Agent Skills (\pa
         wykrycia.
   \item \textbf{Opis to jedna linia w~podwójnym cudzysłowie, z~klauzulą „Use when…”.}
         Parsery YAML czytają blok złożony równie dobrze, ale liniowe sprawdzenia w~narzędziach
-        dla skilli widzą tylko pierwszą linię skalara blokowego. Pliki referencyjne dłuższe niż
-        100 wierszy zaczynają się od wiersza \repopath{Contents:}, zgodnie z~regułami
-        autorskimi Microsoft (generator dodaje ten wiersz do każdego pliku referencyjnego).
+        dla skilli widzą tylko pierwszą linię skalara blokowego. Każdy plik referencyjny
+        zaczyna się od wiersza \repopath{Contents:} z~sekcjami reguły, co spełnia regułę
+        autorską Microsoft (spis treści w~plikach dłuższych niż 100 wierszy); wiersz jest
+        w~każdym pliku, żeby nie pojawiał się i~nie znikał, gdy reguła przekroczy próg.
+        Tak brzmi decyzja po poprawce ADR z~26 IX 2026; wcześniej mówiła tylko o~plikach
+        dłuższych niż 100 wierszy, choć generator od początku dodawał wiersz wszędzie.
   \item \textbf{Jednorazowe sprawdzenie walidatorem skilli Microsoft, poza CI.} Skrypt
         \path{validate_skill.sh} z~\path{microsoft/upgrade-agent-plugins} zgłasza 0 błędów
         i~dwa ostrzeżenia, obydwa heurystyczne i~nieadekwatne: jego lista prefiksów gerundium
@@ -2826,7 +2833,7 @@ Ticket & Rezultat & Zrobione, gdy & Status \\
 Ticket & Rezultat & Zrobione, gdy & Status \\
 \midrule
 \endhead
-R4 & architecture-standards spakowane jako własny skill dla agenta modernizacyjnego Microsoft (modernize-dotnet) & Agent podejmuje skill w~tickecie P6 benchu (P6 uruchamia człowiek z~GitHub Copilot) & scalone (\#3); zrobione, gdy P6 potwierdzi podjęcie skilla \\
+R4 & standardy migracyjne Second Key, razem z~zasadami architecture-standards, które powtarzają, spakowane jako własny skill dla agenta modernizacyjnego Microsoft (modernize-dotnet) & Agent podejmuje skill w~tickecie P6 benchu (P6 uruchamia człowiek z~GitHub Copilot) & scalone (\#3); zrobione, gdy P6 potwierdzi podjęcie skilla \\
 C4-a & Standardy migracji jako Markdown z~metadanymi reguł (identyfikatory zmapowane na diagnostyki Portcullis) & Każda reguła ma identyfikator, wagę, uzasadnienie, przykład zgodny i~niezgodny & zrobione (scalone \#1) \\
 C4-b & Generator: Markdown → katalog skilli, \repopath{.editorconfig} i~\repopath{.globalconfig}, pakiet NuGet & Tryb \repopath{-{}-check} w~CI zawodzi, gdy wynik jest nieaktualny & zrobione (scalone \#2) \\
 C4-c & Drift check jako jeden krok CI repozytorium konsumenta (wersja przypięta vs opublikowana) & Repozytorium fixture z~nieaktualnym pinem zawodzi, aktualne przechodzi & zrobione (scalone \#4) \\

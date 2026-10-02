@@ -212,8 +212,9 @@ przez potok Roslyn, którego używa skaner. \repopath{Diagnostic.Create} przyjmu
 identyfikator, ale \repopath{ReportDiagnostic} wewnątrz analyzera odrzuca go wyjątkiem
 \repopath{ArgumentException} („which is not a valid identifier”), który Roslyn zgłasza jako
 \repopath{AD0001}. Kropka jest odrzucana tak samo; podkreślenia i~same litery przechodzą.
-Ponieważ SPEC jest zamrożony, problem zapisano w~\repopath{docs/MUTATIONS.md} §1, a~reguły
-używają formy \repopath{PORTCULLIS\_P<n>\_<SLUG>}. \repopath{RuleRegistryTests} sprawdza, że
+Problem zapisano w~\repopath{docs/MUTATIONS.md} §1, reguły używają formy
+\repopath{PORTCULLIS\_P<n>\_<SLUG>}, a~SPEC §1--2 i~makiety wyników w~\path{fixtures/mock-engine-output/}
+podają już tę formę i~identyfikatory, które reguły faktycznie rejestrują. \repopath{RuleRegistryTests} sprawdza, że
 każdy identyfikator zaczyna się od \repopath{PORTCULLIS\_}, zawiera tylko litery, cyfry
 i~podkreślenia, a~kategoria to \repopath{P1}--\repopath{P15}, \repopath{Meta} albo
 \repopath{Migration}. Addendum R2: kategorie \repopath{Meta} (para reguł pokrycia
@@ -267,7 +268,7 @@ są wypisywane.
 \texttt{schemaVersion} & Wersja schematu, dziś \texttt{1.0.0}; podbijana przy zmianie łamiącej. \\
 \texttt{engineVersion} & Wersja informacyjna zestawu silnika, z~commitem źródła (np. \texttt{1.0.0+<sha>}). \\
 \texttt{scannedPath} & Bezwzględna ścieżka skanu. \\
-\texttt{scanStartedUtc} & Według SPEC: czas rozpoczęcia skanu (ISO 8601, UTC). \\
+\texttt{scanStartedUtc} & Czas rozpoczęcia skanu (ISO 8601, UTC), odczytany przed skanem, obok stopera, który mierzy \texttt{scanDurationMs}. \\
 \texttt{scanDurationMs} & Czas trwania skanu w~milisekundach. \\
 \texttt{filesScanned} & Liczba sparsowanych plików \texttt{*.cs} (bez \texttt{bin/}, \texttt{obj/}, \texttt{.git/}). \\
 \texttt{rulesEvaluated} & Liczba analyzerów w~\texttt{RuleRegistry.All}, które się wykonały (w~migawce 11). \\
@@ -1647,7 +1648,9 @@ niezależnie od widoczności repozytorium; trzeba go raz upublicznić w~ustawien
 
 Wyjścia: \repopath{blocked}, \repopath{error-count} (wszystkie błędy w~skanie),
 \repopath{blocking-error-count} (błędy liczone przez bramkę w~aktywnym zakresie),
-\repopath{result-path} (ścieżka surowego JSON). Kroki akcji:
+\repopath{gate-scope} (aktywny zakres: \repopath{diff}, gdy blokować mogą tylko linie
+zmienione w~PR, albo \repopath{all} --- także przy fallbacku, gdy zakresu PR nie dało się
+ustalić), \repopath{result-path} (ścieżka surowego JSON). Kroki akcji:
 
 \begin{enumerate}[leftmargin=*]
   \item \repopath{actions/setup-dotnet@v6}, jeśli \repopath{dotnet-version} nie jest puste.
@@ -2103,12 +2106,12 @@ użycie; tylko 2 oznacza awarię Portcullis, 1 to werdykt.
 \begin{lstlisting}
 {
   "filesScanned": 156,
-  "rulesEvaluated": 7,
+  "rulesEvaluated": 11,
   "violations": [
     { "ruleId": "PORTCULLIS_P9_ORPHAN_ENTITY", "filePath": "Domain/QrCode.cs",
       "line": 11, "message": "...", "severity": "warning" }
   ],
-  "summary": { "errorCount": 4, "warningCount": 14, "infoCount": 0 },
+  "summary": { "errorCount": 9, "warningCount": 9, "infoCount": 0 },
   "gate": { "blocked": true, "scope": "diff", "blockingErrorCount": 5 }
 }
 \end{lstlisting}
