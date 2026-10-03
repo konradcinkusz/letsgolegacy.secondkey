@@ -3,8 +3,9 @@
 Repozytorium \path{letsgolegacy.legacy-risk-scan} zawiera Legacy Risk Scan: publiczną,
 statyczną stronę, na którą wkleja się plik projektu albo listę zależności (\repopath{.csproj},
 \repopath{packages.config}, \repopath{composer.json} i~kilka innych formatów), a~w~odpowiedzi
-dostaje raport o~końcu wsparcia (end-of-life, EOL) i~znanych podatnościach frameworka oraz
-każdej zależności. Raport jest liczony w~przeglądarce. Interfejs strony jest po polsku. Strona
+dostaje raport o~końcu wsparcia (end-of-life, EOL) frameworka i~każdej zależności oraz
+o~znanych podatnościach zależności (środowiska uruchomieniowe i~serwery z~formularza mają
+co najwyżej ocenę końca wsparcia). Raport jest liczony w~przeglądarce. Interfejs strony jest po polsku. Strona
 jest publikowana przez GitHub Pages pod adresem
 \url{https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/}. Rozdział opisuje
 wyłącznie technikę: co strona czyta i~jak, skąd bierze dane, jak klasyfikuje wyniki, jak
@@ -317,8 +318,9 @@ pliki projektu zawierają \repopath{include=} i~\repopath{<version>}.
         (ta druga -- zależności deweloperskie). Ograniczenie \repopath{php} z~\repopath{require}
         staje się wierszem środowiska: minimalną wersją PHP, na której aplikacja deklaruje
         działanie; \repopath{config.platform.php} daje dodatkowy wiersz. Wymagania platformy
-        (\repopath{php-64bit} i~podobne, \repopath{hhvm}, \repopath{composer*},
-        \repopath{ext-*}, \repopath{lib-*}) są pomijane i~wymienione we wskazówce. Każdy pakiet
+        (\repopath{php-64bit} i~podobne, \repopath{hhvm}, \repopath{composer},
+        \repopath{composer-plugin-api}, \repopath{composer-runtime-api}, \repopath{ext-*},
+        \repopath{lib-*}) są pomijane i~wymienione we wskazówce. Każdy pakiet
         jest sprawdzany w~najniższej wersji dopuszczanej przez ograniczenie. Nazwy pakietów są
         sprowadzane do małych liter (\path{Doctrine/DBAL} → \path{doctrine/dbal}), a~prefiks
         \repopath{v} przed numerem jest pomijany (\repopath{v2.8.0} to dokładna wersja 2.8.0).
@@ -519,7 +521,7 @@ po cichu błędna data. Plik zawiera datę pobrania (\repopath{generatedAt}); ra
 („Dane o~końcu wsparcia: endoflife.date, stan na …”).
 
 Produkty w~migawce z~2026-10-03 (wszystkie pobrane przez API v1, lista
-\repopath{unavailable} pusta):
+\repopath{unavailable} pusta; razem 12 produktów i~197 cykli):
 
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.2cm}@{}}
 \toprule
@@ -664,8 +666,10 @@ node scripts/update-eol.mjs --out <file> --date YYYY-MM-DD
 
 Odświeżanie danych automatyzuje workflow \path{update-eol.yml}
 (sekcja~\ref{sec:risk-scan-ci}): co miesiąc regeneruje plik, uruchamia na nim testy
-jednostkowe i~otwiera pull request; pull request zmieniający generator dostaje dane
-zregenerowane na własnej gałęzi, więc generator i~dane nie mogą się rozjechać.
+jednostkowe i~otwiera pull request, o~ile w~repozytorium włączono do tego ustawienie (pierwszy
+przebieg miesięczny, z~2026-10-01, pull requesta nie otworzył); pull request zmieniający
+generator dostaje dane zregenerowane na własnej gałęzi, więc generator i~dane nie mogą się
+rozjechać.
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
 \path{letsgolegacy.legacy-risk-scan/data/eol.json},
@@ -681,9 +685,10 @@ Wersja jest dopasowywana do cyklu wydań po najdłuższym prefiksie liczbowym
 (\repopath{findCycle} w~\path{src/lib/eol.js}): \repopath{4.5.1} → cykl \repopath{4.5.1},
 \repopath{8.0} → \repopath{8}, \repopath{7.1.3} → \repopath{7.1}; \repopath{4.8.1} nie jest
 raportowane jako \repopath{4.8}. Krótka nazwa cyklu, która ma bardziej szczegółowe
-rodzeństwo, oznacza swoje wydanie \repopath{.0}: na liście .NET Framework \repopath{4} to 4.0
-(4.5 i~4.8 są osobnymi cyklami), więc niewymieniona wersja 4.7.2 nie zostanie zgłoszona jako
-4.0; bez rodzeństwa \repopath{8} oznacza całe 8.x.
+rodzeństwo, oznacza swoje wydanie \repopath{.0}: na liście .NET Framework w~fixture testów
+\repopath{4} to 4.0 (4.5 i~4.8 są osobnymi cyklami), więc niewymieniona tam wersja 4.7.2 nie
+zostanie zgłoszona jako 4.0 (zatwierdzone dane nazywają ten cykl \repopath{4.0} i~wymieniają
+4.7.2); bez rodzeństwa \repopath{8} oznacza całe 8.x.
 
 endoflife.date nie wymienia każdego wydania (np. Laravel 5.6 leży między wymienionymi 5.5
 i~5.8, a~stare wydania z~czasem znikają). Dla wersji niewymienionej zwracany jest najbliższy
@@ -743,9 +748,11 @@ dotyczy tylko produktu, który zbiór śledzi, ale wersja nie trafia w~żaden cy
         jedną pozycję na generację produktu, wskazującą cykl wspierany najdłużej -- ostatni
         service pack. Pomijane są kanały \repopath{-sac}, \repopath{-ac}, \repopath{-acp}
         i~pakiety „Azure Connect”; etykiety tracą nazwy kodowe, prefiks produktu i~oznaczenia
-        kanałów; generacje są sortowane od najnowszego pierwszego wydania. Wiersz serwera
-        w~raporcie ma notatkę, że terminy dotyczą ostatniego service packa, a~instalacje ze
-        starszym straciły wsparcie wcześniej.
+        kanałów; generacje są sortowane od najnowszego pierwszego wydania. Wiersz serwera,
+        którego wybrany cykl jest service packiem (np. „2016 SP3”), ma w~raporcie notatkę, że
+        terminy dotyczą ostatniego service packa, a~instalacje ze starszym straciły wsparcie
+        wcześniej. W~migawce z~2026-10-03 formularz ma 14 pozycji SQL Server (od 2025 do 6.0)
+        i~10 pozycji Windows Server (od 2025 do 2000).
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
@@ -840,8 +847,8 @@ Status & Etykieta & Kiedy \\
 \end{tabularx}
 
 Status główny to najgorsza flaga, w~kolejności z~tabeli. Wiersz może liczyć się w~kilku
-kategoriach podsumowania (środowisko po końcu wsparcia ze znanymi podatnościami jest w~obu),
-co strona mówi wprost. Stan sprawdzenia podatności pakietu (\repopath{advisoryState}):
+kategoriach podsumowania (pakiet po końcu wsparcia ze znanymi podatnościami, np. jQuery 1.x,
+jest w~obu), co strona mówi wprost. Stan sprawdzenia podatności pakietu (\repopath{advisoryState}):
 \repopath{checked}, \repopath{not-checkable} (DLL dołączona ręcznie, komponent GAC --
 „nie da się sprawdzić automatycznie”), \repopath{unknown-version} („nie sprawdzono --
 nieznana wersja”), \repopath{error} („nie sprawdzono -- brak połączenia z~OSV”),
@@ -894,8 +901,8 @@ nieustalonych i~liczba różnych podatności.
 Strona renderuje raport (\path{src/render.js}) wyłącznie przez \repopath{textContent}
 i~\repopath{setAttribute}, nigdy \repopath{innerHTML}: streszczenia podatności są tekstem
 z~zewnątrz, a~wklejony plik należy do odwiedzającego, więc żadne z~nich nie może zostać
-zinterpretowane jako znaczniki. Wiersz pokazuje do trzech podatności, resztę za przyciskiem
-„Pokaż pozostałe (…)”. Raport ma krótkie objaśnienie każdego poziomu ryzyka, który w~nim
+zinterpretowane jako znaczniki. Wiersz pokazuje do trzech podatności, resztę w~zwijanym elemencie
+\texttt{<details>} „Pokaż pozostałe (…)”. Raport ma krótkie objaśnienie każdego poziomu ryzyka, który w~nim
 wystąpił (sekcja „Co to oznacza dla firmy”, z~liczbą pozycji w~tytule każdego akapitu),
 sekcje „Platforma”, „Zależności” i~„Uwagi do pliku”, informację o~źródłach i~datach danych
 oraz przycisk „Drukuj lub zapisz jako PDF” (\repopath{window.print()}). Gdy OSV jest
@@ -1035,11 +1042,18 @@ tabeli nie są tu powtarzane.
         przeglądarki; wydruk pomija nagłówek strony, formularz, sekcję o~prywatności
         i~przyciski, a~po identyfikatorze każdej podatności dopisuje jej adres
         (\texttt{a.advisory-id::after} w~bloku \texttt{@media print}; pilnuje tego test e2e
-        \texttt{print: an advisory link is followed by its URL}). Wydruk ma jedno ograniczenie:
-        pierwsze trzy podatności komponentu są widoczne, a~dalsze leżą w~zwiniętym elemencie
-        \texttt{<details>}, którego zawartości Chromium nie drukuje (sprawdzone dla zwykłego
-        zamkniętego \texttt{<details>}, nie dla całego raportu), więc na wydruku jest tylko
-        linia „pokaż więcej”. Przed drukiem rozwiń je w~raporcie.
+        \texttt{print: an advisory link is followed by its URL}). Wydruk kończy się blokiem
+        „Zamów audyt Second Key” z~placeholderem „Kontakt: wkrótce.” i~stopką z~zastrzeżeniem, że
+        raport ma charakter informacyjny. Wydruk ma jedno ograniczenie: pierwsze trzy
+        podatności komponentu są widoczne, a~dalsze leżą w~zwiniętym elemencie
+        \texttt{<details>} z~linią „Pokaż pozostałe (\emph{N})”, którego zawartości Chromium nie
+        drukuje, więc na wydruku ich brakuje, choć licznik „Znane podatności: \emph{N}” w~kolumnie
+        Status pokazuje pełną liczbę. Sprawdzono to jednorazowo, poza repozytorium: w~Chromium 141
+        na całym raporcie (OSV z~makietą, pięć podatności jednego pakietu) PDF miał trzy
+        pierwsze podatności z~adresami i~linię „Pokaż pozostałe (2)”, a~po rozwinięciu tej linii
+        przed drukiem -- wszystkie pięć; repozytorium nie ma testu tego zachowania, a~innych
+        przeglądarek nie sprawdzano. Przed drukiem rozwiń „Pokaż pozostałe” w~każdym wierszu,
+        który je ma.
 \end{enumerate}
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.4cm} >{\raggedright\arraybackslash}X@{}}
@@ -1081,7 +1095,10 @@ Prywatność jest właściwością konstrukcji, a~nie deklaracją:
   \item Wklejony plik jest parsowany \textbf{w~przeglądarce}; sam plik nie jest nigdzie
         wysyłany. Strona mówi wprost, że nazwa pliku, nazwa projektu, ścieżki i~reszta
         treści nie opuszczają komputera odwiedzającego, a~do OSV.dev trafiają tylko nazwy
-        pakietów i~ich wersje, np. „NuGet $\cdot$ Newtonsoft.Json $\cdot$ 6.0.4”.
+        pakietów i~ich wersje, np. „NuGet $\cdot$ Newtonsoft.Json $\cdot$ 6.0.4”. Dotyczy to
+        każdego pakietu z~ustaloną wersją, także wewnętrznego pakietu firmy, jeśli występuje
+        w~pliku: skan nie odróżnia go od publicznego (DLL dołączone ręcznie nie mają współrzędnych
+        i~nie są wysyłane).
   \item Połączenia wychodzące idą wyłącznie do publicznego API OSV.dev: zapytania
         \repopath{querybatch} po najwyżej 1000 pakietów, których ciało buduje jedna funkcja
         (\repopath{toQueries()}), przy stronicowanej odpowiedzi ponowione z~tokenem strony od
@@ -1130,7 +1147,13 @@ bez szablonu są dozwolone.
 \path{.github/CODEOWNERS} wskazuje właściciela całego repozytorium i~osobno dwa miejsca,
 w~których zmiana bez przeglądu złamałaby obietnicę prywatności strony:
 \path{src/lib/osv.js} (to, co strona wysyła przez sieć) i~\path{.github/workflows/} (to, co
-CI może wypychać).
+CI może wypychać). Stan z~2026-10-03: w~historii \repopath{main} 11 z~14 commitów
+niescalających napisały sesje agenta (konto autora agenta i~trailer z~identyfikatorem sesji
+w~komunikacie), pozostałe trzy to boty (\texttt{github-actions[bot]} dwa razy,
+\texttt{dependabot[bot]} raz); osiem commitów scalających należy do konta właściciela,
+a~wszystkie osiem pull requestów (\#1--\#8) scalono bez formalnej recenzji (API GitHub:
+0 recenzji). \path{CODEOWNERS} i~szablon pull requestu opisują więc przegląd zamierzony,
+nie odnotowany w~historii.
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
 \path{letsgolegacy.legacy-risk-scan/src/index.html},
@@ -1231,8 +1254,9 @@ Po wdrożeniu (\path{deploy.yml} → \repopath{verify}) & Opublikowana strona, p
 
 \subsubsection{Testy jednostkowe}
 
-\texttt{npm test} uruchamia \texttt{node -{}-test -{}-test-reporter=spec "test/**/*.test.mjs"}.
-Pliki testów: \path{xml.test.mjs} (elementy, atrybuty, CDATA, komentarze, deklaracja
+\texttt{npm test} uruchamia \texttt{node -{}-test -{}-test-reporter=spec "test/**/*.test.mjs"};
+na commicie \texttt{4f4e346} to 203 testy w~15 plikach i~wszystkie przechodzą (job \repopath{unit},
+run 37116401197). Pliki testów: \path{xml.test.mjs} (elementy, atrybuty, CDATA, komentarze, deklaracja
 i~DOCTYPE; brak rozwijania deklarowanych encji), \path{manifest.test.mjs} (wykrycie formatu,
 odrzucenie zbyt dużego wejścia, obcięty plik XML i~JSON z~pozycją błędu, pozycje błędów JSON
 różnych silników; „nigdy nie pada”: każde obcięcie każdego obsługiwanego pliku albo się
@@ -1251,16 +1275,15 @@ poświadczeń i~referrera, podział na paczki, stronicowanie, klasyfikacja błę
 brakujące rekordy, streszczenia, scalanie), \path{report.test.mjs}, \path{scan.test.mjs},
 \path{servers.test.mjs}, \path{messages.test.mjs} (każdy kod błędu, przyczyny wersji
 i~notatki ma polskie zdanie; liczba mnoga; daty). Fixture: \path{test/fixtures/manifests/},
-nagrane rekordy OSV w~\path{test/fixtures/osv/} (\repopath{GHSA-5crp-9r3c-p9vr},
-\repopath{GHSA-gxr4-xjj5-5px2}, \repopath{GHSA-rmxg-73gg-4p98}) i~odpowiedzi endoflife.date
-w~\path{test/fixtures/endoflife/}.
+ręcznie napisane rekordy OSV w~\path{test/fixtures/osv/} (\repopath{GHSA-5crp-9r3c-p9vr},
+\repopath{GHSA-gxr4-xjj5-5px2}, \repopath{GHSA-rmxg-73gg-4p98}) i~ręcznie napisane odpowiedzi
+w~kształcie API endoflife.date (wartości ilustracyjne) w~\path{test/fixtures/endoflife/}.
 
-Testy logiki nie czytają \path{data/eol.json} (poza dwoma testami dat kluczowych, które
-sprawdzają właśnie zatwierdzone dane). Używają ręcznie napisanego
+Testy logiki nie czytają \path{data/eol.json}. Używają ręcznie napisanego
 \path{test/fixtures/eol.fixture.json} w~tym samym schemacie, którego daty są według jego
 komentarza ilustracyjnymi danymi wejściowymi, a~nie źródłem prawdy, i~stałego dnia
 2026-09-26, więc odświeżenie danych ich nie zmienia; zatwierdzone dane sprawdza tylko
-\path{eol-data.test.mjs}. \path{test/helpers.mjs} (runner zbiera tylko
+\path{eol-data.test.mjs} (sześć testów, w~tym dwa o~datach kluczowych). \path{test/helpers.mjs} (runner zbiera tylko
 \path{*.test.mjs}, więc sam nie jest testem) daje \repopath{fakeOsv}: zastępstwo OSV, które
 odpowiada na \repopath{querybatch} i~\path{/v1/vulns/<id>} z~podanych map, zapisuje każde
 wywołanie, żeby test mógł sprawdzić dokładnie, co zostałoby wysłane, symuluje błąd sieci,
@@ -1293,7 +1316,7 @@ z~trzema, każdy zwinięty do jednego wiersza); 22 referencje do zestawów frame
 \repopath{packages.config} i~jedno \repopath{ProjectReference}, które dają dwie kolejne
 uwagi.
 
-Test jednostkowy (\path{report.test.mjs}: dane fixture, dzień 2026-09-26, OSV z~nagranych
+Test jednostkowy (\path{report.test.mjs}: dane fixture, dzień 2026-09-26, OSV z~ręcznie napisanych
 rekordów) oczekuje 18 pozycji (1 środowisko i~17 pakietów): .NET Framework 4.5.1 po końcu
 wsparcia (2016-01-12); \repopath{jquery} 1.10.2 po końcu wsparcia i~z~dwiema podatnościami
 (\repopath{GHSA-gxr4-xjj5-5px2}, \repopath{GHSA-rmxg-73gg-4p98}), ze statusem
@@ -1312,10 +1335,13 @@ mogą się różnić, bo OSV zmienia się pod niezmienionym repozytorium.
 zrzut ekranu tylko przy porażce; w~CI \repopath{forbidOnly} i~raport HTML. Dwa projekty:
 \repopath{chromium} (zestaw akceptacyjny z~makietą OSV, bez \path{live.spec}, bez ponowień --
 zero tolerancji dla niestabilności) i~\repopath{live} (\path{live.spec}, prawdziwe OSV, dwa
-ponowienia na wypadek chwilowego błędu sieci). Bez \repopath{BASE\_URL} Playwright uruchamia
+ponowienia na wypadek chwilowego błędu sieci). Na commicie \texttt{4f4e346} projekt
+\repopath{chromium} ma 14 testów (w~tym dwa testy axe: tryb jasny i~ciemny), a~\repopath{live}
+jeden. Bez
+\repopath{BASE\_URL} Playwright uruchamia
 \path{scripts/serve.mjs} na porcie 4173 z~bazą \path{/letsgolegacy.legacy-risk-scan/}.
 
-Makieta (\path{e2e/helpers.mjs}) odpowiada za \repopath{api.osv.dev} z~tych samych nagranych
+Makieta (\path{e2e/helpers.mjs}) odpowiada za \repopath{api.osv.dev} z~tych samych ręcznie napisanych
 rekordów co testy jednostkowe (NuGet \repopath{Newtonsoft.Json} 6.0.4 →
 \repopath{GHSA-5crp-9r3c-p9vr}; npm \repopath{jquery} 1.10.2 → \repopath{GHSA-gxr4-xjj5-5px2},
 \repopath{GHSA-rmxg-73gg-4p98}); każde żądanie do innego hosta niż origin strony
@@ -1423,7 +1449,12 @@ anulowania: w~połowie opublikowana strona jest gorsza niż opóźniona.
 
 \textbf{Jednorazowy krok ręczny:} \emph{Settings → Pages → Build and deployment → Source →
 GitHub Actions}. Bez niego pierwsze wdrożenie zawodzi na \repopath{configure-pages} z~błędem
-404, czego nic w~workflow nie może naprawić.
+404, czego nic w~workflow nie może naprawić. Krok wykonano: pierwszy przebieg (2026-09-26,
+run 36234304523) zawiódł właśnie tak, a~od następnego (run 36241320513, tego samego dnia)
+wdrożenie przechodzi. Na commicie \texttt{4f4e346} (run 37116401196, 2026-10-03) przeszły
+wszystkie trzy joby: \repopath{verify} odczytał z~opublikowanego adresu \path{build.json}
+z~tym commitem i~test na żywo przeszedł, więc strona jest opublikowana (stan z~2026-10-03:
+sześć kolejnych przebiegów zielonych).
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
 \path{letsgolegacy.legacy-risk-scan/scripts/wait-for-deploy.mjs},
@@ -1464,12 +1495,19 @@ GitHub Advanced Security, bo repozytorium jest publiczne; macierz języków ma
 Job \repopath{refresh} potrzebuje raz ustawienia \emph{Settings → Actions → General →
 Workflow permissions → Allow GitHub Actions to create and approve pull requests}; bez niego
 gałąź jest wypychana, a~przebieg zawodzi z~komunikatem, jak otworzyć pull request ręcznie.
+Tak było w~pierwszym przebiegu miesięcznym (2026-10-01, run 36820139205): regeneracja
+i~testy przeszły, gałąź \path{automation/update-eol-data} została wypchnięta, a~krok „Open or
+update the pull request” zawiódł z~komunikatem „GitHub Actions is not permitted to create or
+approve pull requests”; pull requesta z~tej gałęzi nie ma (stan z~2026-10-03). Czy ustawienie
+włączono po 2026-10-01, nie zweryfikowano; następny zaplanowany przebieg przypada na 2026-11-01. Dane
+w~\path{data/eol.json} (stan z~2026-10-03) powstały w~jobie \repopath{sync-pr} na pull
+requestach (commity bota \texttt{b8e3fb5} i~\texttt{520b32c}), nie w~przebiegu miesięcznym.
 Commit wypchnięty przez \repopath{GITHUB\_TOKEN} w~\repopath{sync-pr} nie uruchamia ponownie
 CI; zrobi to następny push do gałęzi.
 
 Job \repopath{refresh} uruchamia generator bez \path{--keep-date-if-unchanged}, więc
-\repopath{generatedAt} zmienia się przy każdym przebiegu, a~pull request powstaje co miesiąc
-także wtedy, gdy poza datą nic się nie zmieniło -- jego opis mówi wtedy, że dane
+\repopath{generatedAt} zmienia się przy każdym przebiegu, a~pull request, o~ile ustawienie
+jest włączone, powstaje co miesiąc także wtedy, gdy poza datą nic się nie zmieniło -- jego opis mówi wtedy, że dane
 sprawdzono ponownie i~są poza tym identyczne. Gałąź \path{automation/update-eol-data} jest
 za każdym razem tworzona od nowa i~wypychana z~\texttt{-{}-force}; gdy pull request z~niej
 jest już otwarty, job zmienia tylko jego opis. Opis linkuje przebieg, w~którym przeszły testy
@@ -1546,48 +1584,76 @@ w~jednym pliku. Dalej z~kodu i~z~tekstów strony:
         (sekcja~\ref{sec:risk-scan-reguly}).
   \item „Bez zastrzeżeń” to według strony dobry znak, ale nie gwarancja; stopka mówi, że
         raport ma charakter informacyjny i~nie zastępuje audytu bezpieczeństwa.
+  \item Znane podatności są sprawdzane tylko dla pakietów (NuGet, npm, Packagist). Frameworki
+        i~środowiska uruchomieniowe z~pliku oraz serwery z~formularza mają co najwyżej ocenę końca
+        wsparcia (w~kolumnie „Podatności” mają „---”), więc raport nic nie mówi o~podatnościach
+        samej platformy.
+  \item Wydruk albo PDF pomija podatności powyżej trzeciej w~komponencie, dopóki odwiedzający
+        nie rozwinie „Pokaż pozostałe” (sekcja~\ref{sec:risk-scan-procedura}).
+  \item Sekcja „Zamów audyt Second Key” nie ma kontaktu: zamiast adresu strona, także na
+        wydruku raportu, pokazuje „Kontakt: wkrótce.” (\texttt{TODO(L17)}); nie ma e-maila,
+        telefonu, formularza ani odnośnika do zamówienia, a~test e2e pilnuje, żeby strona nie
+        pokazywała wymyślonego adresu.
 \end{itemize}
 
+Z~repozytorium: nie ma pomiaru pokrycia kodu, testów mutacyjnych, lintera ani sprawdzania typów
+(\path{package.json} wymienia tylko Playwright i~axe), a~żaden test nie mierzy trafności
+skanera -- testy sprawdzają jego zachowanie na fixture, przykładzie i~makiecie OSV.
+
 \zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/package.json},
 \path{letsgolegacy.legacy-risk-scan/src/lib/manifest.js},
 \path{letsgolegacy.legacy-risk-scan/src/lib/parsers/msbuild.js},
 \path{letsgolegacy.legacy-risk-scan/src/lib/known-libraries.js},
 \path{letsgolegacy.legacy-risk-scan/src/lib/eol.js},
+\path{letsgolegacy.legacy-risk-scan/src/lib/report.js},
 \path{letsgolegacy.legacy-risk-scan/src/lib/messages.js},
+\path{letsgolegacy.legacy-risk-scan/src/render.js},
 \path{letsgolegacy.legacy-risk-scan/src/index.html},
-\path{letsgolegacy.legacy-risk-scan/test/eol.test.mjs}}
+\path{letsgolegacy.legacy-risk-scan/test/eol.test.mjs},
+\path{letsgolegacy.legacy-risk-scan/e2e/scan.spec.mjs}}
 
 \subsection{Status według WORKPLAN}\label{sec:risk-scan-status}
 
-\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{4.0cm}@{}}
+\begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{5.2cm}@{}}
 \toprule
 Ticket & Rezultat & Zrobione, gdy & Status \\
 \midrule
-L18 & Wklejenie \repopath{.csproj} / \repopath{packages.config} / \repopath{composer.json} → raport EOL i~CVE & Publiczna strona zwraca raport dla przykładowego pliku & scalone (\#1, \#2); zrobione, gdy przejdzie job \repopath{verify} w~\path{deploy.yml} -- czeka na krok 1 poniżej \\
+L18 & Wklejenie \repopath{.csproj} / \repopath{packages.config} / \repopath{composer.json} → raport EOL i~CVE & Publiczna strona zwraca raport dla przykładowego pliku & scalone (\#1, \#2); WORKPLAN pisze: zrobione, gdy przejdzie job \repopath{verify} w~\path{deploy.yml}, „czeka na krok~1”; w~CI \repopath{verify} przechodzi od 2026-09-26 (niżej), a~WORKPLAN tego nie odnotowuje \\
 \bottomrule
 \end{tabularx}
 
 L18 zrealizowano w~dwóch piętrowych pull requestach: \#1 (silnik, pipeline danych EOL,
 baseline repozytorium) i~\#2 (strona, wdrożenie, testy e2e). Przed przeglądem sprawdzono
 w~CI, że przykład daje w~prawdziwej przeglądarce raport z~wierszami EOL i~prawdziwą
-podatnością z~OSV oraz że OSV odpowiada na CORS dla opublikowanego originu. Niesprawdzona
-pozostaje sama opublikowana strona, która nie istnieje przed wykonaniem kroków:
+podatnością z~OSV oraz że OSV odpowiada na CORS dla opublikowanego originu. Sama opublikowana
+strona nie istniała przed wykonaniem kroków z~WORKPLAN; ich stan według CI na 2026-10-03
+podaje lista poniżej, a~WORKPLAN na przypiętym commicie odnotowuje tylko krok~2 (wiersz L18
+nadal mówi, że ticket czeka na krok~1):
 
 \begin{enumerate}
   \item \emph{Settings → Pages → Build and deployment → Source → GitHub Actions} (jednorazowo).
+        Wykonany: od przebiegu \path{deploy.yml} z~2026-09-26 (run 36241320513) krok
+        \repopath{configure-pages} i~wdrożenie przechodzą.
   \item Scalenie \#1, potem \#2 -- wykonane 26~IX~2026. Pierwszy przebieg \path{deploy.yml} na
         \repopath{main} zawiódł na \repopath{configure-pages} z~błędem 404, czego oczekiwano
         przed krokiem 1.
   \item Push do \repopath{main} uruchamia \path{deploy.yml}; jego job \repopath{verify} ładuje
         \textbf{opublikowaną} stronę, uruchamia przykład na prawdziwym OSV i~zachowuje zrzut
-        całej strony (artefakt \repopath{live-verification}). Gdy przejdzie, warunek „done when”
-        jest spełniony i~L18 można oznaczyć jako zrobiony. Po kroku~1 nie trzeba czekać na
-        kolejny push: \path{deploy.yml} ma też wyzwalacz ręczny (\texttt{workflow\_dispatch}).
+        całej strony (artefakt \repopath{live-verification}). Przechodzi: na commicie
+        \texttt{4f4e346} (run 37116401196, 2026-10-03) odczytał z~opublikowanej strony
+        \path{build.json} z~tym commitem i~test na żywo przeszedł, więc warunek „done when”
+        jest spełniony, choć WORKPLAN nie oznacza jeszcze L18 jako zrobionego. Po kroku~1 nie
+        trzeba było czekać na kolejny push: \path{deploy.yml} ma też wyzwalacz ręczny
+        (\texttt{workflow\_dispatch}).
   \item Dla miesięcznego pull requestu z~danymi EOL: \emph{Settings → Actions → General → Allow
-        GitHub Actions to create and approve pull requests}.
+        GitHub Actions to create and approve pull requests}. Nie był wykonany 2026-10-01: pierwszy
+        przebieg miesięczny zawiódł na otwarciu pull requesta (sekcja~\ref{sec:risk-scan-ci});
+        czy ustawienie włączono później, nie zweryfikowano.
   \item Gdy ticket L17 dostarczy domenę i~adres kontaktowy, zastąpić placeholder
         \repopath{TODO(L17)} w~\path{src/index.html} (do tego czasu strona nie pokazuje
-        wymyślonego adresu).
+        wymyślonego adresu). Niewykonany: sekcja „Zamów audyt Second Key” pokazuje „Kontakt:
+        wkrótce.”.
 \end{enumerate}
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
