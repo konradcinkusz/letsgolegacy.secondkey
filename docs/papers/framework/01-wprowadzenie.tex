@@ -64,11 +64,12 @@ narzędziami, które ją realizują. Narzędzia mieszkają w repozytoriach o pre
         Portcullis i~standardy czekają na tę migrację).
 \end{itemize}
 
-Komponenty wymieniają się wyłącznie plikami: nagraniem \repopath{*.skcap}, kontraktem
+Kroki łańcucha wymieniają się wyłącznie plikami: nagraniem \repopath{*.skcap}, kontraktem
 \repopath{contract.yaml}, przebiegiem \repopath{*.skrun}, werdyktem
-\repopath{verdict.json}, logami bramki \repopath{*.sarif} i pakietem dowodowym. Żaden
-komponent nie sięga do wnętrza innego, więc każdy da się wymienić, jeśli czyta i pisze te
-same artefakty (rozdział~\ref{sec:architektura}).
+\repopath{verdict.json}, logami bramki \repopath{*.sarif} i pakietem dowodowym. Dlatego
+każdy krok da się wymienić, jeśli czyta i~pisze te same artefakty
+(rozdział~\ref{sec:architektura}); wewnątrz rdzenia projekty wywołują się jednak jako
+biblioteki (komparator woła silnik kontraktu, a~CLI składa wszystkie w~jednym procesie).
 
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},

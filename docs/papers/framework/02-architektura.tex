@@ -41,10 +41,11 @@ Wszystko, co następuje po replay, działa na plikach.
 
 \subsection{Artefakty są interfejsem}\label{sec:architektura-artefakty}
 
-\finding{Każdy komponent czyta i pisze pliki, nigdy wnętrza innego komponentu.} Dowolny
-komponent można wymienić, dopóki czyta i pisze te same artefakty. Dlatego formaty są
-wersjonowane, opisane schematami JSON i pilnowane testami na próbkach
-(rozdział~\ref{sec:formaty}).
+\finding{Kroki łańcucha wymieniają się plikami, a~nie wnętrzami.} Dowolny krok można
+wymienić, dopóki czyta i~pisze te same artefakty; wewnątrz rdzenia projekty wywołują się
+jednak jako biblioteki (komparator woła silnik kontraktu, a~CLI składa wszystkie w~jednym
+procesie). Dlatego formaty są wersjonowane, opisane schematami JSON i~pilnowane testami na
+próbkach (rozdział~\ref{sec:formaty}).
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -78,6 +79,7 @@ systemu; kontrakt, porównanie i pakiet dowodowy to „plik na wejściu, plik na
 \zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/adr/0001-artifacts-are-the-interface.md},
 \path{letsgolegacy.secondkey/schemas/skcap.schema.json},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/Comparator.cs},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md}}
 
 \subsection{Komponenty C0--C12 i repozytoria}\label{sec:architektura-komponenty}
