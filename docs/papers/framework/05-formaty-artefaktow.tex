@@ -373,7 +373,9 @@ porównania liczbowe w~klauzulach jej nie spełniają, a~przy porównaniu stron 
 \repopath{timestamps}. \repopath{key} w~\repopath{updated} zawiera kolumny klucza głównego.
 Tabela bez klucza głównego identyfikuje wiersz całą zawartością, więc zmieniony wiersz pojawia
 się w~niej jako usunięty i~wstawiony, nigdy jako \repopath{updated}. Tabele są ułożone według
-nazwy.
+nazwy. Sonda czyta całe tabele (\texttt{SELECT *}), więc zawartość wierszy trafia do przebiegu,
+a~przy różnicach także do werdyktu; jest przeznaczona dla małych, zasianych baz środowiska
+weryfikacyjnego.
 
 \paragraph{Przykład.} Z~\path{schemas/samples/sample.skrun}: nagłówek, reset i~wynik kandydata w~scenariuszu \repopath{s-19b2f4} oraz \repopath{run.end} (pozostałe linie pominięto).
 
@@ -805,7 +807,8 @@ normalize:
         \repopath{name} w~postaci jak \repopath{metadata.name}, \repopath{regex} niepusty,
         a~\repopath{replacement} może odwoływać się do grup (\repopath{\$1}). Maski działają na
         każdej wartości napisowej (nie na kluczach ani liczbach), w~kolejności: znaczniki czasu,
-        GUID-y, wzorce.
+        GUID-y, wzorce. Maski działają tylko na kopii porównywanego dokumentu: nie zmieniają
+        nagrania, przebiegu, werdyktu ani raportu i~nie chronią danych osobowych.
 \end{itemize}
 
 \repopath{timestamps} maskuje wyłącznie daty ISO-8601. Inne formy --- \repopath{/Date(1411725600000)/}
@@ -1538,7 +1541,10 @@ not matter”, „What this evidence does not show” i~„Integrity” (skróty
 niewyjaśniona różnica jest oznaczona jako problem, w~kandydacie na poprawkę --- neutralnie,
 bo to zmiana, o~której decyduje osoba. W~„Integrity” skróty kontraktu i~przebiegu są tymi,
 które nazywa werdykt (pakiet sprawdził kontrakt i~podany przebieg przy składaniu), a~skróty
-\repopath{verdict.json} i~logów SARIF są liczone z~kopii w~pakiecie.
+\repopath{verdict.json} i~logów SARIF są liczone z~kopii w~pakiecie. Raport jest po angielsku
+(język strony: \texttt{en}), mechanizmu tłumaczeń nie ma. Werdykt i~raport zawierają fragmenty nagrania
+--- linię każdego żądania (metoda, ścieżka i~query) oraz wartości różnic --- także gdy pakiet nie niesie
+\path{run.skrun}.
 
 \paragraph{Wejścia i~katalog wyjściowy.} Zanim cokolwiek zapisze, \repopath{sk evidence} czyta
 werdykt (walidowany schematem), wczytuje i~waliduje kontrakt, porównuje SHA-256 kontraktu oraz
