@@ -9,7 +9,10 @@ co najwyżej ocenę końca wsparcia). Raport jest liczony w~przeglądarce. Inter
 jest publikowana przez GitHub Pages pod adresem
 \url{https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/}. Rozdział opisuje
 wyłącznie technikę: co strona czyta i~jak, skąd bierze dane, jak klasyfikuje wyniki, jak
-chroni plik użytkownika, jak jest testowana, budowana i~wdrażana.
+chroni plik użytkownika, jak jest testowana, budowana i~wdrażana. Opisany stan to commit
+\texttt{4f4e346} (kod, dane, workflowy, testy); \path{README.md} i~\path{docs/WORKPLAN.md}
+czytano na \texttt{6bb73b1} (scalenie PR~\#9), który względem \texttt{4f4e346} zmienia
+wyłącznie te dwa pliki dokumentacji.
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/README.md}}
 
@@ -1044,8 +1047,8 @@ tabeli nie są tu powtarzane.
         (\texttt{a.advisory-id::after} w~bloku \texttt{@media print}; pilnuje tego test e2e
         \texttt{print: an advisory link is followed by its URL}). Wydruk kończy się blokiem
         „Zamów audyt Second Key” z~placeholderem „Kontakt: wkrótce.” i~stopką z~zastrzeżeniem, że
-        raport ma charakter informacyjny. Wydruk ma jedno ograniczenie: pierwsze trzy
-        podatności komponentu są widoczne, a~dalsze leżą w~zwiniętym elemencie
+        raport ma charakter informacyjny. Wydruk ma jedno ograniczenie (README zapisuje je w~„Known
+        limitations”): pierwsze trzy podatności komponentu są widoczne, a~dalsze leżą w~zwiniętym elemencie
         \texttt{<details>} z~linią „Pokaż pozostałe (\emph{N})”, którego zawartości Chromium nie
         drukuje, więc na wydruku ich brakuje, choć licznik „Znane podatności: \emph{N}” w~kolumnie
         Status pokazuje pełną liczbę. Sprawdzono to jednorazowo, poza repozytorium: w~Chromium 141
@@ -1147,11 +1150,11 @@ bez szablonu są dozwolone.
 \path{.github/CODEOWNERS} wskazuje właściciela całego repozytorium i~osobno dwa miejsca,
 w~których zmiana bez przeglądu złamałaby obietnicę prywatności strony:
 \path{src/lib/osv.js} (to, co strona wysyła przez sieć) i~\path{.github/workflows/} (to, co
-CI może wypychać). Stan z~2026-10-03: w~historii \repopath{main} 11 z~14 commitów
+CI może wypychać). Stan na \texttt{6bb73b1}: w~historii \repopath{main} 12 z~15 commitów
 niescalających napisały sesje agenta (konto autora agenta i~trailer z~identyfikatorem sesji
 w~komunikacie), pozostałe trzy to boty (\texttt{github-actions[bot]} dwa razy,
-\texttt{dependabot[bot]} raz); osiem commitów scalających należy do konta właściciela,
-a~wszystkie osiem pull requestów (\#1--\#8) scalono bez formalnej recenzji (API GitHub:
+\texttt{dependabot[bot]} raz); dziewięć commitów scalających należy do konta właściciela,
+a~wszystkie dziewięć pull requestów (\#1--\#9) scalono bez formalnej recenzji (API GitHub:
 0 recenzji). \path{CODEOWNERS} i~szablon pull requestu opisują więc przegląd zamierzony,
 nie odnotowany w~historii.
 
@@ -1454,7 +1457,7 @@ run 36234304523) zawiódł właśnie tak, a~od następnego (run 36241320513, teg
 wdrożenie przechodzi. Na commicie \texttt{4f4e346} (run 37116401196, 2026-10-03) przeszły
 wszystkie trzy joby: \repopath{verify} odczytał z~opublikowanego adresu \path{build.json}
 z~tym commitem i~test na żywo przeszedł, więc strona jest opublikowana (stan z~2026-10-03:
-sześć kolejnych przebiegów zielonych).
+siedem kolejnych przebiegów zielonych, ostatni -- run 37124075860 -- na \texttt{6bb73b1}).
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
 \path{letsgolegacy.legacy-risk-scan/scripts/wait-for-deploy.mjs},
@@ -1498,8 +1501,9 @@ gałąź jest wypychana, a~przebieg zawodzi z~komunikatem, jak otworzyć pull re
 Tak było w~pierwszym przebiegu miesięcznym (2026-10-01, run 36820139205): regeneracja
 i~testy przeszły, gałąź \path{automation/update-eol-data} została wypchnięta, a~krok „Open or
 update the pull request” zawiódł z~komunikatem „GitHub Actions is not permitted to create or
-approve pull requests”; pull requesta z~tej gałęzi nie ma (stan z~2026-10-03). Czy ustawienie
-włączono po 2026-10-01, nie zweryfikowano; następny zaplanowany przebieg przypada na 2026-11-01. Dane
+approve pull requests”; pull requesta z~tej gałęzi nie ma (stan z~2026-10-03). WORKPLAN.md
+(\texttt{6bb73b1}) prowadzi to ustawienie jako nadal otwarte (krok~4); samego ustawienia nie
+sprawdzano. Następny zaplanowany przebieg przypada na 2026-11-01. Dane
 w~\path{data/eol.json} (stan z~2026-10-03) powstały w~jobie \repopath{sync-pr} na pull
 requestach (commity bota \texttt{b8e3fb5} i~\texttt{520b32c}), nie w~przebiegu miesięcznym.
 Commit wypchnięty przez \repopath{GITHUB\_TOKEN} w~\repopath{sync-pr} nie uruchamia ponownie
@@ -1568,6 +1572,11 @@ Według README:
         dają dokładne wyniki.
   \item Ręcznie skopiowanych DLL i~komponentów GAC nie da się sprawdzić automatycznie; są
         wymienione jako wymagające ręcznej weryfikacji, a~nie zgadywane.
+  \item \textbf{Wydruk i~PDF pokazują pierwsze trzy podatności każdego komponentu.} Reszta
+        leży w~zwiniętej sekcji „Pokaż pozostałe”, której przeglądarka nie drukuje, dopóki jej
+        się nie rozwinie; licznik „Znane podatności: \emph{N}” nadal pokazuje pełną liczbę.
+        Przed drukiem trzeba tę sekcję rozwinąć (sprawdzone w~Chromium 141:
+        sekcja~\ref{sec:risk-scan-procedura}).
 \end{itemize}
 
 Z~kodu: \repopath{package-lock.json} nie jest obsługiwany (strona prosi o~\repopath{package.json});
@@ -1588,8 +1597,6 @@ w~jednym pliku. Dalej z~kodu i~z~tekstów strony:
         i~środowiska uruchomieniowe z~pliku oraz serwery z~formularza mają co najwyżej ocenę końca
         wsparcia (w~kolumnie „Podatności” mają „---”), więc raport nic nie mówi o~podatnościach
         samej platformy.
-  \item Wydruk albo PDF pomija podatności powyżej trzeciej w~komponencie, dopóki odwiedzający
-        nie rozwinie „Pokaż pozostałe” (sekcja~\ref{sec:risk-scan-procedura}).
   \item Sekcja „Zamów audyt Second Key” nie ma kontaktu: zamiast adresu strona, także na
         wydruku raportu, pokazuje „Kontakt: wkrótce.” (\texttt{TODO(L17)}); nie ma e-maila,
         telefonu, formularza ani odnośnika do zamówienia, a~test e2e pilnuje, żeby strona nie
@@ -1615,47 +1622,50 @@ skanera -- testy sprawdzają jego zachowanie na fixture, przykładzie i~makiecie
 
 \subsection{Status według WORKPLAN}\label{sec:risk-scan-status}
 
+Stan według \path{docs/WORKPLAN.md} na commicie \texttt{6bb73b1}. Zgadza się z~przebiegami CI
+opisanymi w~sekcjach~\ref{sec:risk-scan-deploy} i~\ref{sec:risk-scan-ci}.
+
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{1.0cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{5.2cm}@{}}
 \toprule
 Ticket & Rezultat & Zrobione, gdy & Status \\
 \midrule
-L18 & Wklejenie \repopath{.csproj} / \repopath{packages.config} / \repopath{composer.json} → raport EOL i~CVE & Publiczna strona zwraca raport dla przykładowego pliku & scalone (\#1, \#2); WORKPLAN pisze: zrobione, gdy przejdzie job \repopath{verify} w~\path{deploy.yml}, „czeka na krok~1”; w~CI \repopath{verify} przechodzi od 2026-09-26 (niżej), a~WORKPLAN tego nie odnotowuje \\
+L18 & Wklejenie \repopath{.csproj} / \repopath{packages.config} / \repopath{composer.json} → raport EOL i~CVE & Publiczna strona zwraca raport dla przykładowego pliku & zrobione: opublikowane od 26~IX~2026, a~job \repopath{verify} w~\path{deploy.yml} przechodzi (run 37116401196 na \texttt{4f4e346}); dwa kroki poniżej zostają otwarte \\
 \bottomrule
 \end{tabularx}
 
 L18 zrealizowano w~dwóch piętrowych pull requestach: \#1 (silnik, pipeline danych EOL,
-baseline repozytorium) i~\#2 (strona, wdrożenie, testy e2e). Przed przeglądem sprawdzono
-w~CI, że przykład daje w~prawdziwej przeglądarce raport z~wierszami EOL i~prawdziwą
-podatnością z~OSV oraz że OSV odpowiada na CORS dla opublikowanego originu. Sama opublikowana
-strona nie istniała przed wykonaniem kroków z~WORKPLAN; ich stan według CI na 2026-10-03
-podaje lista poniżej, a~WORKPLAN na przypiętym commicie odnotowuje tylko krok~2 (wiersz L18
-nadal mówi, że ticket czeka na krok~1):
+baseline repozytorium) i~\#2 (strona, wdrożenie, testy e2e). Strona jest opublikowana pod
+adresem \url{https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/}; każdy push do
+\repopath{main} uruchamia \path{deploy.yml}, którego job \repopath{verify} ładuje
+\textbf{opublikowaną} stronę, uruchamia przykład na prawdziwym OSV i~zachowuje zrzut całej
+strony (artefakt \repopath{live-verification}). Job przechodzi (run 37116401196 na
+\texttt{4f4e346}, po scaleniu PR~\#9 także run 37124075860 na \texttt{6bb73b1}), więc warunek
+„done when” jest spełniony. Pięć kroków, które WORKPLAN prowadzi, trzy wykonane i~dwa otwarte:
 
 \begin{enumerate}
   \item \emph{Settings → Pages → Build and deployment → Source → GitHub Actions} (jednorazowo).
-        Wykonany: od przebiegu \path{deploy.yml} z~2026-09-26 (run 36241320513) krok
-        \repopath{configure-pages} i~wdrożenie przechodzą.
+        Wykonany: pierwsze udane wdrożenie było 26~IX~2026 (run 36241320513).
   \item Scalenie \#1, potem \#2 -- wykonane 26~IX~2026. Pierwszy przebieg \path{deploy.yml} na
         \repopath{main} zawiódł na \repopath{configure-pages} z~błędem 404, czego oczekiwano
         przed krokiem 1.
-  \item Push do \repopath{main} uruchamia \path{deploy.yml}; jego job \repopath{verify} ładuje
-        \textbf{opublikowaną} stronę, uruchamia przykład na prawdziwym OSV i~zachowuje zrzut
-        całej strony (artefakt \repopath{live-verification}). Przechodzi: na commicie
-        \texttt{4f4e346} (run 37116401196, 2026-10-03) odczytał z~opublikowanej strony
-        \path{build.json} z~tym commitem i~test na żywo przeszedł, więc warunek „done when”
-        jest spełniony, choć WORKPLAN nie oznacza jeszcze L18 jako zrobionego. Po kroku~1 nie
-        trzeba było czekać na kolejny push: \path{deploy.yml} ma też wyzwalacz ręczny
-        (\texttt{workflow\_dispatch}).
-  \item Dla miesięcznego pull requestu z~danymi EOL: \emph{Settings → Actions → General → Allow
-        GitHub Actions to create and approve pull requests}. Nie był wykonany 2026-10-01: pierwszy
-        przebieg miesięczny zawiódł na otwarciu pull requesta (sekcja~\ref{sec:risk-scan-ci});
-        czy ustawienie włączono później, nie zweryfikowano.
-  \item Gdy ticket L17 dostarczy domenę i~adres kontaktowy, zastąpić placeholder
-        \repopath{TODO(L17)} w~\path{src/index.html} (do tego czasu strona nie pokazuje
-        wymyślonego adresu). Niewykonany: sekcja „Zamów audyt Second Key” pokazuje „Kontakt:
+  \item Push do \repopath{main} uruchamia \path{deploy.yml}, a~jego job \repopath{verify}
+        przechodzi. Wykonany: na \texttt{4f4e346} (run 37116401196, 2026-10-03)
+        \repopath{verify} odczytał z~opublikowanej strony \path{build.json} z~tym commitem,
+        a~test na żywo przeszedł.
+  \item \textbf{Otwarty:} dla miesięcznego pull requestu z~danymi EOL: \emph{Settings → Actions
+        → General → Allow GitHub Actions to create and approve pull requests}. Zaplanowany
+        przebieg z~2026-10-01 (run 36820139205) pobrał i~przetestował dane, ale bez tego
+        ustawienia zawiódł na kroku „Open or update the pull request”
+        (sekcja~\ref{sec:risk-scan-ci}); dane w~\path{data/eol.json} (2026-10-03) pochodzą
+        z~jobu \repopath{sync-pr} pull requestu. Samego ustawienia nie sprawdzano.
+  \item \textbf{Otwarty:} gdy ticket L17 dostarczy domenę i~adres kontaktowy, zastąpić
+        placeholder \repopath{TODO(L17)} w~\path{src/index.html} (do tego czasu strona nie
+        pokazuje wymyślonego adresu): sekcja „Zamów audyt Second Key” pokazuje „Kontakt:
         wkrótce.”.
 \end{enumerate}
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
 \path{letsgolegacy.legacy-risk-scan/README.md},
-\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml}}
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/update-eol.yml},
+\path{letsgolegacy.legacy-risk-scan/src/index.html}}
