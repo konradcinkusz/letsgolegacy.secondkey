@@ -84,6 +84,13 @@ public class ValidateCommandTests
             var (badValue, badOutput, _) = await RunAsync("validate", good);
             Assert.Equal(ExitCodes.InvalidInput, badValue);
             Assert.Contains("replay.scenarioMode: 'exchanges' is not one of session, exchange", badOutput, StringComparison.Ordinal);
+
+            // A correlation pattern is checked the same way: validate refuses what replay would
+            // otherwise only trip over once it was running.
+            await File.WriteAllTextAsync(good, "version: 1\nreplay:\n  correlation:\n    - { name: csrf, regex: '(', formField: f }\n");
+            var (badPattern, patternOutput, _) = await RunAsync("validate", good);
+            Assert.Equal(ExitCodes.InvalidInput, badPattern);
+            Assert.Contains("replay.correlation[0].regex ('csrf'): not a valid regular expression", patternOutput, StringComparison.Ordinal);
         }
         finally
         {

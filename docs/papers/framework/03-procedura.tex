@@ -586,9 +586,9 @@ referencja języka: rozdział~\ref{sec:formaty}.
 sk validate contract.yaml secondkey.yaml
 \end{lstlisting}
         Błąd walidacji wskazuje miejsce (ścieżkę w dokumencie) i powód. Walidacja
-        \repopath{secondkey.yaml} nie sprawdza zmiennych z \repopath{connectionStringEnv}
-        ani wyrażeń korelacji; sprawdza je dopiero \repopath{sk replay}
-        (sekcja~\ref{sec:cli-konfiguracja}).
+        \repopath{secondkey.yaml} sprawdza wyrażenia korelacji (muszą się kompilować i mieć grupę),
+        ale nie zmienne z \repopath{connectionStringEnv}; ich brak zgłasza dopiero
+        \repopath{sk replay} (sekcja~\ref{sec:cli-konfiguracja}).
 \end{enumerate}
 
 Plan ruchu benchu zawiera też sondy NLS → ICU dla P7: miejsca w nopCommerce, w których

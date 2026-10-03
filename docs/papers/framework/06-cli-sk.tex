@@ -473,7 +473,8 @@ Ograniczenia reguły korelacji, z~kodu replay:
         \texttt{text/*}, XML, formularze. Odpowiedź JSON (\texttt{application/json},
         \texttt{*+json}) jest zapisywana jako JSON i~reguła jej nie czyta. Nie czyta też
         treści base64.
-  \item \repopath{regex} bez grupy niczego nie poznaje i~niczego nie zgłasza.
+  \item \repopath{regex} bez grupy niczego by nie poznawał i~niczego by nie zgłaszał, więc
+        plik z~takim wyrażeniem jest odrzucany przy wczytaniu (niżej).
   \item \repopath{formField} jest podmieniane tylko tam, gdzie pole już jest, i~to w~każdym
         jego wystąpieniu; reguła nigdy pola nie dodaje. Nazwy pól porównuje się po
         zdekodowaniu (\texttt{+} to spacja) i~z~rozróżnieniem wielkości liter, a~wartość
@@ -485,10 +486,13 @@ Ograniczenia reguły korelacji, z~kodu replay:
   \item Wyrażenie jest kompilowane bez zależności od kultury, z~limitem czasu dopasowania
         równym jednej sekundzie. Dopasowanie, które ten limit przekroczy, przerywa replay
         kodem 4.
-  \item Wyrażenia nie sprawdza ani wczytanie \repopath{secondkey.yaml}, ani
-        \repopath{sk validate secondkey.yaml}. Niepoprawne wyrażenie zatrzymuje dopiero
-        \repopath{sk replay}, zanim cokolwiek zapisze, kodem 4 z~komunikatem
-        \texttt{error: …}.
+  \item Wyrażenie jest sprawdzane przy wczytaniu \path{secondkey.yaml}, więc
+        \repopath{sk validate} i~każde polecenie odrzucają je tak samo, kodem 3
+        i~komunikatem z~nazwą reguły (\texttt{replay.correlation[0].regex ('csrf'): not a
+        valid regular expression: …}). Wyrażenie musi się kompilować i~mieć co najmniej jedną
+        grupę przechwytującą: bez grupy przebieg by ruszył i~niczego by się nie nauczył
+        (\texttt{… has no capture group; …}). Grupa nienazwana, nazwana i~numerowana liczą
+        się tak samo; grupa nieprzechwytująca (\texttt{(?:…)}) nie.
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey/docs/cli.md},
@@ -854,7 +858,7 @@ albo SIGTERM; wynik może być niekompletny, np. przebieg bez \repopath{run.end}
 \texttt{error: database '<baza>' was not found or has no data files} & 4 & zła nazwa
 w~\repopath{reset.sqlServerSnapshot.database} \\
 \texttt{error: …} & 4 & każdy inny wyjątek, np. brak pliku wejściowego,
-\repopath{-{}-pdf required} bez PDF, niepoprawny regex korelacji \\
+\repopath{-{}-pdf required} bez PDF \\
 \end{xltabular}
 }
 
@@ -953,8 +957,8 @@ też. Pusty plik to pusta konfiguracja. YAML jest typowany tak samo jak w~kontra
 core schema). \repopath{sk validate secondkey.yaml} sprawdza plik bez uruchamiania czegokolwiek.
 Wartości, których typ klucza nie ogranicza --- adresy (bezwzględne http(s)),
 \repopath{scenarioMode} (\repopath{session} albo \repopath{exchange}), \repopath{evidence.pdf}
-(\repopath{auto}, \repopath{required}, \repopath{off}) i~\repopath{reset} (dokładnie jeden
-rodzaj) --- są sprawdzane przy wczytaniu pliku, więc \repopath{sk validate secondkey.yaml}
+(\repopath{auto}, \repopath{required}, \repopath{off}), \repopath{reset} (dokładnie jeden
+rodzaj) i~wyrażenia korelacji (kompilują się i~mają grupę) --- są sprawdzane przy wczytaniu pliku, więc \repopath{sk validate secondkey.yaml}
 i~każde polecenie odrzucają ten sam plik tak samo, kodem 3.
 
 Wczytanie pliku, a~więc i~\repopath{sk validate secondkey.yaml}, nie sprawdza wszystkiego,
@@ -962,8 +966,6 @@ co może zatrzymać polecenie później:
 \begin{itemize}
   \item czy zmienne z~\repopath{connectionStringEnv} są ustawione --- sprawdza to dopiero
         \repopath{sk replay} (kod 3);
-  \item czy wyrażenia \repopath{replay.correlation[].regex} się kompilują --- dopiero
-        \repopath{sk replay} (kod 4);
   \item czy pliki wskazane ścieżkami istnieją --- brak pliku wejściowego daje kod 4;
   \item jakie są wartości \repopath{timeoutSeconds} i~\repopath{maxBodyBytes}.
 \end{itemize}

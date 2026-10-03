@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using SecondKey.Cli.Configuration;
 
 namespace SecondKey.Cli.Tests;
@@ -60,11 +61,29 @@ public class ConfigurationTests
     [InlineData("version: 1\nevidence:\n  pdf: sometimes\n", "evidence.pdf: 'sometimes' is not one of auto, required, off")]
     [InlineData("version: 1\nreplay:\n  legacy:\n    reset: { http: { path: /r }, command: { run: x } }\n", "replay.legacy.reset: give exactly one of http, sqlServerSnapshot, command (found 2)")]
     [InlineData("version: 1\nreplay:\n  candidate:\n    reset: {}\n", "replay.candidate.reset: give exactly one of http, sqlServerSnapshot, command (found 0)")]
+    [InlineData("version: 1\nreplay:\n  correlation:\n    - { name: csrf, regex: '(', formField: f }\n", "replay.correlation[0].regex ('csrf'): not a valid regular expression")]
+    [InlineData("version: 1\nreplay:\n  correlation:\n    - { name: csrf, regex: 'token=[a-z]+', formField: f }\n", "replay.correlation[0].regex ('csrf'): has no capture group")]
+    [InlineData("version: 1\nreplay:\n  correlation:\n    - { name: ok, regex: 'a=(b)', header: h }\n    - { name: plain, regex: '(?:b)', header: h }\n", "replay.correlation[1].regex ('plain'): has no capture group")]
     public void A_wrong_configuration_says_what_is_wrong(string yaml, string expected)
     {
         var ex = Assert.Throws<ConfigurationException>(() => SecondKeyConfig.Parse(yaml, "secondkey.yaml"));
 
         Assert.Contains(expected, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_correlation_pattern_with_a_group_is_accepted_and_runs_as_the_engine_runs_it()
+    {
+        var config = SecondKeyConfig.Parse(
+            "version: 1\nreplay:\n  correlation:\n    - { name: a, regex: 'x=([0-9]+)', header: h }\n    - { name: b, regex: 'y=(?<v>[0-9]+)', formField: f }\n",
+            "secondkey.yaml");
+
+        Assert.All(config.Replay!.Correlation!, rule =>
+        {
+            var pattern = rule.Compile();
+            Assert.Equal(CorrelationConfig.MatchTimeout, pattern.MatchTimeout);
+            Assert.Equal(RegexOptions.CultureInvariant, pattern.Options);
+        });
     }
 
     [Fact]
