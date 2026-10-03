@@ -27,7 +27,8 @@ public sealed record ComparisonInputs
 /// <summary>
 /// C7 (S13): places every replayed exchange in exactly one of four classes and derives the
 /// run's outcome, as ADR 0003 decides. Deterministic: the same contract and the same run
-/// always give the same verdict, apart from the time it was made (design rule 1).
+/// always give the same verdict, apart from the time it was made, the build of the tool that
+/// made it and the names of the input files (design rule 1).
 /// </summary>
 public static class Comparator
 {

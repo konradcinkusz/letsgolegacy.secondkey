@@ -29,9 +29,12 @@ sk capture --target http://127.0.0.1:5080 --listen http://127.0.0.1:8080 --sessi
 ```
 
 Starts a recording proxy. Clients talk to `--listen` instead of the legacy system; every
-request goes to `--target` unchanged, except that it asks for an uncompressed answer so
-the recording can be read, and the client gets the legacy system's answer unchanged. The
-legacy system itself is not touched: only its clients' address changes.
+request goes to `--target` and the client gets the legacy system's answer. The proxy
+changes three things on the way: it removes `Accept-Encoding`, so the answer is
+uncompressed and the recording can be read; it sends the target's own `Host` instead of
+the client's; and it adds `X-Forwarded-For`, `X-Forwarded-Host` and `X-Forwarded-Proto`.
+The legacy system's code and configuration are not touched: only its clients' address
+changes. The proxy listens on plain HTTP only.
 
 | Option | In `secondkey.yaml` | Default | Meaning |
 |---|---|---|---|
