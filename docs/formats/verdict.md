@@ -2,7 +2,9 @@
 
 `sk compare` reads a contract and a run and writes one verdict: every replayed exchange in
 exactly one of four classes, and the run's outcome. It is computed by code alone — the
-same contract and run always give the same verdict, apart from `createdAt` (design rule 1).
+same contract and run always give the same verdict, apart from `createdAt`, `tool` (the
+build that computed it) and `inputs.*.path` (the names of the files it was given), which
+are the only fields that differ (design rule 1).
 [`schemas/verdict.schema.json`](../../schemas/verdict.schema.json) is the authority on the
 format; [`schemas/samples/verdict.json`](../../schemas/samples/verdict.json) is what
 `sk compare` produces from the sample contract and run, and a test keeps it that way.

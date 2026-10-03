@@ -45,7 +45,7 @@ files are removed; see above.)
 cd evidence
 python3 -c "import json,hashlib; [print('ok' if hashlib.sha256(open(f['path'],'rb').read()).hexdigest()==f['sha256'] else 'CHANGED', f['path']) for f in json.load(open('manifest.json'))['files']]"
 sk validate verdict.json contract.yaml
-sk compare --contract contract.yaml --run run.skrun --out recomputed.json   # the same verdict, apart from createdAt
+sk compare --contract contract.yaml --run run.skrun --out recomputed.json   # the same verdict, apart from createdAt, tool and the input file names
 ```
 
 ## The PDF
