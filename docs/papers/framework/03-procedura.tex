@@ -1120,7 +1120,8 @@ w podrozdziale~\ref{sec:portcullis-tutorial}.
   \item Pełny checkout; \repopath{gate.scope} równe \repopath{"diff"}.
   \item SARIF zapisany dla head commita kandydata.
   \item Wersja pakietu standardów w kandydacie równa wersji skilla.
-  \item \repopath{sk gate} uruchomione na SARIF; wynik trafia do pakietu.
+  \item \repopath{sk gate} uruchomione na SARIF (kod 0, 1 albo 3); sam SARIF trafia do pakietu
+        przez \repopath{sk evidence --sarif}.
 \end{checklista}
 
 \zrodla{\path{letsgolegacy.portcullis/docs/TUTORIAL.md},

@@ -1,8 +1,8 @@
 \section{Formaty artefaktów}\label{sec:formaty}
 
-Artefakty są interfejsem produktu: każdy komponent Second Key czyta i~pisze te pliki i~nic
-więcej, więc każdy komponent można zastąpić innym, który ich dotrzymuje (ADR 0001,
-sekcja~\ref{sec:rdzen}). Autorytetem są schematy JSON w~katalogu \path{/schemas} rdzenia;
+Artefakty są interfejsem produktu: kroki łańcucha Second Key wymieniają się tymi plikami
+i~niczym więcej, więc każdy krok można zastąpić innym, który ich dotrzymuje (ADR 0001,
+sekcja~\ref{sec:rdzen-adr}; wewnątrz rdzenia projekty wywołują się jednak jako biblioteki). Autorytetem są schematy JSON w~katalogu \path{/schemas} rdzenia;
 próbki, które je spełniają, leżą w~\path{/schemas/samples} i~są sprawdzane w~CI. Rozdział jest
 referencją wszystkich formatów: reguł wspólnych, walidacji, plików \repopath{*.skcap},
 \repopath{contract.yaml}, \repopath{*.skrun}, \repopath{verdict.json} i~pakietu dowodowego,

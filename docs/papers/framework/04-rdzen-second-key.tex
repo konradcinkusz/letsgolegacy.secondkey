@@ -5,7 +5,7 @@ który nie ma własnego powodu, by mieszkać gdzie indziej. W~fazie 01 jest to �
 weryfikacji poza bramką i~standardami (osobne repozytoria) oraz poza minerem kontraktu
 i~silnikiem mutacji (w~rdzeniu są tylko stuby): CLI \repopath{sk}, przechwytywanie ruchu HTTP,
 silnik kontraktu, replay, komparator i~niepodpisany evidence pack (pakiet dowodowy). Rozdział opisuje migawkę
-rdzenia w~commicie \repopath{c3ae5c2} (sekcja~\ref{sec:wprowadzenie-wersja}): po co rdzeń
+rdzenia w~commicie \repopath{7631266} (sekcja~\ref{sec:wprowadzenie-wersja}): po co rdzeń
 istnieje, gdzie mieszkają komponenty,
 jakie zasady projektowe egzekwuje i~dlaczego, jak zbudowane jest solution, jak rdzeń jest
 budowany, testowany i~sprawdzany w~CI, jakie ryzyka zaakceptowano, co przejął ze starszych
@@ -38,7 +38,7 @@ wymiana (exchange), czyli para żądanie–odpowiedź, trafia do jednej z~cztere
 podstawie których osoba zatwierdzająca może działać, a~przydział do klasy musi być
 deterministyczny.
 
-Status według README w~commicie \repopath{c3ae5c2}: faza 01 (demo). Łańcuch działa end to end na sample shop; następnym
+Status według README w~commicie \repopath{7631266}: faza 01 (demo). Łańcuch działa end to end na sample shop; następnym
 krokiem jest publiczny okaz, bench nopCommerce 3.x (jego repozytorium już istnieje i~ma część wyników:
 rozdział~\ref{sec:bench}, stan --- sekcja~\ref{sec:status-faza01}). Nic nie zostało wydane; wspólna wersja
 projektów w~\path{Directory.Build.props} to \repopath{0.1.0}. Bramką fazy 01 jest publiczny
@@ -230,9 +230,12 @@ repozytoriów SARIF i~skills. Żaden komponent nie wywołuje kodu innego. Strumi
 i~czytać bez ładowania w~całości do pamięci. Każde zdarzenie i~każdy dokument niesie wersję
 formatu \repopath{v}; czytelnik odrzuca wersje, których nie zna. Schematy są ścisłe
 (\repopath{additionalProperties: false}); reguły, których schemat nie wyrazi, sprawdza kod
-i~raportuje z~tak samo zlokalizowanymi błędami. Werdykty cytują SHA-256 swoich wejść.
+i~raportuje z~tak samo zlokalizowanymi błędami. Werdykty cytują SHA-256 swoich wejść. W~kodzie
+rdzenia reguła „żaden komponent nie wywołuje kodu innego” obowiązuje między krokami
+łańcucha, a~nie między projektami: komparator wywołuje silnik kontraktu jako bibliotekę,
+a~CLI składa wszystkie projekty w~jednym procesie (sekcja~\ref{sec:architektura}).
 
-\textbf{Konsekwencje.} Zmiana formatu to przeglądana zmiana schematu, jego próbek i~\path{docs/formats/}; CI waliduje próbki przy każdym buildzie. Każdy komponent
+\textbf{Konsekwencje.} Zmiana formatu to przeglądana zmiana schematu, jego próbek i~\path{docs/formats/}; CI waliduje próbki przy każdym buildzie. Każdy krok łańcucha
 można przepisać --- także poza projektem --- pod warunkiem, że czyta i~pisze te same
 pliki. Formaty są z~konstrukcji publiczne; nagrania prawdziwych systemów nie są publiczne
 nigdy i~trzyma je poza gitem \path{.gitignore}.
@@ -500,9 +503,9 @@ per package, one diff to upgrade it”):
 \toprule
 Produkt & Wersja & Testy & Wersja \\
 \midrule
-AngleSharp & 1.8.2 & Microsoft.AspNetCore.Mvc.Testing & 10.0.12 \\
+AngleSharp & 1.8.3 & Microsoft.AspNetCore.Mvc.Testing & 10.0.12 \\
 JsonSchema.Net & 9.4.0 & Microsoft.NET.Test.Sdk & 18.10.1 \\
-Microsoft.Data.SqlClient & 7.1.0 & Testcontainers.MsSql & 4.15.0 \\
+Microsoft.Data.SqlClient & 7.1.1 & Testcontainers.MsSql & 4.15.0 \\
 System.CommandLine & 2.0.12 & xunit & 2.9.3 \\
 Yarp.ReverseProxy & 2.3.0 & xunit.runner.visualstudio & 4.0.0 \\
 YamlDotNet & 18.1.0 & & \\
