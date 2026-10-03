@@ -18,12 +18,12 @@ evidence pack. Second Key verifies; it does not rewrite.
 | Step | Component | Output |
 |---|---|---|
 | 1 Capture | C1 — recording proxy in front of the legacy system, no code change | `*.skcap` |
-| 2 Contract | C2 miner + a human, C3 engine | `contract.yaml` |
-| 3 Standards | C4 — standards delivered to the migration agent as skills | agent pull request |
+| 2 Contract | a human writes it (C2 miner: planned, phase 02, `sk mine` exits 70), C3 engine checks it | `contract.yaml` |
+| 3 Standards | C4 — standards delivered to the migration agent as skills (written; not yet confirmed with an agent) | agent pull request |
 | 4 Gate | C5 — Roslyn analyzers on changed lines ([Portcullis](https://github.com/konradcinkusz/letsgolegacy.portcullis)) | `*.sarif` |
 | 5 Replay | C6 — both versions under identical conditions; C7 compares field by field against the contract | `*.skrun`, `verdict.json` |
-| 6 Mutations | C9 — injected defects the contract must catch | kill rate per clause |
-| 7 Evidence | C10 — one pack per pull request | `evidence/` |
+| 6 Mutations | C9 — injected defects the contract must catch (planned, phase 02, `sk mutate` exits 70; phase 01 has 11 hand-written ones in the bench) | kill rate per clause |
+| 7 Evidence | C10 — one pack per pull request, with SHA-256 digests; not yet signed | `evidence/` |
 
 ## Try it
 
