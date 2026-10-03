@@ -7,7 +7,7 @@ komponentu są w rozdziałach~\ref{sec:rdzen}--\ref{sec:bench}.
 
 \subsection{Łańcuch weryfikacji}\label{sec:architektura-lancuch}
 
-Łańcuch ma siedem kroków. Każdy kończy się plikiem, który czyta następny krok.
+Łańcuch ma siedem kroków. Wynikiem większości jest plik, który czyta kolejny komponent.
 
 \begin{tabularx}{\linewidth}{@{}p{2.3cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{3.3cm}@{}}
 \toprule
@@ -15,11 +15,11 @@ Krok & Komponent & Wynik \\
 \midrule
 1 Capture & C1 --- proxy nagrywające przed systemem legacy, bez zmiany kodu & \repopath{*.skcap} \\
 2 Contract & C2 (miner, faza 02) i człowiek; C3 --- silnik kontraktu & \repopath{contract.yaml} \\
-3 Standards & C4 --- standardy dostarczane agentowi migracyjnemu jako skills & pull request agenta \\
+3 Standards & C4 --- standardy dostarczane agentowi migracyjnemu jako skills (czy agent je podejmuje, rozstrzyga dopiero P6) & pull request agenta \\
 4 Gate & C5 --- analyzery Roslyn na zmienionych liniach (Portcullis) & \repopath{*.sarif} \\
 5 Replay & C6 --- obie wersje w identycznych warunkach; C7 porównuje pole po polu względem kontraktu & \repopath{*.skrun}, \repopath{verdict.json} \\
-6 Mutations & C9 --- wstrzyknięte defekty, które kontrakt musi wykryć & kill rate per klauzula \\
-7 Evidence & C10 --- jeden pakiet na pull request & \repopath{evidence/} \\
+6 Mutations & C9 (faza 02; \repopath{sk mutate} to dziś stub, a~bench ma 11 mutantów napisanych ręcznie) --- wstrzyknięte defekty, które kontrakt musi wykryć & kill rate per klauzula (faza 02) \\
+7 Evidence & C10 --- jeden pakiet na pull request, ze skrótami SHA-256, bez podpisu & \repopath{evidence/} \\
 \bottomrule
 \end{tabularx}
 
@@ -30,8 +30,10 @@ Krok & Komponent & Wynik \\
   \label{fig:lancuch}
 \end{figure}
 
-Strona legacy i kandydat są uruchamiane, ale nie są modyfikowane przez łańcuch: capture
-stoi przed systemem legacy jako proxy, a replay wysyła nagrane żądania do obu wersji.
+Strona legacy i~kandydat są uruchamiane, ale łańcuch nie zmienia ich kodu ani konfiguracji:
+capture stoi przed systemem legacy jako proxy, a~replay wysyła nagrane żądania, także te
+zapisujące dane, do obu wersji i~--- jeśli skonfigurowano reset --- przywraca stan każdej
+strony przed scenariuszem.
 Wszystko, co następuje po replay, działa na plikach.
 
 \zrodla{\path{letsgolegacy.secondkey/README.md},
@@ -39,10 +41,11 @@ Wszystko, co następuje po replay, działa na plikach.
 
 \subsection{Artefakty są interfejsem}\label{sec:architektura-artefakty}
 
-\finding{Każdy komponent czyta i pisze pliki, nigdy wnętrza innego komponentu.} Dowolny
-komponent można wymienić, dopóki czyta i pisze te same artefakty. Dlatego formaty są
-wersjonowane, opisane schematami JSON i pilnowane testami na próbkach
-(rozdział~\ref{sec:formaty}).
+\finding{Kroki łańcucha wymieniają się plikami, a~nie wnętrzami.} Dowolny krok można
+wymienić, dopóki czyta i~pisze te same artefakty; wewnątrz rdzenia projekty wywołują się
+jednak jako biblioteki (komparator woła silnik kontraktu, a~CLI składa wszystkie w~jednym
+procesie). Dlatego formaty są wersjonowane, opisane schematami JSON i~pilnowane testami na
+próbkach (rozdział~\ref{sec:formaty}).
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -63,6 +66,11 @@ Artefakt & Format & Produkuje & Czyta \\
 \bottomrule
 \end{xltabular}
 
+Tabela pokazuje interfejs z~planu rdzenia. W~fazie 01 nie działają C2 miner ani C9
+(stuby \repopath{sk mine} i~\repopath{sk mutate}), a~zamiast \repopath{evidence.dsse}
+pakiet niesie niepodpisany \repopath{statement.intoto.json}. Konfigurację standardów (poziomy
+reguł) czyta bramka tylko jako analyzery w~buildzie, a~nie w~skanie CLI Portcullis.
+
 Konsekwencja widoczna w benchu: granica między maszynami może przebiegać wszędzie tam,
 gdzie da się skopiować plik. Tylko capture i replay muszą mieć dostęp HTTP do działającego
 systemu; kontrakt, porównanie i pakiet dowodowy to „plik na wejściu, plik na wyjściu”
@@ -71,6 +79,7 @@ systemu; kontrakt, porównanie i pakiet dowodowy to „plik na wejściu, plik na
 \zrodla{\path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/adr/0001-artifacts-are-the-interface.md},
 \path{letsgolegacy.secondkey/schemas/skcap.schema.json},
+\path{letsgolegacy.secondkey/src/SecondKey.Compare/Comparator.cs},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/TOPOLOGY.md}}
 
 \subsection{Komponenty C0--C12 i repozytoria}\label{sec:architektura-komponenty}
@@ -104,7 +113,7 @@ C12 & pakowanie w granicy klienta (sandbox) & \path{letsgolegacy.secondkey-sandb
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{\dgm{a1-mapa-repozytoriow}}
-  \caption{Repozytoria frameworku letsgolegacy i to, co przepływa między nimi. Nazwy bez wspólnego prefiksu \texttt{letsgolegacy.}}
+  \caption{Repozytoria frameworku letsgolegacy i~to, co przepływa między nimi. Nazwy bez wspólnego prefiksu \texttt{letsgolegacy.} Linie przerywane to przepływy planowane od fazy 02 (repozytoria capture, sandbox i~portal nie mają jeszcze kodu); przepływy oznaczone P6 też jeszcze nie istnieją.}
   \label{fig:mapa}
 \end{figure}
 
@@ -120,7 +129,11 @@ się kodem 70 (\repopath{NotImplemented}); kontrakt pisze człowiek.
 
 \subsection{Zasady projektowe}\label{sec:architektura-zasady}
 
-Rdzeń egzekwuje siedem zasad projektowych. Pozostałe repozytoria się na nie powołują.
+Plan pracy rdzenia zapisuje siedem zasad projektowych, które rdzeń ma egzekwować;
+pozostałe repozytoria się na nie powołują. Dziś część z~nich pilnuje konwencja
+(\path{letsgolegacy.secondkey/CLAUDE.md}) i~kształt projektów, a~nie test architektury:
+zakaz modelu w~werdykcie nie ma ani analizatora, ani testu, a~brak ruchu wychodzącego
+jest własnością kodu, nie wymuszoną izolacją sieciową.
 
 \begin{enumerate}
   \item \textbf{Werdykt jest deterministyczny.} O pass/fail decyduje wyłącznie kod bez
@@ -129,8 +142,8 @@ Rdzeń egzekwuje siedem zasad projektowych. Pozostałe repozytoria się na nie p
         ani \repopath{SecondKey.Compare} nie woła modelu językowego; ten sam kontrakt i
         ten sam przebieg dają zawsze ten sam werdykt (poza polem \repopath{createdAt}).
   \item \textbf{Wszystko działa w granicy klienta; domyślnie zero ruchu wychodzącego.}
-        Repozytorium \path{letsgolegacy.secondkey-sandbox} pakuje łańcuch dla różnych
-        rodzajów takiej granicy.
+        Repozytorium \path{letsgolegacy.secondkey-sandbox} ma w~planie pakowanie łańcucha dla
+        różnych rodzajów takiej granicy; dziś zawiera tylko plan pracy.
   \item \textbf{Tylko technologie, które odbiorca już ma}: .NET, SQL Server, Entra ID,
         GitHub albo Azure DevOps, Kubernetes.
   \item \textbf{System legacy jest nietykalny}: capture nie wymaga zmiany kodu ani
@@ -138,8 +151,8 @@ Rdzeń egzekwuje siedem zasad projektowych. Pozostałe repozytoria się na nie p
         \repopath{Guid.NewGuid()}) obsługuje normalizacja w komparatorze, a nie zmiana
         systemu legacy.
   \item \textbf{Dowód jest artefaktem kryptograficznym, nie dashboardem}: pakiet zawiera
-        skróty SHA-256 wszystkich plików i niepodpisany statement in-toto; podpis dochodzi
-        w fazie 03 bez zmiany formatu.
+        skróty SHA-256 plików (poza samym manifestem) i~niepodpisany statement in-toto;
+        podpis dochodzi w~fazie 03 bez zmiany formatu.
   \item \textbf{Brak własnej usługi tożsamości}; używany jest IdP klienta.
   \item \textbf{Każdy krok działa z CLI w pipeline}; portal jest oknem na dowody, a nie
         interfejsem.
@@ -156,10 +169,20 @@ Obok siedmiu zasad cały łańcuch wiążą trzy decyzje:
   \item \textbf{Kontrakt nie czyta prozy i nie przechodzi pusto.} Wartości ze stron HTML
         wyciągają nazwane ekstraktory z jawnym typem i kulturą; klauzula, do której nie
         trafiło żadne żądanie, jest \repopath{unexercised}, nigdy spełniona (ADR 0002).
+        Wynik \repopath{pass} nie wymaga jednak, by każda klauzula była ćwiczona: klauzula
+        \repopath{unexercised} trafia do podsumowania i~raportu, ale nie blokuje (bench sam
+        wymaga zera klauzul niesprawdzonych).
   \item \textbf{Agent i bramka dostają te same standardy.} Standardy są spisane raz
-        i kompilowane do skilla agenta oraz do konfiguracji analyzerów bramki; rozbieżność
-        między tym, co usłyszał agent, a tym, co egzekwuje bramka, jest błędem CI, a nie
-        znaleziskiem (rozdział~\ref{sec:standardy}).
+        i~generowane do skilla agenta oraz do konfiguracji analyzerów bramki; według planu
+        standardów rozbieżność między tym, co usłyszał agent, a~tym, co egzekwuje bramka,
+        ma być błędem CI, a~nie znaleziskiem. Dziś CI standardów pilnuje w~tej sprawie tylko
+        zgodności wygenerowanych plików ze źródłem (\repopath{generate --check}); zgodności
+        z~poziomami reguł Portcullis nie sprawdza żaden test między repozytoriami (kontrakt
+        to ręcznie utrzymywana lista 13 identyfikatorów diagnostyk), a~poziomy ze standardów
+        stosuje kompilator z~paczką analyzerów, nie \repopath{portcullis scan}. Sprawdzenie
+        wykonywalne ma tylko 11 z~20 standardów (9 przez diagnostyki Portcullis i~2 przez
+        analizatory SDK .NET, te drugie tylko w~buildzie); pozostałe 9 to instrukcje dla
+        agenta (rozdział~\ref{sec:standardy}).
 \end{itemize}
 
 Decyzje ADR rdzenia opisuje podrozdział~\ref{sec:rdzen-adr}.
@@ -220,7 +243,7 @@ Application. \\
 
 System legacy na .NET Framework potrzebuje Windows: nopCommerce 3.90 to ASP.NET MVC 5
 serwowany przez IIS z bazą SQL Server. Łańcuch Second Key jest napisany na .NET 10 i
-działa wszędzie. Demonstracyjna topologia (decyzja D7, w stanie „proposed”) umieszcza więc
+działa na Windows i~Linuksie (CI rdzenia testuje oba). Demonstracyjna topologia (decyzja D7, w~stanie „proposed”) umieszcza więc
 stronę legacy na jednym hoście Windows, a resztę łańcucha na Linuksie. Tylko dwa kroki
 muszą sięgać do działającego sklepu przez HTTP: capture i replay. Działają obok IIS na
 hoście Windows, a ich wyniki (\repopath{*.skcap}, \repopath{*.skrun}) wychodzą jako

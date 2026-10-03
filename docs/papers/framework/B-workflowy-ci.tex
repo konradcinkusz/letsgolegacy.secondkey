@@ -25,7 +25,7 @@ Plik & Triggery & Joby \\
 \path{mutation.yml} & pull request (paths), push (paths) & Stryker dla reguł migracyjnych \\
 \path{portcullis-pr-check.yml} & pull request & skan Portcullis na własnym PR z baseline i zakresem diff; komentarz sticky, którego krok decyduje o bramce; wynik poprzedniego pushu z cache \\
 \path{portcullis-sarif.yml} & pull request & przefiltrowany SARIF jako artefakt i do code scanning; nigdy nie blokuje \\
-\path{release.yml} & tag \repopath{v*}, ręcznie & build, testy, pakowanie; na tagu publikacja NuGet, kontener do GHCR, release na GitHub i przesunięcie tagu wersji głównej; ręczne uruchomienie buduje pakiety bez publikacji \\
+\path{release.yml} & tag \repopath{v*}, ręcznie & build, testy, pakowanie; na tagu publikacja NuGet, kontener do GHCR, release na GitHub i~przesunięcie tagu wersji głównej; ręczne uruchomienie buduje pakiety bez publikacji; workflow nie miał jeszcze żadnego przebiegu \\
 \path{codeql.yml} & pull request, push, co tydzień & analiza C\# \\
 \path{secret-scan.yml} & pull request, push & gitleaks 8.28.0 (cała historia) \\
 \midrule
@@ -44,7 +44,7 @@ Plik & Triggery & Joby \\
 \multicolumn{3}{@{}l}{\textbf{\path{letsgolegacy.legacy-risk-scan}}} \\
 \path{ci.yml} & pull request, push, co tydzień, ręcznie & testy jednostkowe (Node 22); e2e (Playwright, OSV zamockowane); smoke z prawdziwym API OSV (błąd sieci nie blokuje) \\
 \path{deploy.yml} & push, ręcznie & testy i build strony; wdrożenie na GitHub Pages; weryfikacja opublikowanej strony z prawdziwym OSV \\
-\path{update-eol.yml} & co miesiąc, ręcznie, pull request (paths) & odświeżenie danych EOL z endoflife.date i pull request; regeneracja danych w PR generatora \\
+\path{update-eol.yml} & co miesiąc, ręcznie, pull request (paths) & odświeżenie danych EOL z~endoflife.date i~pull request (otwarcie PR wymaga ustawienia „Allow GitHub Actions to create and approve pull requests”; przebieg z~1~X~2026 wypchnął gałąź i~zawiódł na tym kroku); regeneracja danych w~PR generatora \\
 \path{codeql.yml} & pull request, push, co tydzień, ręcznie & JavaScript/TypeScript i workflowy GitHub Actions, zapytania \texttt{security-and-quality} \\
 \path{secret-scan.yml} & pull request, push, co tydzień, ręcznie & gitleaks z obrazu \texttt{:latest} (cała historia) \\
 \bottomrule

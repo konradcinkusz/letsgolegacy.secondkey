@@ -16,7 +16,9 @@ nie są tłumaczone.
   \item[baseline (Portcullis)] Plik z odciskami znalezisk, które już istnieją; znalezisko
         przyjęte przez baseline jest raportowane, ale nie blokuje.
   \item[bench (okaz)] Repozytorium \path{letsgolegacy.secondkey-nopcommerce-bench}:
-        publiczny dowód, że łańcuch działa na prawdziwym kodzie legacy.
+        publiczny okaz, na którym w~CI działają nagranie ruchu, replay, porównanie i~pakiet
+        dowodowy na prawdziwym kodzie legacy (nopCommerce 3.90); zmigrowanego kandydata,
+        skanu Portcullis na okazie ani opublikowanego pakietu dowodowego jeszcze nie ma.
   \item[bramka (gate)] Portcullis na pull request: blokuje błędy w liniach zmienionych
         przez PR. \repopath{sk gate} podsumowuje jej SARIF.
   \item[bramka fazy 01] Ticket P9 benchu: publiczny pakiet dowodowy na nopCommerce 3.x.
@@ -29,7 +31,8 @@ nie są tłumaczone.
         Portcullis przechodzi na całe drzewo (\repopath{"all"}) i podaje
         \repopath{degradedReason}.
   \item[drift check] Krok CI repozytorium docelowego, który porównuje przypiętą wersję
-        standardów z opublikowaną i skill z pakietem.
+        standardów (referencję do pakietu i~wersję zainstalowanego skilla) z~najwyższym tagiem
+        wydania standardów; dopóki żaden tag nie istnieje, wynik to \repopath{no-release} (kod 2).
   \item[DSSE] Koperta podpisu dla statementu in-toto; w fazie 03 (\repopath{evidence.dsse}).
   \item[ekstraktor] Reguła, która wyciąga wartość z HTML, JSON, nagłówka albo tekstu,
         zanim ocenią ją klauzule; \repopath{all: true} zbiera listę.
@@ -44,7 +47,8 @@ nie są tłumaczone.
         z uzasadnieniem nosi znacznik \repopath{SECONDKEY-FLAG}.
   \item[granica klienta] Sieć i infrastruktura klienta, w której działa cały łańcuch;
         domyślnie bez ruchu wychodzącego (zasada projektowa 2). Łańcuch dla różnych rodzajów
-        takiej granicy pakuje repozytorium \path{letsgolegacy.secondkey-sandbox}.
+        takiej granicy ma pakować repozytorium \path{letsgolegacy.secondkey-sandbox}
+        (dziś tylko plan pracy).
   \item[IdP] Dostawca tożsamości klienta, np. Entra ID albo ADFS przez OIDC; framework nie ma
         własnej usługi tożsamości (zasada projektowa 6).
   \item[kandydat] Zmigrowana wersja systemu, wskazana commitem head pull requestu.
@@ -61,13 +65,17 @@ nie są tłumaczone.
         (normalizacja); YAML walidowany schematem JSON i regułami w kodzie. Musi zawierać co
         najmniej jedną zaakceptowaną klauzulę \repopath{never}.
   \item[korelacja] Reguła replay, która przenosi wartość wygenerowaną przez serwer (np.
-        token anti-forgery) z ostatniej odpowiedzi tej samej strony do kolejnych żądań.
+        token anti-forgery) z~ostatniej pasującej odpowiedzi tej samej strony w~tym samym
+        scenariuszu do pola formularza albo nagłówka kolejnych żądań.
   \item[legacy] System przed migracją; strona \repopath{legacy} w replay i werdykcie.
-  \item[manifest] \repopath{manifest.json} pakietu: każdy plik z SHA-256 i rozmiarem.
+  \item[manifest] \repopath{manifest.json} pakietu: każdy plik pakietu poza sobą
+        z~SHA-256 i~rozmiarem.
   \item[maska] Reguła normalizacji, po której dwa napisy są równe (\repopath{timestamps},
-        \repopath{guids}, nazwane wzorce).
-  \item[miner kontraktu (C2)] \repopath{sk mine}, faza 02: proponuje klauzule z nagrań, ze
-        wsparciem statystycznym dla każdej; klauzula decyduje dopiero po akceptacji.
+        \repopath{guids}, nazwane wzorce). Maska działa przy porównaniu: nie zmienia
+        nagrania i~nie chroni danych osobowych.
+  \item[miner kontraktu (C2)] \repopath{sk mine}, faza 02: ma proponować klauzule z~nagrań,
+        ze wsparciem statystycznym dla każdej; klauzula decyduje dopiero po akceptacji.
+        W~fazie 01 to stub (kod 70), a~kontrakt pisze człowiek.
   \item[modernize-dotnet] Agent migracyjny Microsoftu, tak nazwany w planach pracy. Microsoft
         dokumentuje go obecnie jako GitHub Copilot upgrade (wcześniej GitHub Copilot app
         modernization for .NET); w Visual Studio to komponent GitHub Copilot app modernization
@@ -90,11 +98,12 @@ nie są tłumaczone.
   \item[outbound stubs] Zaślepki wywołań wychodzących z nagranego ruchu (WireMock.Net,
         komponent C6, ticket S16); przeniesione do fazy 02, bo ani sklep przykładowy, ani
         demonstracyjna konfiguracja nopCommerce nie wywołują usług zewnętrznych.
-  \item[PII] Dane osobowe w nagraniach; od fazy 02 capture tokenizuje je wewnątrz sieci
-        klienta (sidecar Presidio).
-  \item[podpis pakietu (faza 03)] Statement in-toto w kopercie DSSE podpisany przez cosign
-        kluczem klienta z jego KMS albo HSM, bez publicznego transparency log, przechowywany
-        w OCI (ORAS) albo WORM.
+  \item[PII] Dane osobowe w~nagraniach. W~fazie 01 trafiają do nagrania bez zmian (capture
+        redaguje tylko nagłówki); tokenizację wewnątrz sieci klienta (sidecar Presidio)
+        plan przewiduje w~fazie 02.
+  \item[podpis pakietu (faza 03)] Planowany: statement in-toto w~kopercie DSSE podpisany
+        przez cosign kluczem klienta z~jego KMS albo HSM, bez publicznego transparency log,
+        przechowywany w~OCI (ORAS) albo WORM. W~fazie 01 pakiet nie jest podpisany.
   \item[pozytywny bliźniak] Klauzula lub krok scenariusza, który dowodzi, że scenariusz
         dotarł do miejsca, którego pilnuje klauzula \repopath{never}.
   \item[probe] Dwa znaczenia: sonda bazy w \repopath{secondkey.yaml}
@@ -104,7 +113,8 @@ nie są tłumaczone.
         \repopath{status} \repopath{proposed} albo \repopath{accepted}, autor, data;
         decydują tylko klauzule \repopath{accepted}) oraz zakres commitów, który Portcullis
         dostaje w \repopath{--provenance-range}: zawęża bramkę do zmienionych linii
-        i zaostrza próg dla linii napisanych przez AI.
+        i~zaostrza próg dla linii, które historia git (trailery commitów) przypisuje
+        agentowi AI.
   \item[przebieg] Plik \repopath{*.skrun} z \repopath{sk replay}: \repopath{run.header},
         zdarzenia \repopath{state.reset} i \repopath{exchange.result} obu stron oraz
         \repopath{run.end}; przebieg bez \repopath{run.end} został przerwany i nigdy nie jest
@@ -115,8 +125,8 @@ nie są tłumaczone.
         kandydata złamana albo niedająca się ocenić (\repopath{clause-regression}), albo
         różnica, której nie tłumaczy żadna klauzula ani reguła normalizacji
         (\repopath{uncovered-difference}; fail closed).
-  \item[replay] Odtwarzanie nagranych scenariuszy na obu stronach z resetem stanu przed
-        każdym scenariuszem (\repopath{sk replay}).
+  \item[replay] Odtwarzanie nagranych scenariuszy na obu stronach, z~resetem stanu przed
+        każdym scenariuszem, gdy reset jest skonfigurowany (\repopath{sk replay}).
   \item[reset stanu] Przywrócenie stanu startowego strony przed scenariuszem:
         \repopath{http}, \repopath{sqlServerSnapshot} albo \repopath{command}.
   \item[rozgrzewka (P3)] Pierwszy przebieg całego łańcucha w benchu, na eShopLegacyMVC
@@ -139,9 +149,10 @@ nie są tłumaczone.
         bramki; w fazie 01 niepodpisany (\repopath{"signed": false}).
   \item[suppression] Zaakceptowane wyciszenie diagnostyki w logu SARIF; błąd, który obejmuje,
         nie blokuje \repopath{sk gate}.
-  \item[testy mutacyjne] Stryker.NET na kodzie rdzenia i reguł Portcullis: mutanty kodu
-        narzędzi, które testy muszą wykryć; poniżej progu \texttt{break} CI zawodzi. To co
-        innego niż mutanty P9 --- defekty w kodzie systemu legacy, które ma złapać kontrakt.
+  \item[testy mutacyjne] Stryker.NET na kodzie rdzenia (5 z~7 projektów) i~na regułach
+        migracyjnych Portcullis: mutanty kodu narzędzi, które testy muszą wykryć; poniżej
+        progu \texttt{break} CI zawodzi. To co innego niż mutanty P9 --- defekty w~kodzie
+        systemu legacy, które ma złapać kontrakt.
   \item[ticket] Jednostka pracy z planu pracy repozytorium (\path{docs/WORKPLAN.md}) z jednym
         rezultatem i kryterium „done when”, cytowanym w pull requeście dosłownie; jeden
         ticket to jeden pull request (w benchu poza zadaniami oznaczonymi jako praca

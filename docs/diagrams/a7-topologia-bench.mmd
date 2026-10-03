@@ -12,9 +12,9 @@ flowchart TB
   end
   subgraph LNX["Linux: ubuntu, WSL2 albo VM"]
     direction LR
-    CONTRACT["silnik kontraktu (S8 rdzenia)"]
+    CONTRACT["silnik kontraktu (S8 rdzenia):<br/>contract.yaml na *.skrun"]
     COMPARE["sk compare: werdykt"] --> EVID["sk evidence:<br/>pakiet dowodowy"]
     CONTRACT -- "werdykty klauzul" --> COMPARE
   end
   REPLAY -- "*.skrun (artefakt CI)" --> COMPARE
-  PROXY -- "*.skcap" --> CONTRACT
+  REPLAY -- "*.skrun" --> CONTRACT

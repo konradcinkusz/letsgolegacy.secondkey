@@ -16,8 +16,10 @@ migracji zachowuje się tak samo wobec użytkownika. Migracja z .NET Framework n
 zmienia na przykład bibliotekę globalizacji z NLS na ICU, więc porównywanie i sortowanie
 napisów zależne od kultury może dać inny wynik, choć build i testy są zielone. Tę
 pułapkę bench nopCommerce traktuje jako główny kandydat na moment, wokół którego zbudowana
-jest demonstracja: agent migruje, build i testy przechodzą, a weryfikacja i tak znajduje
-realną różnicę zachowania.
+jest demonstracja: agent migruje, build i~testy przechodzą, a~weryfikacja i~tak ma znaleźć
+realną różnicę zachowania. To cel demonstracji, a~nie jej wynik: migracja przez agenta
+i~porównanie z~kandydatem (tickety benchu P6 i~P7) nie są jeszcze wykonane
+(rozdział~\ref{sec:status}).
 
 Rdzeń opisuje swoje zadanie jednym zdaniem: niezależny, deterministyczny dowód, że system
 .NET zmigrowany przez agenta AI nadal dotrzymuje kontraktu biznesowego. Nazwa Second Key
@@ -42,27 +44,32 @@ narzędziami, które ją realizują. Narzędzia mieszkają w repozytoriach o pre
 \begin{itemize}
   \item \textbf{Second Key} --- łańcuch weryfikacji: nagranie ruchu (capture), kontrakt,
         odtworzenie (replay) na obu wersjach, porównanie (compare), werdykt i pakiet
-        dowodowy. Rdzeń w \path{letsgolegacy.secondkey}, rozszerzenia fazy 02 i 03 w
-        \path{secondkey-capture}, \path{secondkey-sandbox} i \path{secondkey-portal}.
+        dowodowy. Rdzeń w~\path{letsgolegacy.secondkey}; rozszerzenia fazy 02 i~03 są
+        dopiero planowane w~\path{secondkey-capture}, \path{secondkey-sandbox}
+        i~\path{secondkey-portal}, które zawierają dziś tylko plany pracy.
   \item \textbf{Portcullis} --- bramka na pull request: deterministyczne analyzery Roslyn
         uruchamiane na zmienionych liniach, z wynikiem w SARIF i plikiem baseline
         (\path{letsgolegacy.portcullis}).
   \item \textbf{secondkey-standards} --- standardy architektury i migracji spisane raz w
         Markdown i dostarczane z jednego źródła agentowi migracyjnemu (jako skill) oraz
-        bramce (jako konfiguracja analyzerów).
+        bramce (jako konfiguracja analyzerów, którą czyta build z~paczką analyzerów, a~nie
+        skan CLI Portcullis); sprawdzenie wykonywalne ma 11 z~20 standardów, pozostałe 9 to
+        instrukcje dla agenta. Żadna wersja standardów nie jest jeszcze otagowana.
   \item \textbf{legacy-risk-scan} --- strona, która z pliku projektu (\repopath{.csproj},
         \repopath{packages.config}, \repopath{composer.json}) liczy w przeglądarce raport
         końca wsparcia (EOL) i znanych podatności.
   \item \textbf{bench nopCommerce} --- publiczny okaz: nopCommerce 3.90 na .NET Framework,
-        na którym cały łańcuch jest uruchamiany w CI i na którym będzie oceniona migracja
-        wykonana przez agenta.
+        na którym w~CI działają nagranie ruchu, replay, porównanie z~kontraktem i~pakiet
+        dowodowy, a~na którym będzie oceniona migracja wykonana przez agenta (bramka
+        Portcullis i~standardy czekają na tę migrację).
 \end{itemize}
 
-Komponenty wymieniają się wyłącznie plikami: nagraniem \repopath{*.skcap}, kontraktem
+Kroki łańcucha wymieniają się wyłącznie plikami: nagraniem \repopath{*.skcap}, kontraktem
 \repopath{contract.yaml}, przebiegiem \repopath{*.skrun}, werdyktem
-\repopath{verdict.json}, logami bramki \repopath{*.sarif} i pakietem dowodowym. Żaden
-komponent nie sięga do wnętrza innego, więc każdy da się wymienić, jeśli czyta i pisze te
-same artefakty (rozdział~\ref{sec:architektura}).
+\repopath{verdict.json}, logami bramki \repopath{*.sarif} i pakietem dowodowym. Dlatego
+każdy krok da się wymienić, jeśli czyta i~pisze te same artefakty
+(rozdział~\ref{sec:architektura}); wewnątrz rdzenia projekty wywołują się jednak jako
+biblioteki (komparator woła silnik kontraktu, a~CLI składa wszystkie w~jednym procesie).
 
 \zrodla{\path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
@@ -116,11 +123,11 @@ Pozostałych repozytoriów ten check nie czyta.
 \toprule
 Repozytorium & Commit & Data & Rola \\
 \midrule
-\path{letsgolegacy.secondkey} & \texttt{c3ae5c2} & 2026-10-03 & rdzeń Second Key \\
+\path{letsgolegacy.secondkey} & \texttt{7631266} & 2026-10-03 & rdzeń Second Key \\
 \path{letsgolegacy.portcullis} & \texttt{d045f07} & 2026-09-26 & bramka C5 \\
 \path{letsgolegacy.secondkey-standards} & \texttt{a8c60ff} & 2026-09-26 & standardy C4 \\
 \path{letsgolegacy.secondkey-nopcommerce-bench} & \texttt{98d88d8} & 2026-10-03 & publiczny okaz \\
-\path{letsgolegacy.legacy-risk-scan} & \texttt{4f4e346} & 2026-10-03 & raport EOL i CVE \\
+\path{letsgolegacy.legacy-risk-scan} & \texttt{6bb73b1} & 2026-10-03 & raport EOL i CVE \\
 \path{letsgolegacy.secondkey-capture} & \texttt{e56068e} & 2026-09-25 & C1, faza 02 \\
 \path{letsgolegacy.secondkey-sandbox} & \texttt{75042c6} & 2026-09-25 & C12, faza 02 \\
 \path{letsgolegacy.secondkey-portal} & \texttt{e73546f} & 2026-09-25 & C11, faza 03 \\
@@ -138,8 +145,11 @@ repozytoriach. Dokument nie opisuje też pracy w toku na gałęziach, które nie
 
 Bench buduje narzędzia łańcucha z własnych przypiętych commitów (\path{pins.json}, sekcja
 \repopath{chain}; podrozdział~\ref{sec:bench-pins}): \repopath{sk} z \texttt{c3ae5c2}
-i Portcullis z \texttt{d045f07}, czyli z tych samych commitów, które opisuje tabela. Piny
-przesunięto po raz pierwszy w ADR 0008 (podrozdział~\ref{sec:bench-pins-adr}); wyniki P3--P5
+i Portcullis z \texttt{d045f07}. Portcullis to commit z tabeli. Rdzeń w tabeli jest od
+\texttt{c3ae5c2} nowszy tylko o wersje dwóch pakietów (Dependabot: AngleSharp 1.8.3,
+Microsoft.Data.SqlClient 7.1.1), poprawione opisy w dokumentacji i komentarzach oraz README:
+kod jest ten sam co w benchu, ale bench buduje go z poprzednimi wersjami tych dwóch pakietów.
+Piny przesunięto po raz pierwszy w ADR 0008 (podrozdział~\ref{sec:bench-pins-adr}); wyniki P3--P5
 i P9 zapisano na starych pinach, \texttt{967c49c} i \texttt{84e1925} (sekcja~\ref{sec:procedura-wymagania}).
 
 Wersję samego dokumentu --- commit, z którego zbudowano PDF --- podaje nagłówek każdej

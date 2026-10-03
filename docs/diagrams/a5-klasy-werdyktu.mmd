@@ -1,9 +1,9 @@
 flowchart TD
-  S["wymiana: odpowiedzi legacy i kandydata<br/>zredukowane do zachowania"] --> A["strona bez odpowiedzi?<br/>(timeout, połączenie, reset,<br/>brak wyniku)"]
+  S["wymiana: odpowiedzi legacy i kandydata<br/>zredukowane do zachowania"] --> A["strona bez odpowiedzi?<br/>(timeout, połączenie,<br/>protokół, reset,<br/>brak wyniku)"]
   A -- tak --> R1["regression<br/>missing-result"]
   A -- nie --> B["zaakceptowana klauzula:<br/>legacy pass, kandydat fail albo error?"]
   B -- tak --> R2["regression<br/>clause-regression"]
-  B -- nie --> C["legacy fail albo error,<br/>kandydat pass?"]
+  B -- nie --> C["zaakceptowana klauzula:<br/>legacy fail albo error,<br/>kandydat pass?"]
   C -- tak --> FC["fix-candidate<br/>clause-fixed"]
   C -- nie --> D["brak różnic?"]
   D -- tak --> E["equal<br/>identical"]

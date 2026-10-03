@@ -1,10 +1,11 @@
 \section{Second Key --- rdzeń}\label{sec:rdzen}
 
 Repozytorium \path{letsgolegacy.secondkey}, dalej: rdzeń, mieści każdy komponent Second Key,
-który nie ma własnego powodu, by mieszkać gdzie indziej. W~fazie 01 jest to cały łańcuch
-weryfikacji poza bramką: CLI \repopath{sk}, przechwytywanie ruchu HTTP, silnik kontraktu,
-replay, komparator i~niepodpisany evidence pack (pakiet dowodowy). Rozdział opisuje migawkę
-rdzenia w~commicie \repopath{c3ae5c2} (sekcja~\ref{sec:wprowadzenie-wersja}): po co rdzeń
+który nie ma własnego powodu, by mieszkać gdzie indziej. W~fazie 01 jest to łańcuch
+weryfikacji poza bramką i~standardami (osobne repozytoria) oraz poza minerem kontraktu
+i~silnikiem mutacji (w~rdzeniu są tylko stuby): CLI \repopath{sk}, przechwytywanie ruchu HTTP,
+silnik kontraktu, replay, komparator i~niepodpisany evidence pack (pakiet dowodowy). Rozdział opisuje migawkę
+rdzenia w~commicie \repopath{7631266} (sekcja~\ref{sec:wprowadzenie-wersja}): po co rdzeń
 istnieje, gdzie mieszkają komponenty,
 jakie zasady projektowe egzekwuje i~dlaczego, jak zbudowane jest solution, jak rdzeń jest
 budowany, testowany i~sprawdzany w~CI, jakie ryzyka zaakceptowano, co przejął ze starszych
@@ -27,7 +28,7 @@ ról jako dwa klucze:
         zmiany.
 \end{itemize}
 
-\finding{Second Key weryfikuje; nie przepisuje.} Nie poprawia kodu kandydata (candidate) i~nie dotyka systemu legacy. Jego wynikiem jest werdykt i~pakiet dowodowy, a~nie zmiana w~kodzie.
+\finding{Second Key weryfikuje; nie przepisuje.} Nie poprawia kodu kandydata (candidate) i~nie zmienia kodu ani konfiguracji systemu legacy (replay może jednak resetować jego stan przed scenariuszem, jeśli skonfigurowano reset). Jego wynikiem jest werdykt i~pakiet dowodowy, a~nie zmiana w~kodzie.
 
 ADR 0003 odróżnia to twierdzenie od tego, czego dowodzą narzędzia typu replay. Replay
 dowodzi parytetu: nowy system robi to, co stary, łącznie z~jego błędami. Second Key twierdzi,
@@ -37,8 +38,9 @@ wymiana (exchange), czyli para żądanie–odpowiedź, trafia do jednej z~cztere
 podstawie których osoba zatwierdzająca może działać, a~przydział do klasy musi być
 deterministyczny.
 
-Status według README: faza 01 (demo). Łańcuch działa end to end na sample shop; następnym
-krokiem jest publiczny okaz, bench nopCommerce 3.x. Nic nie zostało wydane; wspólna wersja
+Status według README w~commicie \repopath{7631266}: faza 01 (demo). Łańcuch działa end to end na sample shop; następnym
+krokiem jest publiczny okaz, bench nopCommerce 3.x (jego repozytorium już istnieje i~ma część wyników:
+rozdział~\ref{sec:bench}, stan --- sekcja~\ref{sec:status-faza01}). Nic nie zostało wydane; wspólna wersja
 projektów w~\path{Directory.Build.props} to \repopath{0.1.0}. Bramką fazy 01 jest publiczny
 pakiet dowodowy na nopCommerce 3.x.
 
@@ -120,16 +122,19 @@ sekcja~\ref{sec:architektura}.
 
 Plan pracy rdzenia numeruje siedem zasad projektowych („design rules this repository
 enforces”). Przy każdej podano uzasadnienie ze źródeł i~mechanizm, którym rdzeń ją
-egzekwuje.
+egzekwuje. Nie każdy mechanizm jest automatyczną kontrolą: zasada~1 to konwencja
+(\path{CLAUDE.md}) i~kształt projektów, a~zasada~2 --- własność kodu, a~nie wymuszona
+izolacja sieciowa; żaden test architektury ani analizator zakazanych API ich nie pilnuje
+(powtarzalność werdyktu sprawdzają zwykłe testy).
 
 \begin{enumerate}
   \item \textbf{Werdykt jest deterministyczny}: o~pass/fail decyduje wyłącznie kod bez modelu
         językowego. Model może szkicować klauzule kontraktu albo pomagać w~triage różnic;
         nigdy nie decyduje. \emph{Dlaczego:} osoba zatwierdzająca potrzebuje decyzji
         deterministycznej (ADR 0003); ten sam kontrakt i~ten sam przebieg dają zawsze ten
-        sam werdykt, poza polem \repopath{createdAt}, więc werdykt można przeliczyć z~plików
-        w~pakiecie; także tekst klauzuli w~języku naturalnym jest deterministyczny, żeby
-        mógł stać w~podpisanym dowodzie. \emph{Jak:} w~\repopath{SecondKey.Contract} i~\repopath{SecondKey.Compare} nic nie może wołać modelu językowego --- opisy obu
+        sam werdykt, poza polami \repopath{createdAt}, \repopath{tool} (inny build) i~\repopath{inputs.*.path} (nazwy plików), więc werdykt można przeliczyć z~plików
+        w~pakiecie (o~ile złożono go z~\repopath{-{}-run}); także tekst klauzuli w~języku naturalnym jest deterministyczny, żeby
+        mógł stać w~dowodzie podpisywanym od fazy 03 (dziś pakiet jest niepodpisany). \emph{Jak:} w~\repopath{SecondKey.Contract} i~\repopath{SecondKey.Compare} nic nie może wołać modelu językowego --- opisy obu
         projektów mówią „Deterministic; no model in it”; komparator jest czysty, a~czas i~wartości losowe w~odpowiedziach maskuje normalizacja z~kontraktu; klauzule
         \repopath{proposed}, także naszkicowane przez model, są ewaluowane i~raportowane,
         ale nie decydują, dopóki osoba nie zaakceptuje ich w~przeglądanej zmianie kontraktu;
@@ -139,7 +144,9 @@ egzekwuje.
         wychodzącego.} \emph{Dlaczego:} Second Key obsługuje nagrania ruchu innych systemów,
         które mogą zawierać dane osobowe i~poświadczenia. \emph{Jak:} nic nie jest wysyłane
         przez sieć poza dwa porównywane systemy; capture redaguje skonfigurowane nagłówki,
-        zanim cokolwiek trafi na dysk, więc sanityzacja odbywa się w~sieci klienta; pakiet
+        zanim cokolwiek trafi na dysk, więc ta redakcja odbywa się w~sieci klienta (ciała,
+        ścieżka, query i~pozostałe nagłówki zostają w~nagraniu jawnie; tokenizacja PII to
+        faza 02); pakiet
         dowodowy pozwala pominąć \repopath{run.skrun}, gdy nagrany ruch musi zostać w~swojej
         granicy; raport HTML zakazuje skryptów i~żądań sieciowych polityką Content Security
         Policy.
@@ -147,8 +154,10 @@ egzekwuje.
         ID, GitHub albo Azure DevOps, Kubernetes. \emph{Jak:} logika kalibracji z~judge-worker (TypeScript) ma zostać przepisana na C\# zamiast przeniesiona; PDF
         raportu drukuje przeglądarka oparta na Chromium, która już jest na maszynie.
   \item \textbf{System legacy jest nietykalny}: capture nie wymaga zmiany kodu ani
-        rekompilacji. \emph{Jak:} proxy przekazuje każde żądanie bez zmian, poza prośbą o~nieskompresowaną odpowiedź, i~oddaje klientowi odpowiedź systemu legacy bez zmian;
-        zmienia się tylko adres, pod który łączą się klienci systemu. Czas i~losowość w~kodzie legacy (\repopath{DateTime.Now}, \repopath{Guid.NewGuid()}) bez wstrzykiwania
+        rekompilacji. \emph{Jak:} proxy przekazuje treść każdego żądania bez zmian i~oddaje klientowi odpowiedź systemu legacy bez zmian, ale system legacy widzi zmienione nagłówki żądania:
+        \repopath{Host} z~adresem celu (oryginał w~\repopath{X-Forwarded-Host}), dodane \repopath{X-Forwarded-For},
+        \repopath{X-Forwarded-Host} i~\repopath{X-Forwarded-Proto} oraz usunięty \repopath{Accept-Encoding}
+        (proxy prosi o~nieskompresowaną odpowiedź); sam system pozostaje bez zmian, a~zmienia się tylko adres, pod który łączą się jego klienci. Czas i~losowość w~kodzie legacy (\repopath{DateTime.Now}, \repopath{Guid.NewGuid()}) bez wstrzykiwania
         zależności obsługuje normalizacja w~C7, a~nie ingerencja w~system. Ticket S9
         powołuje się na tę zasadę.
   \item \textbf{Dowód jest artefaktem kryptograficznym, nie dashboardem.} \emph{Jak:} pakiet
@@ -156,10 +165,12 @@ egzekwuje.
         in-toto Statement. Faza 01 niesie skróty i~niepodpisany statement po to, żeby podpis
         w~fazie 03 niczego w~formacie nie zmienił. Ticket S14 powołuje się na tę zasadę.
   \item \textbf{Brak własnej usługi tożsamości}; używany jest IdP klienta. \emph{Jak:}
-        repozytorium authservice służy wyłącznie próbnej instancji portalu, którą
-        hostują sami autorzy Second Key (C11, faza 03); produkcyjnie portal używa IdP klienta przez OIDC.
+        repozytorium authservice ma służyć wyłącznie próbnej instancji portalu, którą
+        mieliby hostować sami autorzy Second Key (C11, faza 03); produkcyjnie portal ma używać IdP klienta przez OIDC.
+        To plan: repozytorium portalu jest w~tej migawce szkieletem bez kodu.
   \item \textbf{Każdy krok działa z~CLI w~pipeline}; portal jest oknem, nie interfejsem.
-        \emph{Jak:} każdy krok łańcucha to polecenie \repopath{sk} ze stabilnymi kodami
+        \emph{Jak:} każdy krok łańcucha, który rdzeń implementuje, to polecenie \repopath{sk}
+        (\repopath{sk mine} i~\repopath{sk mutate} to stuby z~kodem 70) ze stabilnymi kodami
         wyjścia, na których pipeline może się rozgałęziać bez czytania werdyktu;
         \repopath{sk evidence} kończy się kodem 0 niezależnie od werdyktu, żeby pipeline
         mógł opublikować pakiet, który wyjaśnia porażkę. Ticket S7 powołuje się na tę
@@ -206,7 +217,8 @@ sekcja~\ref{sec:formaty}.
 
 \emph{Tickety S3–S6.} \textbf{Kontekst.} Second Key to łańcuch komponentów --- capture,
 contract, replay, compare, evidence --- które są budowane, wymieniane i~wdrażane osobno:
-capture działa po stronie Windows/IIS, reszta w~sandboksie linuksowym; bramka jest osobnym
+capture ma działać po stronie Windows/IIS, a~reszta w~sandboksie linuksowym (założenie ADR:
+repozytorium \path{letsgolegacy.secondkey-sandbox} to w~tej migawce plan bez kodu); bramka jest osobnym
 repozytorium; miner, silnik mutacji i~portal przychodzą w~późniejszych fazach. Komponenty
 muszą móc się zmieniać bez skoordynowanego wydania wszystkich naraz.
 
@@ -218,9 +230,12 @@ repozytoriów SARIF i~skills. Żaden komponent nie wywołuje kodu innego. Strumi
 i~czytać bez ładowania w~całości do pamięci. Każde zdarzenie i~każdy dokument niesie wersję
 formatu \repopath{v}; czytelnik odrzuca wersje, których nie zna. Schematy są ścisłe
 (\repopath{additionalProperties: false}); reguły, których schemat nie wyrazi, sprawdza kod
-i~raportuje z~tak samo zlokalizowanymi błędami. Werdykty cytują SHA-256 swoich wejść.
+i~raportuje z~tak samo zlokalizowanymi błędami. Werdykty cytują SHA-256 swoich wejść. W~kodzie
+rdzenia reguła „żaden komponent nie wywołuje kodu innego” obowiązuje między krokami
+łańcucha, a~nie między projektami: komparator wywołuje silnik kontraktu jako bibliotekę,
+a~CLI składa wszystkie projekty w~jednym procesie (sekcja~\ref{sec:architektura}).
 
-\textbf{Konsekwencje.} Zmiana formatu to przeglądana zmiana schematu, jego próbek i~\path{docs/formats/}; CI waliduje próbki przy każdym buildzie. Każdy komponent
+\textbf{Konsekwencje.} Zmiana formatu to przeglądana zmiana schematu, jego próbek i~\path{docs/formats/}; CI waliduje próbki przy każdym buildzie. Każdy krok łańcucha
 można przepisać --- także poza projektem --- pod warunkiem, że czyta i~pisze te same
 pliki. Formaty są z~konstrukcji publiczne; nagrania prawdziwych systemów nie są publiczne
 nigdy i~trzyma je poza gitem \path{.gitignore}.
@@ -353,14 +368,15 @@ i~\texttt{BodyCodec}; w~\path{Runs/} zdarzenia \texttt{RunHeader}, \texttt{State
 \texttt{ExchangeResult}, \texttt{RunEnd}, \texttt{RunFile} i~\texttt{RunWriter}; w~\path{Contracts/} \texttt{ContractDocument}, \texttt{ContractFile} (YAML → JSON → schemat →
 reguły) i~\texttt{ContractRules}; w~\path{Verdicts/} \texttt{VerdictDocument} i~\texttt{VerdictFile}, który waliduje dokument przed zapisem; ponadto \texttt{SelectorPath}
 (jeden język ścieżek dla klauzul, ekstraktów i~normalizacji), \texttt{YamlJson},
-\texttt{ArtifactJson} (jedyny zestaw opcji serializacji), \texttt{Sha256Digest} i~\texttt{ToolInfo} (nazwa \texttt{secondkey}, wersja i~commit z~metadanych buildu, zapisywane
+\texttt{ArtifactJson} (wspólne opcje serializacji capture, przebiegu i~werdyktu; manifest i~statement pakietu mają własne), \texttt{Sha256Digest} i~\texttt{ToolInfo} (nazwa \texttt{secondkey}, wersja i~commit z~metadanych buildu, zapisywane
 w~każdym artefakcie).\par
 \smallskip
 \textbf{SecondKey.Capture --- C1} („a~recording proxy in front of the legacy system that
 writes *.skcap without touching the system”): \texttt{RecordingProxy} na
 \texttt{IHttpForwarder} z~YARP, \texttt{CaptureOptions}, \texttt{SessionTracker} (przypisanie
 wymiany do sesji), \texttt{TeeStream} (kopia odpowiedzi do nagrania bez wstrzymywania
-klienta).\par
+klienta). Proxy przyjmuje ruch klientów wyłącznie po HTTP: nie kończy TLS, a~\texttt{-{}-listen https://…}
+kończy się błędem (kod 4).\par
 \smallskip
 \textbf{SecondKey.Contract --- C3} („evaluates a~contract's clauses against what each side
 answered; deterministic; no model in it”): \texttt{ContractEngine} (\texttt{Compile},
@@ -389,7 +405,8 @@ a~manifest and an unsigned in-toto statement”): \texttt{EvidencePack},
 \smallskip
 \textbf{SecondKey.Cli --- C0}: \texttt{Program}, \texttt{SecondKeyCli} (drzewo poleceń na
 System.CommandLine), \texttt{ExitCodes}, klasy poleceń w~\path{Commands/},
-\texttt{StubCommand} dla poleceń planowanych, \texttt{SecondKeyConfig} z~\texttt{ConfigurationException}. Projekt pakuje się jako narzędzie .NET:
+\texttt{StubCommand} dla poleceń planowanych, \texttt{SecondKeyConfig} z~\texttt{ConfigurationException}. Projekt pakuje się jako narzędzie .NET (paczka
+nie jest opublikowana: repozytorium nie ma ani tagów, ani wydań):
 \texttt{PackAsTool}, \texttt{ToolCommandName} = \texttt{sk}, \texttt{PackageId} =
 \texttt{SecondKey.Cli}, \texttt{InvariantGlobalization} = \texttt{false}.\par
 \smallskip
@@ -486,9 +503,9 @@ per package, one diff to upgrade it”):
 \toprule
 Produkt & Wersja & Testy & Wersja \\
 \midrule
-AngleSharp & 1.8.2 & Microsoft.AspNetCore.Mvc.Testing & 10.0.12 \\
+AngleSharp & 1.8.3 & Microsoft.AspNetCore.Mvc.Testing & 10.0.12 \\
 JsonSchema.Net & 9.4.0 & Microsoft.NET.Test.Sdk & 18.10.1 \\
-Microsoft.Data.SqlClient & 7.1.0 & Testcontainers.MsSql & 4.15.0 \\
+Microsoft.Data.SqlClient & 7.1.1 & Testcontainers.MsSql & 4.15.0 \\
 System.CommandLine & 2.0.12 & xunit & 2.9.3 \\
 Yarp.ReverseProxy & 2.3.0 & xunit.runner.visualstudio & 4.0.0 \\
 YamlDotNet & 18.1.0 & & \\
@@ -611,7 +628,9 @@ wykonuje \repopath{dotnet tool restore}, a~przed każdym usuwa jego poprzedni ra
 
 Mutacjom podlega ścieżka werdyktu --- formaty, silnik kontraktu, komparator, evidence --- i~silnik replay, który decyduje, co komparator zobaczy. Dwie części zostają testom
 integracyjnym, bo mutowanie ich powtarzałoby I/O~dla każdego mutanta, daleko poza budżetem
-CI (TESTING-STRATEGY §2): proxy capture oraz reset i~sonda SQL Server w~replay. Po każdym
+CI (TESTING-STRATEGY §2): proxy capture oraz reset i~sonda SQL Server w~replay. Poza testami
+mutacyjnymi jest też \repopath{SecondKey.Cli} (skrypt nie podaje powodu), więc Stryker.NET obejmuje
+pięć z~siedmiu projektów produktu. Po każdym
 projekcie skrypt dopisuje do \repopath{\$GITHUB\_STEP\_SUMMARY} (poza Actions do
 \path{/dev/null}) wiersz tabeli „Mutation scores” z~kolumnami Project, Score, Killed,
 Survived, No coverage i~Timeout. Wynik to $(K + T) / (K + S + N + T)$, gdzie $K$ to mutanty
@@ -626,7 +645,10 @@ wysyła (nagłówki hop-by-hop, nagrane ciasteczka, wartości zredagowane, nagra
 \texttt{content-length}), tego, że przekierowanie jest zapisywane, a~nie wykonywane, że
 ścieżka adresu bazowego poprzedza każde żądanie i~że korelacja zostawia w~spokoju treści,
 których nie umie odczytać. Otwarte pozostaje to, że reset i~sonda SQL Server są pokryte
-tylko testami integracyjnymi.
+tylko testami integracyjnymi. Wyniki przebiegu CI na commicie \repopath{c3ae5c2} (przebieg 37116794634):
+Compare 98,89\%, Evidence 91,67\%, Replay 89,71\%, Artifacts 89,09\% i~Contract 86,87\%, czyli wszystkie
+powyżej progu \texttt{high} (85). Wyniki nie są zapisane w~repozytorium: są w~logach i~artefaktach
+\texttt{mutation-report-}\emph{projekt} jobów CI oraz w~podsumowaniu joba.
 
 \zrodla{\path{letsgolegacy.secondkey/stryker-config.json},
 \path{letsgolegacy.secondkey/scripts/mutation.sh},
@@ -1081,7 +1103,8 @@ schemat kontraktu odrzuca odpowiedniki: predykat z~\texttt{value} i~\texttt{ref}
 klauzula ma wymagane \texttt{why} \\
 Asercje nieobecności jako pełnoprawny element (\texttt{tool\_not\_called},
 \texttt{event\_not\_emitted}) & klauzule \texttt{kind: never} i~operator \texttt{absent};
-walidator raportuje udział nieobecności w~kontrakcie \\
+udział nieobecności (\emph{absence share}) liczy \texttt{sk compare} i~zapisuje w~werdykcie
+(\texttt{sk validate} go nie liczy) \\
 Reguła dwóch asercji: odmowa to odmowa \emph{i} nieobecność (\path{evals/README.md},
 \path{scripts/validate-scenarios.mjs}) & walidacja semantyczna poza schematem: kontrakt bez
 klauzuli \texttt{never} jest odrzucany \\
@@ -1115,7 +1138,7 @@ Nie przeniesiono: runtime agenta MCP, modelu trace/span, warstwy Layer 2 (sędzi
 
 \textbf{listing-search-bench} → kształt publicznego okazu. Commit \repopath{5751287}
 (publiczne, MIT): 28 scenariuszy, 128 asercji, z~czego 29 to wykluczenia i~nieobecności
-(około 22\%). To drugi okaz tej samej metody, co czyni metodę przenośną, a~nie szytą na
+(22,7\%). To drugi okaz tej samej metody, co czyni metodę przenośną, a~nie szytą na
 miarę. Nic z~niego nie działa w~Second Key; jest wzorem dla
 \path{letsgolegacy.secondkey-nopcommerce-bench}: publicznego repozytorium, którego korpus
 ewaluacyjny, liczby i~znaleziska są dowodem produktu, publikowanym razem z~ograniczeniami.
@@ -1165,9 +1188,10 @@ Identyfikatory reguł \texttt{PORTCULLIS\_<...>}; reguły migracyjne
 \path{PORTCULLIS_MIG_SYSTEM_WEB}, \path{PORTCULLIS_MIG_HTTPCONTEXT_CURRENT},
 \path{PORTCULLIS_MIG_SYNC_OVER_ASYNC}, \path{PORTCULLIS_MIG_CONFIGURATION_MANAGER}
 (\path{src/Portcullis.Rules/RuleRegistry.cs}) & pokazywane po identyfikatorze w~pakiecie;
-mapowane na standardy w~C4 \\
+mapowane na standardy w~C4. W~commicie \repopath{4a375b9} rejestr ma jeszcze tylko sześć reguł zasad i~regułę
+pokrycia konwencji; reguły migracyjne doszły później i~są w~rejestrze w~commicie \repopath{d045f07} Portcullis \\
 Testy mutacyjne jako nawyk, nie wydarzenie (\path{docs/MUTATIONS.md}) & CI rdzenia ma próg
-Stryker.NET od pierwszego commitu (S1) \\
+Stryker.NET od ticketu S1, pierwszego commitu z~kodem \\
 \bottomrule
 \end{tabularx}
 }
@@ -1187,8 +1211,9 @@ Analiza fazy 01 przypisuje ponadto ticketom zasady P4 (persistence za granicą) 
 Celowo nieużywane przez rdzeń: \texttt{context-pin} --- jego idea, wersja standardów
 przypięta per repozytorium i~wykrywanie dryfu w~CI, weszła do C4
 (\path{letsgolegacy.secondkey-standards}) jako pakiet NuGet, tag gita i~jeden krok CI, bez
-osobnej usługi; \texttt{authservice} --- tylko dla próbnej instancji portalu, którą hostują
-sami autorzy Second Key (C11, faza 03), bo produkcja używa IdP klienta przez OIDC (zasada 6); Keploy
+osobnej usługi (w~migawce pakiet NuGet powstaje tylko jako artefakt CI, a~pierwszy tag wydania
+jeszcze nie istnieje); \texttt{authservice} --- tylko dla planowanej próbnej instancji portalu, którą mieliby hostować
+sami autorzy Second Key (C11, faza 03), bo produkcja ma używać IdP klienta przez OIDC (zasada 6); Keploy
 (zewnętrzny) --- wczesny plan zbudowania na nim capture porzucono, bo eBPF działa tylko na
 Linuksie, a~legacy .NET Framework działa na Windows/IIS.
 
