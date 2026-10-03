@@ -22,7 +22,7 @@ Artefakt & Schemat & Kształt & Pisze & Czyta \\
 \texttt{sk mine} & \texttt{sk compare} (C7), \texttt{sk mutate} (C9), \texttt{sk evidence} (C10) \\
 \texttt{*.skrun} & \path{skrun.schema.json} & JSON Lines: \texttt{run.header}, zdarzenia
 \texttt{state.reset} i~\texttt{exchange.result}, \texttt{run.end} & \texttt{sk replay} (C6) &
-\texttt{sk compare} (C7); \texttt{sk evidence} (C10) sprawdza jego skrót i~go kopiuje \\
+\texttt{sk compare} (C7); \texttt{sk evidence} (C10) sprawdza jego skrót i~go kopiuje, gdy podano \texttt{-{}-run} \\
 \texttt{verdict.json} & \path{verdict.schema.json} & dokument JSON & \texttt{sk compare} (C7)
 & \texttt{sk evidence} (C10), portal (C11) \\
 evidence pack & in-toto Statement v1 dla \path{statement.intoto.json} & katalog plików &
@@ -30,6 +30,10 @@ evidence pack & in-toto Statement v1 dla \path{statement.intoto.json} & katalog 
 \bottomrule
 \end{tabularx}
 }
+
+Wiersze wymieniające \texttt{sk mine} (C2), \texttt{sk mutate} (C9) i~portal (C11) opisują przepływy
+planowane (README i~plan pracy): w~tej migawce \texttt{sk mine} i~\texttt{sk mutate} są stubami, które
+kończą się kodem 70 i~niczego nie czytają ani nie piszą, a~portal jest tylko planem w~osobnym repozytorium.
 
 Plan pracy wymienia jeszcze artefakty spoza rdzenia: \path{standards/} (Markdown → skills i~NuGet, z~\path{letsgolegacy.secondkey-standards}), \repopath{*.sarif} (SARIF 2.1 z~bramki
 \path{letsgolegacy.portcullis}; czytają go \texttt{sk gate} i~\texttt{sk evidence}, czyli C5 i~C10) oraz \repopath{evidence.dsse} --- in-toto w~kopercie DSSE, podpisywany od fazy 03.
@@ -87,7 +91,9 @@ muszą się rozwiązywać, regexy kompilować, a~ścieżki parsować.
 
 \paragraph{Nagłówki i~treści.} Nazwy nagłówków są zapisywane małymi literami, a~każda wartość
 jest listą, bo HTTP pozwala nagłówkowi się powtarzać. Wartość zredagowana to dosłownie
-\repopath{<redacted>}. Treść (body) jest zapisywana jako sparsowany JSON
+\repopath{<redacted>}. Redaguje się wyłącznie wartości nagłówków wymienionych w~\texttt{sanitization.redactedHeaders}:
+treść, ścieżka i~query trafiają do nagrania jawnie, także hasło z~formularza logowania (maskowanie danych
+osobowych w~nagraniu to faza 02). Treść (body) jest zapisywana jako sparsowany JSON
 (\repopath{encoding: json}), tekst albo base64.
 
 \paragraph{Skróty SHA-256.} Każdy skrót to SHA-256 zapisany małymi literami szesnastkowo
@@ -230,8 +236,10 @@ to kolejność nagrania, więc plik przestawiony jest odrzucany. Pusty plik jest
 \paragraph{Co zapisuje \texttt{sk capture}.} \repopath{captureId} ma postać
 \texttt{cap-<yyyyMMddHHmmss>-<6 znaków hex>}, identyfikator wymiany ---
 \repopath{ex-<seq, 6 cyfr>}, np. \repopath{ex-000001}. Sesja to \repopath{s-} i~pierwsze 12
-znaków szesnastkowych SHA-256 z~nazwy klucza i~wartości, więc nagranie nigdy nie niesie
-samego sekretu sesji; wymiana bez klucza sesji dostaje sesję \repopath{anon-<seq>}. Numer
+znaków szesnastkowych SHA-256 z~nazwy klucza i~wartości, więc pole \repopath{session} nie niesie
+samego sekretu sesji (ciasteczko sesyjne chroni domyślna redakcja \texttt{cookie}, ale nagłówek wskazany
+jako klucz sesji zostaje w~nagłówkach żądania jawnie, jeśli nie dodano go do listy redakcji);
+wymiana bez klucza sesji dostaje sesję \repopath{anon-<seq>}. Numer
 \repopath{seq} jest nadawany pod tą samą blokadą, pod którą zapisywana jest linia, więc
 kolejność w~pliku i~kolejność \repopath{seq} nie mogą się rozjechać. Każda wymiana jest
 zapisywana i~opróżniana z~bufora, gdy się zakończy. Sesja anonimowa ma numer w~sześciu
@@ -317,8 +325,9 @@ w~scenariuszu --- w~kolejności \texttt{seq} \\
 \midrule
 \textbf{\texttt{exchange.result}} & wymagane \texttt{exchange}, \texttt{scenario},
 \texttt{side}, \texttt{seq}, \texttt{startedAt}, \texttt{durationMs}, \texttt{request} \\
-\texttt{request} & żądanie tak, jak wysłano je tej stronie, po podstawieniach korelacji
-(definicja z~capture) \\
+\texttt{request} & żądanie z~nagrania po podstawieniach korelacji (definicja jak w~capture), a~nie kopia
+tego, co poszło do sieci: nagłówki, których replay nie wysyła (m.in. \texttt{host},
+\texttt{content-length}, \texttt{cookie}, \texttt{accept-encoding} i~wartości zredagowane), zostają w~zapisie \\
 \texttt{response} albo \texttt{error} & dokładnie jedno z~nich; \texttt{error} ma
 \texttt{kind} (\texttt{connection}, \texttt{timeout}, \texttt{protocol},
 \texttt{reset-failed}) i~\texttt{message} --- strona nie odpowiedziała: żądanie jest
@@ -824,7 +833,9 @@ przed usunięciem), a~pozostałe elementy zachowują kolejność.
 \repopath{review}, \repopath{production-trace}, \repopath{manual-session}. \repopath{status}:
 \repopath{proposed} albo \repopath{accepted}. Tylko klauzule \repopath{accepted} decydują o~werdykcie; \repopath{proposed} --- napisane przez osobę, wydobyte z~nagrań albo naszkicowane
 przez model --- są ewaluowane i~raportowane, ale nie decydują o~niczym, dopóki osoba nie
-zaakceptuje ich w~przeglądanej zmianie pliku. Opcjonalne są \repopath{author} (dowolny
+zaakceptuje ich w~przeglądanej zmianie pliku. W~tej migawce \repopath{mined} i~\repopath{llm-draft}
+są tylko etykietami pochodzenia: żaden komponent rdzenia nie wydobywa ani nie szkicuje klauzul
+(\repopath{sk mine} jest stubem). Opcjonalne są \repopath{author} (dowolny
 napis), \repopath{date} (format \repopath{date}) i~\repopath{support} dla klauzul wydobytych:
 obiekt z~dwiema wymaganymi liczbami całkowitymi $\geq 0$ --- \repopath{observations} (na ilu
 obserwacjach widziano niezmiennik) i~\repopath{violations} (ile mu przeczyło).
@@ -843,7 +854,8 @@ pokazuje go jako „Absence share”.
 \subsubsection{Tekst klauzuli w~języku naturalnym}
 
 Werdykt zawiera każdą klauzulę wyrenderowaną po angielsku dla osób, które nie czytają YAML.
-Renderowanie jest deterministyczne, więc zdanie może stać w~podpisanym dowodzie. Zakres
+Renderowanie jest deterministyczne, więc zdanie będzie mogło stać w~dowodzie podpisywanym od fazy 03
+(dziś pakiet jest niepodpisany). Zakres
 brzmi „For every request”, „For GET /cart” (dla ścieżki zakotwiczonej literalnie) albo „For
 requests to paths matching …”, z~dopiskiem „with query … matching …”; \repopath{must} łączy
 predykaty przez „, and”, a~\repopath{never} zaczyna się od „it never happens that”. Przykłady
@@ -899,7 +911,8 @@ operatory & \texttt{is present}, \texttt{is absent}, \texttt{equals}, \texttt{do
 
 \path{schemas/samples/contract.yaml} używa każdej części formatu: ekstraktorów z~HTML, reguł
 normalizacji oraz klauzul \repopath{must} i~\repopath{never}. Poniżej jego metadane i~trzy z~sześciu klauzul --- klauzula nieobecności bez zakresu, klauzula na wartościach
-wyekstrahowanych i~klauzula w~statusie \repopath{proposed} z~pochodzeniem \repopath{mined};
+wyekstrahowanych i~klauzula w~statusie \repopath{proposed} z~pochodzeniem \repopath{mined} (wpisana ręcznie, razem
+z~liczbami \repopath{support}: \repopath{sk mine} jest stubem);
 ekstraktory i~normalizacja tego pliku to te same konstrukcje, które pokazano wyżej.
 
 \begin{lstlisting}
@@ -1180,7 +1193,7 @@ kroki jako schemat.
 \toprule
 Krok & Klasa & Powody (\texttt{reasons}) \\
 \midrule
-1. Strona nie ma odpowiedzi: timeout, odrzucone połączenie, nieudany reset albo brak wyniku
+1. Strona nie ma odpowiedzi: timeout, odrzucone połączenie, błąd protokołu, nieudany reset albo brak wyniku
 & \texttt{regression} & \texttt{missing-result: candidate (timeout)}; strona nieodtworzona
 to \texttt{(not replayed)} \\
 2. Zaakceptowana klauzula przechodzi na legacy, a~na kandydacie oblewa albo nie daje się
@@ -1366,9 +1379,11 @@ liczba); schemat opisuje je jako to, ile celowo wstrzykniętych defektów kontra
 \subsubsection{Jak czytać \texttt{verdict.json}}
 
 \begin{enumerate}
-  \item \repopath{outcome} mówi, czy kandydata można zatwierdzić bez dalszych decyzji
+  \item \repopath{outcome} mówi, czy nie ma ani regresji, ani kandydatów do decyzji osoby
         (\repopath{pass}), czy osoba musi rozstrzygnąć kandydatów na poprawkę
-        (\repopath{review}), czy są regresje (\repopath{fail}).
+        (\repopath{review}), czy są regresje (\repopath{fail}). \repopath{pass} nie znaczy, że każda
+        klauzula została sprawdzona i~dotrzymana: klauzule \repopath{unexercised},
+        \repopath{violated-both} i~\repopath{proposed} go nie blokują.
   \item \repopath{inputs} wiąże werdykt z~dokładnymi wejściami: kontrakt po nazwie, rewizji i~SHA-256, przebieg po \repopath{runId} i~SHA-256.
   \item \repopath{summary} podaje liczby klas i~klauzul; zaakceptowane klauzule
         \repopath{unexercised} to zachowanie, którego nagranie nie sprawdziło.
@@ -1458,8 +1473,8 @@ Wielokropki oznaczają pominięte fragmenty pliku.
 
 \repopath{sk evidence} składa to, czego osoba zatwierdzająca --- rada zmian, druga linia
 obrony, audytor --- potrzebuje, by zdecydować o~zmigrowanym systemie bez uruchamiania Second
-Key: jeden katalog, który wyjaśnia werdykt, niesie jego wejścia i~podaje SHA-256 każdego
-pliku.
+Key: jeden katalog, który wyjaśnia werdykt, niesie jego wejścia (kontrakt zawsze, przebieg tylko
+z~\texttt{-{}-run}) i~podaje SHA-256 każdego pliku.
 
 {\small
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.6cm} >{\raggedright\arraybackslash}X@{}}
@@ -1558,7 +1573,9 @@ mają schematu w~\path{/schemas} i~dostają „not a~Second Key artifact” --- 
 skróty z~manifestu. Przeliczony werdykt różni się od zapisanego tylko \repopath{createdAt}, gdy
 liczy go ten sam build \repopath{sk} na plikach o~tych samych nazwach: \repopath{tool} pochodzi
 z~uruchomionego buildu, a~\repopath{inputs.contract.path} i~\repopath{inputs.run.path} to nazwy
-plików podanych \repopath{sk compare} --- pakiet zapisuje wejścia pod stałymi nazwami.
+plików podanych \repopath{sk compare} --- pakiet zapisuje wejścia pod stałymi nazwami. Ostatnie
+polecenie z~listingu wymaga \path{run.skrun}, a~ten trafia do pakietu tylko wtedy, gdy złożono go
+z~\repopath{-{}-run}.
 
 \paragraph{Czego jeszcze nie ma.} Podpisu: w~fazie 03 statement ma być podpisywany kluczem
 właściciela do koperty DSSE (\repopath{evidence.dsse}). Do tego czasu pakiet dowodzi, które
@@ -1587,7 +1604,7 @@ przeglądarki i~reguły bramki opisuje sekcja~\ref{sec:cli}.
 Plik & Co zawiera \\
 \midrule
 \path{schemas/samples/contract.yaml} & kontrakt \repopath{sample-shop}: dwa ekstraktory, sześć
-klauzul, w~tym jedna \repopath{proposed} wydobyta z~nagrań \\
+klauzul, w~tym jedna \repopath{proposed} z~pochodzeniem \repopath{mined}, wpisana ręcznie \\
 \path{schemas/samples/sample.skcap} & nagłówek i~pięć wymian w~dwóch sesjach \\
 \path{schemas/samples/sample.skrun} & dwa scenariusze, dziesięć wyników \\
 \path{schemas/samples/verdict.json} & werdykt, który \repopath{sk compare} tworzy z~próbek
