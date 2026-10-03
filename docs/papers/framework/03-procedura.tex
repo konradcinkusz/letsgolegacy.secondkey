@@ -210,9 +210,15 @@ produkuje artefaktu, który czytają dalsze kroki.
 \textbf{Postępowanie.}
 \begin{enumerate}
   \item Otwórz stronę \url{https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/}.
-        Publikuje ją \path{deploy.yml} na GitHub Pages z gałęzi \repopath{main}; według
-        planu pracy ticket L18 jest scalony, a za ukończony uzna go dopiero przejście jobu
-        \repopath{verify} po pierwszym udanym wdrożeniu. Lokalnie stronę uruchamia \repopath{./scripts/setup.sh}, a potem
+        Publikuje ją \path{deploy.yml} na GitHub Pages z gałęzi \repopath{main}. Według planu
+        pracy ticket L18 jest zrobiony (strona jest opublikowana od 26~IX~2026, a~job
+        \repopath{verify}, który ładuje opublikowaną stronę, przechodzi), a~dwa kroki zostają
+        otwarte. Pierwszy to ustawienie repozytorium, bez którego nie powstaje miesięczny pull
+        request z~danymi EOL: zaplanowany przebieg z~1~X~2026 pobrał i~przetestował dane, ale
+        zawiódł przy otwieraniu pull requestu (ustawienie podaje tabela
+        w~podrozdziale~\ref{sec:procedura-rozwoj}). Drugi to kontakt: sekcja „Zamów audyt
+        Second Key” ma jeszcze tekst zastępczy („Kontakt: wkrótce.”), bo domenę i~adres e-mail
+        firmy dostarczy ticket L17. Lokalnie stronę uruchamia \repopath{./scripts/setup.sh}, a potem
         \repopath{npm start}; serwer udostępnia ją pod
         \url{http://127.0.0.1:4173/letsgolegacy.legacy-risk-scan/}.
   \item Wklej plik albo wybierz go z dysku; „Wypróbuj na przykładzie” pokazuje raport dla
@@ -226,8 +232,9 @@ produkuje artefaktu, który czytają dalsze kroki.
         w ciągu roku”, „Znane podatności”, „Nieustalone”, „Bez zastrzeżeń”) liczony z dat
         w dniu raportu, advisories z OSV oraz datę, z której pochodzą dane EOL
         (\repopath{generatedAt}). Gdy OSV było nieosiągalne, raport ma ostrzeżenie,
-        a „Sprawdź podatności ponownie” powtarza skan. Raport zapisuje przycisk „Drukuj lub
-        zapisz jako PDF”.
+        a „Sprawdź podatności ponownie” powtarza skan. Przycisk „Drukuj lub zapisz jako PDF”
+        otwiera okno drukowania przeglądarki; podatności komponentu ponad pierwsze trzy leżą
+        w~zwiniętym elemencie i~trafiają na wydruk dopiero po rozwinięciu.
   \item Sprawdź ograniczenia, zanim uznasz raport za pełny (tabela niżej). Ten krok przycisk
         po przycisku, z uwagami do pliku, rozwija podrozdział~\ref{sec:risk-scan-procedura}.
 \end{enumerate}
@@ -244,7 +251,7 @@ Objaw & Przyczyna \\
 Pakiet NuGet bez advisories, choć powinien je mieć & OSV porównuje identyfikatory NuGet z uwzględnieniem wielkości liter; ręcznie edytowany \repopath{PackageReference} może mieć inną wielkość liter niż kanoniczna \\
 Brak Bootstrapa lub wtyczek jQuery w raporcie z klasycznego \repopath{.csproj} & klasyczny projekt wymienia tylko pakiety z DLL; pakiety samych treści widać tylko w \repopath{packages.config} \\
 Wersja w raporcie starsza niż zainstalowana & ograniczenia (\repopath{composer.json}, \repopath{package.json}, zakresy NuGet) są sprawdzane w najniższej dozwolonej wersji; dokładny wynik dają pliki lock \\
-Pozycje „Nieustalone” & DLL skopiowane ręcznie, komponenty z GAC, pakiety bez wersji albo z wersją wyznaczoną zakresem nie dają się ocenić automatycznie; wymagają ręcznej weryfikacji \\
+Pozycje „Nieustalone” & DLL skopiowane ręcznie, komponenty z GAC, pakiety bez wersji albo z~zakresem, z~którego nie da się wyznaczyć najniższej wersji (np. \texttt{*}, \texttt{dev-master}), nie dają się ocenić automatycznie; wymagają ręcznej weryfikacji \\
 \bottomrule
 \end{xltabular}
 
@@ -255,7 +262,9 @@ Pozycje „Nieustalone” & DLL skopiowane ręcznie, komponenty z GAC, pakiety b
   \item Pozycje „Nieustalone” zweryfikowane ręcznie.
 \end{checklista}
 
-\zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\zrodla{\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/update-eol.yml},
+\path{letsgolegacy.legacy-risk-scan/README.md},
 \path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
 \path{letsgolegacy.legacy-risk-scan/src/index.html},
 \path{letsgolegacy.legacy-risk-scan/src/lib/messages.js}}
@@ -307,7 +316,7 @@ Runtime .NET Framework & 4.8 (hosta), aplikacja zbudowana dla 4.5.1 & runtime in
 Kultura & \repopath{en-US}, ustawiana per żądanie z języka sklepu & formatowanie cen i dat; porównanie NLS → ICU w P7 dotyczy runtime, więc obie strony muszą widzieć tę samą kulturę \\
 Strefa czasowa & UTC na hostowanych runnerach & ważność rabatów, daty zamówień, „nowe” produkty \\
 Kompresja & niezainstalowana & nagrane ciała odpowiedzi zostają czytelne \\
-Zegar & czas rzeczywisty & nie da się go kontrolować bez zmiany kodu legacy; komparator normalizuje czasy \\
+Zegar & czas rzeczywisty & nie da się go kontrolować bez zmiany kodu legacy; język kontraktu ma maskę \repopath{masks.timestamps}, ale kontrakt benchu jej nie włącza (ma tylko trzy maski wzorcowe), nie porównuje nagłówka \texttt{Date}, a~strony HTML porównuje wyłącznie przez ekstrakty \\
 \bottomrule
 \end{xltabular}
 
@@ -643,7 +652,10 @@ Pełna lista komunikatów walidacji kontraktu: podrozdział~\ref{sec:formaty-ble
 replay nagrania na legacy po obu stronach (A/A), z przywróceniem snapshotu przed każdym
 scenariuszem na każdej stronie, ma dać werdykt \repopath{pass} z każdą zaakceptowaną
 klauzulą utrzymaną i żadną niesprawdzoną. Taki przebieg pokazuje, że łańcuch nie wnosi
-różnic od siebie i że kontrakt trzyma na systemie legacy.
+różnic od siebie i że kontrakt trzyma na systemie legacy. W benchu obie strony to ten sam
+sklep na tej samej bazie, więc A/A dowodzi powtarzalności ruchu i~zgodności kontraktu
+z~legacy, a~nie tego, że porównanie wykryje błąd (to sprawdzają mutanty, krok~4a), ani że
+migracja jest wierna.
 
 \textbf{Polecenia (bench).}
 \begin{lstlisting}
@@ -789,7 +801,8 @@ kliencie opisuje podrozdział~\ref{sec:standardy-modernize} (krok 4); Windows z 
 którego trafia zapis przebiegu. Standardy: runbook P6 wymaga otagowanego wydania
 repozytorium standardów z \path{generated/skills/} i bez niego P6 się nie zaczyna;
 przewodnik standardów poza benchem dopuszcza przed pierwszym wydaniem \repopath{main}
-z zapisanym commitem. Uruchom stoper: wszystko do otwarcia pull requestu liczy się do
+z zapisanym commitem. Standardy z~commitu z~tabeli wersji nie mają jeszcze żadnego tagu ani
+wydania, więc warunek runbooka nie jest dziś spełniony. Uruchom stoper: wszystko do otwarcia pull requestu liczy się do
 godzin P6.
 
 \textbf{5.2 Fork i gałęzie.} Kandydat jest zmodyfikowanym nopCommerce, więc mieszka w
@@ -1075,9 +1088,10 @@ dla komentarza i \repopath{fetch-depth: 0}; wejścia i wyjścia opisuje
 podrozdział~\ref{sec:portcullis-dystrybucja}. SARIF do code scanning publikuje się na razie
 osobnym krokiem CLI i \repopath{github/codeql-action/upload-sarif}. Gotowy workflow SARIF
 opisuje sekcja~\ref{sec:portcullis-tutorial-sarif}, a sprawdzenie konwencji przed włączeniem
-bramki --- sekcja~\ref{sec:portcullis-tutorial-konwencje}. Pakiety i obraz kontenera są
-zbudowane i sprawdzone lokalnie, ale jeszcze nieopublikowane, a tagu \texttt{v0} jeszcze nie
-ma: do pierwszego tagu \repopath{v*} odwołanie \repopath{@v0} się nie rozwiąże i działa
+bramki --- sekcja~\ref{sec:portcullis-tutorial-konwencje}. Akcja, paczki
+i~obraz kontenera nie są jeszcze opublikowane: paczki NuGet pakują się lokalnie, ale nie ma
+ich w~rejestrze, obraz kontenera nie był budowany w~CI, samej akcji nie uruchomił żaden
+workflow, a~tagu \texttt{v0} jeszcze nie ma: do pierwszego tagu \repopath{v*} odwołanie \repopath{@v0} się nie rozwiąże i działa
 tylko ścieżka z kodu źródłowego (polecenie wyżej).
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.6cm} >{\raggedright\arraybackslash}X@{}}
@@ -1280,6 +1294,10 @@ klauzula \repopath{violated-both} & złamana po obu stronach, sama o niczym nie 
 \bottomrule
 \end{xltabular}
 
+Narzędzie nie zapisuje decyzji człowieka o~fix candidate i~nie ma oznaczenia „zamierzona
+zmiana”: wynik \repopath{review} trwa, dopóki nie zmieni się kontrakt albo kandydat, a~decyzja
+zapada poza narzędziem.
+
 Sondy NLS → ICU z planu ruchu benchu (formatowanie ujemnych kwot walutowych, zamiana
 wielkości liter i przycinanie kodów kuponów, porównanie kodów pocztowych, sortowanie,
 daty) są hipotezami do sprawdzenia właśnie w tym kroku; najmocniejszym kandydatem według
@@ -1411,7 +1429,7 @@ wymian; P5: 76 klauzul, w tym 15 \repopath{never}); pakiet dowodowy kandydata, r
 i regresje przyniosą P6--P8. Pakiet cytuje pull request kandydata, jego head commit,
 wersję standardów i zapis przebiegu P6.
 
-\textbf{Jak bench zapisuje wynik.} Każdy zrobiony ticket ma
+\textbf{Jak bench zapisuje wynik.} Ticket, który daje liczby (dziś P3, P4, P5 i~P9), ma
 \path{results/<ticket>/README.md} z linkiem do przebiegu CI, commitem, narzędziami
 z przypiętymi commitami i liczbami. Artefakty CI --- nagranie, przebieg, pakiet dowodowy ---
 CI przechowuje 30 dni, a każdy przebieg workflowu tworzy nowe
