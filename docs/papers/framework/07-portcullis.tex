@@ -194,6 +194,7 @@ w~skanowanym źródle, a~typ frameworku nie ma lokalizacji w~źródle.
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Semantics/LegacyApiSurface.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Cli/Program.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Provenance/ProvenanceModels.cs},
+\path{letsgolegacy.portcullis/src/Portcullis.CiComment/GitHubPullRequestCommentClient.cs},
 \path{letsgolegacy.portcullis/docs/rules/MIGRATION.md}}
 
 \subsection{Specyfikacja (SPEC)}\label{sec:portcullis-spec}
@@ -537,8 +538,9 @@ w~zwykłym C\# nic tych ról nie deklaruje; nazwy są konfigurowalne
 (sekcja~\ref{sec:portcullis-migracja}) jest 15 diagnostyk: 6 ma domyślnie poziom \texttt{error}
 (oba P2, \texttt{P4\_ENSURE\_CREATED\_OUTSIDE\_TEST}, \texttt{P9\_CONTROLLER\_NO\_DBCONTEXT},
 \texttt{MIG\_HTTPCONTEXT\_CURRENT} i~\texttt{MIG\_CONFIGURATION\_MANAGER}), 9 -- \texttt{warning},
-żadna nie ma poziomu \texttt{info}. Blokować mogą tylko błędy; ostrzeżenie dopiero po
-eskalacji pochodzenia AI.
+żadna nie ma poziomu \texttt{info}. W~bramce PR blokować mogą tylko błędy; ostrzeżenie dopiero
+po eskalacji pochodzenia AI (w~buildzie z~pakietem analyzerów poziom zmienia też
+\repopath{.editorconfig}).
 
 \paragraph{Tytuły i~komunikaty.} Tytuł deskryptora to opis reguły w~SARIF
 (\repopath{shortDescription} i~\repopath{fullDescription}); komunikat to tekst pojedynczego
@@ -622,7 +624,9 @@ if (context.Database.IsInMemory()) { await context.Database.EnsureCreatedAsync(.
   \item \textbf{P15.} Plik bez wywołania fabryki hosta (np. zwykłe narzędzie konsolowe)
         nie jest punktem wejścia usługi i~nie jest sprawdzany. Reguła przegląda tylko
         drzewo składniowe pliku punktu wejścia: \repopath{AddServiceDefaults()} wywołane
-        w~metodzie z~innego pliku nie jest widoczne i~plik zostaje zgłoszony.
+        w~metodzie z~innego pliku nie jest widoczne i~plik zostaje zgłoszony. Reguła zakłada
+        wzorzec ServiceDefaults (.NET Aspire): zwykły \repopath{Program.cs} z~\repopath{WebApplication.CreateBuilder(args)}
+        i~bez \repopath{AddServiceDefaults()} dostaje ostrzeżenie (sprawdzone na \repopath{d045f07}).
 \end{itemize}
 
 \paragraph{Pokrycie konwencji (\texttt{Meta}).} Każda reguła konwencyjna reaguje na
@@ -2997,6 +3001,7 @@ Szerzej o~bezpieczeństwie frameworku -- sekcja~\ref{sec:bezpieczenstwo}.
 \zrodla{\path{letsgolegacy.portcullis/SECURITY.md}, \path{letsgolegacy.portcullis/.gitleaks.toml},
 \path{letsgolegacy.portcullis/scripts/hooks/pre-commit}, \path{letsgolegacy.portcullis/scripts/install-hooks.sh},
 \path{letsgolegacy.portcullis/.github/workflows/secret-scan.yml}, \path{letsgolegacy.portcullis/.github/CODEOWNERS},
+\path{letsgolegacy.portcullis/.github/dependabot.yml}, \path{letsgolegacy.portcullis/action.yml},
 \path{letsgolegacy.portcullis/.gitignore}, \path{letsgolegacy.portcullis/Dockerfile},
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Provenance/GitCommandRunner.cs},
 \path{letsgolegacy.portcullis/src/Portcullis.Engine/Provenance/GitProvenanceProvider.cs},
@@ -3157,6 +3162,10 @@ a~\repopath{0.1.0} to numer przyszłego pierwszego wydania.
         artefaktów (Dockerfile, \repopath{fly.toml}, YAML CI, proza). P5 jest rozdzielona:
         skan literałów sekretów dałoby się zbudować dziś, „dokładnie jedna usługa trzyma
         klucz podpisu” to niezmiennik między repozytoriami.
+  \item \textbf{Żadna z~15 diagnostyk nie jest regułą bezpieczeństwa ani zgodności
+        regulacyjnej} (podatności, sekrety, uwierzytelnianie, kryptografia, zależności ze
+        znanymi lukami): „zgodność” znaczy zgodność z~deklarowaną architekturą i~standardem
+        migracji.
   \item \textbf{Poziom da się stroić tylko w~kanale pakietu analyzerów}; akcja nie udostępnia
         \repopath{--sarif} ani \repopath{--baseline}; nic nie jest opublikowane, a~obraz GHCR
         i~workflow wydania nie były wykonane, podobnie jak akcja w~jakimkolwiek workflow.
