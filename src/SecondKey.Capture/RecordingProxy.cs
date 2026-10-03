@@ -17,10 +17,11 @@ namespace SecondKey.Capture;
 
 /// <summary>
 /// C1, phase 01: a recording proxy in front of the legacy system. It forwards every request
-/// unchanged (except that it asks for an uncompressed answer, so the recording is readable),
-/// hands the client the legacy system's answer unchanged, and appends the exchange to a
-/// *.skcap file. The legacy system is untouched: no code change, no recompilation, only a
-/// different address for its clients (design rule 4).
+/// with three changes (no Accept-Encoding, so the answer is uncompressed and the recording is
+/// readable; the target's own Host; X-Forwarded-For, -Host and -Proto added), hands the client
+/// the legacy system's answer, and appends the exchange to a *.skcap file. The legacy system
+/// is untouched: no code change, no recompilation, only a different address for its clients
+/// (design rule 4).
 /// </summary>
 public sealed class RecordingProxy : IAsyncDisposable
 {
