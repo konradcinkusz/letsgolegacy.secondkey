@@ -2597,11 +2597,11 @@ Azure DevOps); do pierwszego wydania działa tylko ścieżka ze źródeł (krok~
 \subsubsection{Krok 5. Odczyt wyniku}
 
 \repopath{summary} to to, co \textbf{znaleziono};
-\repopath{gate} to to, co \textbf{blokuje}; różnica między błędami a~\repopath{blockingErrorCount}
-to istniejący dług (błędy poza zmienionymi liniami albo w~baseline), a~ostrzeżenia same nie
-blokują. Pełny schemat --
+\repopath{gate} to to, co \textbf{blokuje}. Pełny schemat --
 sekcja~\ref{sec:portcullis-spec}. Kody wyjścia: 0 -- nie blokuje, 1 -- blokuje, 2 -- błędne
-użycie; awarię Portcullis oznacza kod większy niż 1, a~1 to werdykt.
+użycie; awarię Portcullis oznacza kod większy niż 1, a~1 to werdykt. Błędy, których nie liczy
+\repopath{blockingErrorCount}, to istniejący dług (poza zmienionymi liniami albo w~baseline);
+ostrzeżenia same nie blokują.
 
 \begin{lstlisting}
 {
