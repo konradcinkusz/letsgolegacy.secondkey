@@ -98,5 +98,5 @@ internal static class ReplayCommand
     private static string Secret(string variable) =>
         Environment.GetEnvironmentVariable(variable) is { Length: > 0 } value
             ? value
-            : throw new ConfigurationException($"environment variable {variable} is not set (see secrets.env.example)");
+            : throw new ConfigurationException($"environment variable {variable} is not set (sk reads the process environment, not .env; see secrets.env.example)");
 }

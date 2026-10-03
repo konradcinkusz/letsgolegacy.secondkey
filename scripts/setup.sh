@@ -38,6 +38,18 @@ else
          without it those tests report themselves skipped locally; CI's Linux build-and-test
          job always runs them, while its Windows and mutation jobs skip them on purpose)"
 fi
+# The two tools the repository's own scripts shell out to. Neither is needed to build or test.
+if command -v curl >/dev/null 2>&1; then
+  ok "curl"
+else
+  warn "curl not found (optional — needed only by scripts/e2e.sh, the end-to-end run on the sample shop)"
+fi
+if command -v python3 >/dev/null 2>&1; then
+  ok "python3 $(python3 --version 2>&1 | cut -d' ' -f2)"
+else
+  warn "python3 not found (optional — needed only by scripts/e2e.sh, which checks the verdict and the pack
+         with it, and scripts/mutation.sh, which writes its summary table with it)"
+fi
 if command -v gitleaks >/dev/null 2>&1; then
   ok "gitleaks $(gitleaks version 2>/dev/null || echo '')"
 else
@@ -78,5 +90,7 @@ fi
 step "4. Local secrets"
 if [[ -f .env ]]; then ok ".env exists — left untouched"
 else cp secrets.env.example .env; ok "created .env from secrets.env.example (every variable in it is optional)"; fi
+# Nothing loads .env: sk and the scripts read the process environment only (P5).
+ok "sk does not read .env; export what you fill in first:  set -a; . ./.env; set +a"
 
 step "Done. Build and test with:  dotnet build SecondKey.slnx && dotnet test SecondKey.slnx"

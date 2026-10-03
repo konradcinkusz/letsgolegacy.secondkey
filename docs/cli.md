@@ -236,6 +236,9 @@ evidence: { verdict: .secondkey/verdict.json, contract: contract.yaml, run: .sec
 
 Secrets never live in this file: a connection string is named by the environment variable
 that holds it (`connectionStringEnv`), and `secrets.env.example` lists every such variable.
+`sk` reads the process environment only — it does not load `.env`. Export the variables
+before running it (in bash, `set -a; . ./.env; set +a`); one that is missing or empty stops
+`sk replay` by name with exit 3, before any request is sent.
 
 Relative paths resolve against the directory that holds the file. On Windows, write a path
 with forward slashes (`C:/sk/traffic.skcap`) or in single quotes (`'C:\sk\traffic.skcap'`):

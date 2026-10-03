@@ -868,7 +868,7 @@ kroki, a~z~opcją \texttt{-{}-check} tylko raportuje, czego brakuje, i~niczego n
         \texttt{[FAIL]} z~odnośnikiem do pobrania, a~skrypt kończy się kodem 1. Opcjonalne,
         nazwane tak, żeby pominięcie było świadomym wyborem (P8): działający Docker (tylko
         dla testów snapshotu SQL Server, S11; bez niego te testy lokalnie raportują się jako
-        pominięte), gitleaks (dla skanu pre-commit w~kroku 3; job CI skanuje niezależnie) i~przeglądarka headless (tylko do PDF pakietu; raport HTML powstaje zawsze).
+        pominięte), \texttt{curl} i~\texttt{python3} (tylko dla \path{scripts/e2e.sh} i~\path{scripts/mutation.sh}, niżej), gitleaks (dla skanu pre-commit w~kroku 3; job CI skanuje niezależnie) i~przeglądarka headless (tylko do PDF pakietu; raport HTML powstaje zawsze).
         Przeglądarki skrypt szuka w~tej samej kolejności co \texttt{PdfRenderer}:
         \texttt{SK\_CHROME\_PATH}, \texttt{google-chrome}, \texttt{google-chrome-stable},
         \texttt{chrome}, \texttt{microsoft-edge}, \texttt{microsoft-edge-stable},
@@ -883,14 +883,18 @@ kroki, a~z~opcją \texttt{-{}-check} tylko raportuje, czego brakuje, i~niczego n
         \repopath{SK\_LEGACY\_DB}, \repopath{SK\_CANDIDATE\_DB} --- ogólnie każdą zmienną
         wskazaną przez \repopath{connectionStringEnv} --- i~\repopath{SK\_CHROME\_PATH}
         wyłącznie ze środowiska swojego procesu. Wartości trzeba więc wyeksportować do
-        środowiska przed uruchomieniem polecenia. Inaczej \repopath{sk replay} kończy się
-        kodem 3 i~komunikatem \texttt{environment variable SK\_LEGACY\_DB is not set (see
-        secrets.env.example)}.
+        środowiska przed uruchomieniem polecenia, w~bashu
+        \texttt{set -a; . ./.env; set +a}; skrypt wypisuje tę podpowiedź na końcu kroku.
+        Inaczej \repopath{sk replay} kończy się kodem 3 i~komunikatem
+        \texttt{environment variable SK\_LEGACY\_DB is not set (sk reads the process
+        environment, not .env; see secrets.env.example)}. Nagłówek
+        \path{secrets.env.example} mówi to samo.
 \end{enumerate}
 
-\paragraph{Czego \texttt{setup.sh} nie sprawdza.} Skrypt sprawdza tylko .NET SDK (wymagany)
-oraz Dockera, gitleaks i~przeglądarkę (opcjonalne). Dwa skrypty rdzenia potrzebują narzędzi
-spoza tej listy:
+\paragraph{Narzędzia skryptów rdzenia.} Skrypt sprawdza .NET SDK (wymagany) oraz Dockera,
+\texttt{curl}, \texttt{python3}, gitleaks i~przeglądarkę (opcjonalne: brak to ostrzeżenie
+\texttt{[ -- ]}, nie błąd, i~nie zmienia kodu wyjścia). Dwa skrypty rdzenia potrzebują
+\texttt{curl} i~\texttt{python3}:
 \begin{itemize}
   \item \path{scripts/e2e.sh} wysyła żądania przez \texttt{curl}, a~werdykt i~pakiet sprawdza
         w~Pythonie (\texttt{python3});
