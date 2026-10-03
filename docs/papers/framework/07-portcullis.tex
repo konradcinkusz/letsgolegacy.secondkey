@@ -1194,8 +1194,13 @@ sukcesem, a~jedynym objawem byłaby krótsza lista zakresów, czyli łagodniejsz
 \repopath{scope} \repopath{all} z~powodem w~\repopath{degradedReason}, CLI pisze dwa
 ostrzeżenia na stderr, SARIF dostaje notyfikację, a~komentarz na PR -- adnotację.
 \repopath{ChangedLines} odmawia zbudowania się ze zdegradowanego raportu (wyjątek), więc
-tego fallbacku nie da się ominąć przez pomyłkę. Fallback nigdy nie jest łagodniejszy od
-zakresu, który zastępuje: zakres pusty blokuje na 0~naruszeniach, cały skan na N~$\geq$~0.
+tego fallbacku nie da się ominąć przez pomyłkę. Fallback nie jest łagodniejszy od pustego
+zakresu, który zastępuje: pusty zakres blokuje na 0~naruszeniach, cały skan na N~$\geq$~0.
+Nie jest za to równoważny bramce z~działającym git: bez zakresów nie ma linii AI, więc
+eskalacja się nie wykonuje, a~ostrzeżenie na linii agenta, które przy zakresie \repopath{diff}
+stałoby się blokującym błędem, zostaje ostrzeżeniem. Sprawdzone na \repopath{d045f07}: ten
+sam commit ze współautorem AI daje kod~1 z~poprawnym zakresem i~kod~0 z~bazą, której git
+nie rozwiąże (przy zakresie \repopath{all} i~z~\repopath{degradedReason}).
 
 \begin{lstlisting}
 $ portcullis scan "$SB" --provenance-range HEAD~1..HEAD --provenance-repo "$SB"
@@ -1229,8 +1234,8 @@ finding, który jednocześnie:
   \item nie jest akceptowany przez baseline (sekcja~\ref{sec:portcullis-baseline}).
 \end{enumerate}
 W~GitHub Actions krok \repopath{actions/checkout} musi mieć \repopath{fetch-depth: 0}:
-płytki klon nie zawiera commita bazowego PR, więc git zawodzi i~bramka (poprawnie, ale
-surowiej) przechodzi na cały skan.
+płytki klon nie zawiera commita bazowego PR, więc git zawodzi i~bramka przechodzi na cały
+skan: surowiej wobec istniejącego długu, ale bez eskalacji linii AI.
 
 \textbf{Granica zakresu diff.} Liczy się linia, na której finding został \emph{zgłoszony},
 a~nie to, co zmiana naruszyła: reguła, która zgłasza gdzie indziej niż w~zmienionym kodzie,
@@ -2631,7 +2636,7 @@ na repozytorium referencyjnym (sekcja~\ref{sec:portcullis-diff-gate}).
 \midrule
 \endhead
 \texttt{gate.scope} to \texttt{all}, a~oczekiwano \texttt{diff} & Commita bazowego nie ma w~checkoucie. Dodaj \texttt{fetch-depth: 0} (GitHub) lub \texttt{GIT\_DEPTH: 0} (GitLab); akcja ostrzega o~tym jawnie. \\
-Bramka przechodzi, choć powinna blokować & Sprawdź \texttt{gate.scope}. Przy \texttt{diff} naruszenie leży poza zmienionymi liniami PR -- bramka działa zgodnie z~projektem. Przy \texttt{all} z~\texttt{degradedReason} git nie rozwiązał zakresu i~skan przeszedł na całe drzewo; powód mówi, co zawiodło. Awaria git już nie przechodzi po cichu. \\
+Bramka przechodzi, choć powinna blokować & Sprawdź \texttt{gate.scope}. Przy \texttt{diff} naruszenie leży poza zmienionymi liniami PR -- bramka działa zgodnie z~projektem. Przy \texttt{all} z~\texttt{degradedReason} git nie rozwiązał zakresu i~skan przeszedł na całe drzewo; powód mówi, co zawiodło; w~tym stanie nie działa też eskalacja pochodzenia AI, więc ostrzeżenie na linii agenta nie blokuje. Awaria git już nie przechodzi po cichu. \\
 Pakiet się instaluje, ale diagnostyk nie ma & Sprawdź, czy DLL leży w~\texttt{analyzers/dotnet/cs/} wewnątrz \texttt{.nupkg}; analyzer spakowany do \texttt{lib/} instaluje się bez błędu i~nic nie robi. \\
 \texttt{warning CS9057: ... references version 4.x of the compiler, which is newer} & Roslyn SDK jest starszy niż ten, na którym zbudowano Portcullis. \texttt{Portcullis.Analyzers} celuje w~Roslyn 4.8 (wersja SDK .NET 8) właśnie po to, żeby tego uniknąć; objaw oznacza SDK starszy niż .NET 8. \\
 \texttt{docker pull} obrazu GHCR zwraca „unauthorized” & Pakiet GHCR powstaje przy pierwszym pushu jako prywatny, niezależnie od widoczności repozytorium; trzeba go raz upublicznić w~ustawieniach pakietu. \\
@@ -3157,6 +3162,10 @@ a~\repopath{0.1.0} to numer przyszłego pierwszego wydania.
         zgłasza poza zmienioną linią (np. sufit jądra P2, zgłaszany w~pierwszej linii
         największego pliku), nie blokuje PR, który ją wywołał
         (sekcja~\ref{sec:portcullis-diff-gate}).
+  \item \textbf{Przy awarii git nie działa eskalacja pochodzenia AI.} Bramka wraca wtedy do
+        całego skanu, ale bez zakresów nie ma linii AI, więc ostrzeżenie na linii agenta nie
+        staje się błędem i~samo nie blokuje; powód degradacji widać na stderr, w~SARIF i~w~komentarzu
+        na PR (sekcja~\ref{sec:portcullis-diff-gate}).
   \item \textbf{Konwencje są konfigurowalne, kształt reguły nie.} Jądro, domena i~adapter
         są rozpoznawane po nazwach folderów i~plików, nie po niczym zadeklarowanym w~kodzie.
   \item \textbf{Konwencja, która nic nie dopasowała, jest raportowana} -- ostrzeżeniami,
