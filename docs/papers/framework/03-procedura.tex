@@ -78,7 +78,7 @@ Windows PowerShell 5.1 lub PowerShell 7 & skrypty benchu & P, 1--9 \\
 .NET 10 SDK & \repopath{sk}, Portcullis, generator standardów, build kandydata & P, 2--9 \\
 GitHub Copilot z trybem agenta; Visual Studio, VS Code albo Copilot CLI z modernize-dotnet; GitHub CLI & migracja & 5 \\
 przeglądarka oparta na Chromium & \repopath{report.pdf} w pakiecie & P, 9 \\
-curl, python3 & \path{scripts/e2e.sh} rdzenia (oba) i sprawdzenie skrótów pakietu (python3); przy rozwoju rdzenia także \path{scripts/mutation.sh} (python3); \path{scripts/setup.sh} rdzenia ich nie sprawdza & P, 9 \\
+curl, python3 & \path{scripts/e2e.sh} rdzenia (oba) i sprawdzenie skrótów pakietu (python3); przy rozwoju rdzenia także \path{scripts/mutation.sh} (python3); \path{scripts/setup.sh} rdzenia nazywa je jako opcjonalne (przy braku ostrzega, nie przerywa) & P, 9 \\
 gitleaks; w standardach i legacy-risk-scan zamiast niego działający Docker & skan sekretów przed commitem w każdym repozytorium (sekcja~\ref{sec:bezpieczenstwo-skan}) & wszystkie \\
 Docker (tylko przy rozwoju rdzenia) & testy resetu SQL Server & --- \\
 PSScriptAnalyzer (tylko przy rozwoju benchu) & lint skryptów benchu & --- \\
@@ -1466,9 +1466,11 @@ Repozytoria frameworku rozwija się według tych samych reguł:
         pomija instalację hooka, w Portcullis instalator bez gitleaks kończy się kodem 127,
         a w standardach i legacy-risk-scan hook bez gitleaks uruchamia obraz gitleaks przez
         Dockera (tabela w sekcji~\ref{sec:bezpieczenstwo-skan}). W rdzeniu
-        \repopath{setup.sh} nie sprawdza \texttt{curl} ani \texttt{python3}, których
-        potrzebują \path{scripts/e2e.sh} i \path{scripts/mutation.sh}, a \path{.env}, który
-        tworzy, nie jest wczytywany automatycznie (sekcja~\ref{sec:rdzen-setup}).
+        \repopath{setup.sh} ostrzega, gdy brakuje \texttt{curl} albo \texttt{python3},
+        których potrzebują \path{scripts/e2e.sh} i \path{scripts/mutation.sh}, a \path{.env},
+        który tworzy, nie jest wczytywany automatycznie: wartości trzeba wyeksportować
+        (\texttt{set -a; . ./.env; set +a}), zanim uruchomi się \repopath{sk}
+        (sekcja~\ref{sec:rdzen-setup}).
   \item \textbf{Zbuduj i przetestuj lokalnie} tak jak CI. W rdzeniu:
 \begin{lstlisting}
 dotnet build SecondKey.slnx && dotnet test SecondKey.slnx

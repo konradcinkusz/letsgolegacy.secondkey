@@ -824,8 +824,9 @@ w~\repopath{secondkey.yaml} \\
 (found <n>)} & 3 & \repopath{reset} bez dokładnie jednego rodzaju \\
 komunikat deserializacji z~nazwą klucza & 3 & nieznany klucz (literówka) albo brak
 wymaganego klucza w~resecie, sondzie lub korelacji \\
-\texttt{environment variable <NAZWA> is not set (see secrets.env.example)} & 3 & zmiennej
-z~\repopath{connectionStringEnv} nie ma w~środowisku procesu; wyeksportuj ją \\
+\texttt{environment variable <NAZWA> is not set (sk reads the process environment, not
+.env; see secrets.env.example)} & 3 & zmiennej z~\repopath{connectionStringEnv} nie ma
+w~środowisku procesu; wyeksportuj ją (\path{.env} nie jest wczytywany) \\
 \texttt{<plik>: <n> error(s)} i~lista błędów & 3 & artefakt nie przechodzi walidacji; ten
 sam raport daje \repopath{sk validate <plik>} \\
 \texttt{sk capture: no target — …} & 64 & brak \repopath{-{}-target}
@@ -971,9 +972,11 @@ co może zatrzymać polecenie później:
 jest wskazywany nazwą zmiennej środowiskowej, która go przechowuje
 (\repopath{connectionStringEnv}), a~\path{secrets.env.example} wymienia każdą taką zmienną.
 Zmienna nieustawiona albo pusta zatrzymuje polecenie z~jej nazwą („environment variable
-SK\_LEGACY\_DB is not set (see secrets.env.example)”) i~kodem 3. Zmienne są czytane ze
-środowiska procesu \repopath{sk}; \path{.env}, który tworzy \path{scripts/setup.sh}, nie
-jest wczytywany automatycznie (sekcja~\ref{sec:rdzen-setup}).
+SK\_LEGACY\_DB is not set (sk reads the process environment, not .env; see
+secrets.env.example)”) i~kodem 3. Zmienne są czytane ze środowiska procesu \repopath{sk};
+\path{.env}, który tworzy \path{scripts/setup.sh}, nie jest wczytywany automatycznie:
+wartości trzeba wyeksportować, w~bashu \texttt{set -a; . ./.env; set +a}
+(sekcja~\ref{sec:rdzen-setup}).
 
 \paragraph{Ścieżki.} Ścieżki względne rozwiązuje się względem katalogu, w~którym leży plik,
 także \repopath{reset.command.workingDirectory}. Na Windows ścieżkę pisze się z~ukośnikami (\path{C:/sk/traffic.skcap}) albo w~apostrofach (\path{'C:\sk\traffic.skcap'}): w~cudzysłowie YAML czyta ukośnik wsteczny jako
@@ -1007,7 +1010,7 @@ Dwa polecenia z~README uruchamiają cały łańcuch lokalnie:
   \item do PDF: przeglądarki opartej na Chromium. Bez niej, przy domyślnym
         \repopath{SK\_PDF=auto}, pakiet powstaje bez PDF.
 \end{itemize}
-\path{scripts/setup.sh} nie sprawdza ani \texttt{curl}, ani \texttt{python3}
+\path{scripts/setup.sh} ostrzega, gdy brakuje \texttt{curl} albo \texttt{python3}
 (sekcja~\ref{sec:rdzen-setup}).
 
 \paragraph{Sample shop.} \path{samples/SampleShop} to mała aplikacja ASP.NET Core, która gra

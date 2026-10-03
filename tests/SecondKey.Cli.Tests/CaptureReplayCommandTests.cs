@@ -206,6 +206,8 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
 
         Assert.Equal(ExitCodes.InvalidInput, exit);
         Assert.Contains("SK_TEST_NO_SUCH_VARIABLE is not set", error, StringComparison.Ordinal);
+        // Nothing loads .env, and the message at the point of failure says so.
+        Assert.Contains("not .env", error, StringComparison.Ordinal);
     }
 
     [Fact]
