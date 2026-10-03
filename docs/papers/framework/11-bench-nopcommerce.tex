@@ -9,20 +9,21 @@ tego, co sklep musi robić i~czego nie może robić nigdy. Second Key niczego ni
 tylko sprawdza.
 
 Rozdział opisuje migawkę repozytorium w~stanie \texttt{origin/main} (commit
-\texttt{5bf3cfc}). W~tym stanie zadania P1--P5 są zrobione (build, host legacy, rozgrzewka
+\texttt{98d88d8}). W~tym stanie zadania P1--P5 są zrobione (build, host legacy, rozgrzewka
 łańcucha, nagranie ruchu, kontrakt z~dowodem A/A), w~P9 zrobiona jest część „zabite
 mutanty” (11 z~11), dziennik P10 jest prowadzony, a~P6--P8 i~reszta P9 są zaplanowane. README
 zaznacza, że repozytorium jest w~budowie i~że żaden evidence pack (pakiet dowodowy) nie
 został jeszcze opublikowany; pakiety powstające w~każdym przebiegu CI są artefaktami
-workflowów, a~nie publikacją. Kolejne podsekcje idą od decyzji (ADR 0001--0007) przez
+workflowów, a~nie publikacją. Kolejne podsekcje idą od decyzji (ADR 0001--0008) przez
 nagranie ruchu, kontrakt, skrypty i~workflowy do wyników P3--P5, zabitych mutantów P9,
 runbooka P6 i~planów P7--P10.
 
 Decyzje są zapisane jako ADR w~\path{docs/adr/}: jeden plik na decyzję -- kontekst, decyzja,
 odrzucone warianty z~powodami i~konsekwencje. Decyzję zmienia nowy zapis, który zastępuje
-stary, a~nie edycja historii. Wszystkie siedem ADR ma status „accepted” z~numerem zadania
-(P1--P5 i~część mutantów P9), datę 2026-09-26 i~decydenta: agenta implementującego zadanie;
-każdą decyzję ma jeszcze potwierdzić właściciel w~review.
+stary, a~nie edycja historii. Wszystkie osiem ADR ma status „accepted” z~numerem zadania
+(P1--P5, część mutantów P9 i~P8 w~ADR 0008), datę 2026-09-26 (ADR 0008: 2026-10-03)
+i~decydenta: agenta implementującego zadanie; każdą decyzję ma jeszcze potwierdzić właściciel
+w~review.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
@@ -76,7 +77,7 @@ zawiera repozytorium.
   (sekcja~\ref{sec:bench-rozgrzewka}) \\
 \path{docs/} & \path{WORKPLAN.md}, \path{TOPOLOGY.md}, \path{P4-TRAFFIC-PLAN.md},
   \path{P6-RUNBOOK.md}, \path{P9-MUTANTS.md}, \path{P10-ONBOARDING-HOURS.md}, \path{adr/}
-  (ADR 0001--0007) \\
+  (ADR 0001--0008) \\
 \path{mutants/} & mutanty P9: katalog \path{mutants.json} i~łatki M01--M11, a~w~\path{scripts/mutants/}
   ich skrypty (sekcja~\ref{sec:bench-p9}) \\
 \path{results/p3/}, \path{p4/}, \path{p5/}, \path{p9/} & to, co zapisały przebiegi CI zamykające
@@ -104,6 +105,32 @@ zawiera repozytorium.
 \path{letsgolegacy.secondkey-nopcommerce-bench/.gitignore},
 \path{letsgolegacy.secondkey-nopcommerce-bench/LICENSE},
 \path{letsgolegacy.secondkey-nopcommerce-bench/.gitattributes}}
+
+\paragraph{Przebieg na nopCommerce.} Rysunek~\ref{fig:przebieg-nopcommerce} pokazuje jeden
+przebieg \path{legacy-build.yml} w~kolejności zdarzeń, od przypiętego źródła do pakietu
+dowodowego. Kroki 1--9 to skrypty z~\path{scripts/} (sekcja~\ref{sec:bench-skrypty}); każdy
+job działa na osobnym runnerze, więc pliki przechodzą między jobami jako artefakty CI, a~werdykt
+i~pakiet liczy job linuksowy z~samych plików (sekcja~\ref{sec:bench-topologia}). Zimny przebieg
+z~3 X 2026 po przesunięciu pinów (podrozdział~\ref{sec:bench-pins-adr}) trwał około
+15 minut, z~czego job \texttt{iis} 13 (instalacja SQL Server Express, nagranie 38 scenariuszy
+i~replay A/A). Dolna ramka rysunku nazywa to, czego jeszcze nie ma: kandydata (P6--P8).
+Dopóki go nie ma, pakiet jest pakietem A/A, czyli dowodem, że kontrakt trzyma na samym legacy
+i~że łańcuch nie wnosi własnych różnic (krok~4 procedury), a~nie dowodem poprawności
+migracji.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth,height=0.8\textheight,keepaspectratio]{\dgm{a10-przebieg-nopcommerce}}
+  \caption{Przebieg audytu na nopCommerce: jeden przebieg \texttt{legacy-build.yml}, od
+           przypiętego źródła do pakietu dowodowego A/A; kandydat jest planowany.}
+  \label{fig:przebieg-nopcommerce}
+\end{figure}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/9-verdict.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md}}
 
 \subsection{Wybór i~przypięcie nopCommerce 3.90 (ADR 0001)}\label{sec:bench-pin}
 
@@ -235,10 +262,10 @@ Klucz & Wartość \\
   \path{Microsoft.NETFramework.ReferenceAssemblies.net461} i~\path{...net472} w~wersji
   1.0.3 (frameworki \texttt{v4.6.1}, \texttt{v4.7.2}) \\
 \path{chain.secondKey} & \path{konradcinkusz/letsgolegacy.secondkey}, commit
-  \texttt{967c49c0005c4412180914f43437d75b43f148dc}, projekt
+  \texttt{c3ae5c28efece2a665a693dbcfa15767197d4ab3}, projekt
   \path{src/SecondKey.Cli/SecondKey.Cli.csproj}, asemblacja \path{SecondKey.Cli.dll} \\
 \path{chain.portcullis} & \path{konradcinkusz/letsgolegacy.portcullis}, commit
-  \texttt{84e1925fe0d85cf23415f0d33c98590f86128722}, projekt
+  \texttt{d045f07daf948ac07c3ac62481cc2a97c5d10846}, projekt
   \path{src/Portcullis.Cli/Portcullis.Cli.csproj}, asemblacja \path{Portcullis.Cli.dll} \\
 \bottomrule
 \end{tabularx}
@@ -247,6 +274,145 @@ Klucz & Wartość \\
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/pins.json},
 \path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
 \path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/chain-tools.yml}}
+
+\subsubsection{Przesunięcie pinów łańcucha (ADR 0008)}\label{sec:bench-pins-adr}
+Piny \repopath{sk} i~Portcullis przesunięto po raz pierwszy 3 X 2026, przed P7 i~P8:
+\repopath{sk} z~\texttt{967c49c} na~\texttt{c3ae5c2}, Portcullis z~\texttt{84e1925}
+na~\texttt{d045f07}. Oba nowe commity były w~tym dniu głowami \repopath{main} swoich repozytoriów,
+potomkami starych pinów i~miały zielone wszystkie checki. Powody były dwa:
+\begin{itemize}
+  \item P8 uruchamia reguły Portcullis na pull requeście kandydata P6, czyli rozwiązaniu
+    .NET~10, a~projekt .NET~10 domyślnie kompiluje C\#~14. Przypięty Portcullis parsuje
+    Roslynem 4.11, którego najnowszym językiem jest C\#~13, więc konstrukcja C\#~14 jest dla
+    niego błędem składni. Poprawka to \texttt{52d9f1e}: parser skanera przeszedł na
+    Roslyn 5.9, a~pakiet analyzerów zachował swoją dolną granicę 4.8.0.
+  \item Przypięty \repopath{sk} jest starszy niż zachowanie, które opisuje jego dokumentacja.
+    Bench cytuje \path{docs/cli.md} rdzenia jako interfejs \repopath{sk}
+    (\path{scripts/lib/NopBench.Chain.ps1}), a~przy \texttt{967c49c} nie ma w~nim rozdziału
+    o~\repopath{sk capture} ani \repopath{sk replay}; oba rozdziały powstały z~uwag tego
+    benchu (\texttt{51e1754}), a~kod wyrównano z~tabelą kodów wyjścia (\texttt{7939e80}).
+\end{itemize}
+Samo przesunięcie Portcullis wystarczyłoby P8, ale wtedy liczby A/A i~mutantów (P5, P9)
+zostałyby przy starszym \repopath{sk}, a~późniejsza zmiana narzędzia wypadłaby między nimi
+a~werdyktem kandydata (P7).
+
+Metoda: w~każdym repozytorium \texttt{git log -{}-no-merges <stary>..<nowy>}, diff każdego
+commita, który dotyka kodu, a~potem skrypty benchu, oba \path{secondkey.yaml}, oba kontrakty
+i~workflowy, przeczytane pod kątem tego, co zależy od zmienionych opcji, kodów wyjścia
+i~tekstu, który skrypty parsują.
+
+\begin{itemize}
+  \item \textbf{Second Key} (\texttt{967c49c..c3ae5c2}): 29 commitów poza scaleniami;
+    9 zmienia \path{src/}, 6 to testy, CI albo próbka, 10 dokumentacja, 1 reguła skanu
+    sekretów, 3 aktualizacje akcji. Capture, compare, tabela kodów wyjścia, formaty plików
+    i~schemat kontraktu nie zmieniły się, więc logika werdyktu jest ta sama. Do benchu
+    docierają trzy zmiany: wartości \path{secondkey.yaml} sprawdzane przy wczytaniu pliku
+    przez każde polecenie i~\repopath{sk validate}, w~tym wzorce korelacji, które muszą się
+    kompilować i~mieć grupę (\texttt{7939e80}, \texttt{9574718}; oba pliki benchu są
+    zgodne); odrzucanie operatora jednej wartości (\texttt{lt}, \texttt{gt}, \texttt{between},
+    \texttt{matches} i~pokrewne) na całej liście ekstraktora z~\texttt{all: true}
+    (\texttt{05ba3b3}; oba kontrakty używają całych list tylko z~\texttt{equals},
+    \texttt{contains} i~operatorami \texttt{count*}); i~\repopath{sk evidence -{}-pdf required}
+    drukujący PDF przed ruszeniem katalogu wyjściowego (\texttt{d39e264}; trzy joby werdyktu
+    używają \texttt{-Pdf required}, ścieżka sukcesu jest ta sama). Reszta (\texttt{51e1754},
+    \texttt{b2e1bb7}, poprawki \texttt{workingDirectory} i~resetu http, \texttt{8609426},
+    \texttt{bbea70d}, \texttt{56dbb8d}) nie ma tu skutku: kroki nagrywania kończą proxy
+    przez \texttt{Stop-Process -Force}, porównanie i~pakiet działają na Linuksie, bench nie
+    używa \texttt{workingDirectory} ani resetu http, a~refaktoryzację silnika replay
+    przeczytano jako zachowującą zachowanie.
+  \item \textbf{Portcullis} (\texttt{84e1925..d045f07}): 24 commity poza scaleniami;
+    10 aktualizacji zależności, 5 dokumentacji, 2 baseline i~skan sekretów, 7 zmienia
+    \path{src/}, \path{fixtures/} albo \path{action.yml}. CLI, writer SARIF, provenance
+    i~reguły nie zmieniły się. Docierają dwie zmiany: \texttt{52d9f1e} (parser C\#~14, powód
+    przesunięcia) i~\texttt{e62d5e2} (\texttt{scanStartedUtc} z~chwili startu skanu;
+    \path{5-scan-eshop.ps1} czyta tylko SARIF).
+\end{itemize}
+
+Lokalnie (Linux, .NET SDK 10.0.112) cztery commity zbudowano tak jak robi to
+\path{chain-tools.yml}. \repopath{sk validate} przyjmuje oba kontrakty i~oba
+\path{secondkey.yaml} z~obiema wersjami; jako kontrola nowa wersja odrzuca kodem 3 pięć
+celowo zepsutych kopii (wzorzec bez grupy, niezamknięta grupa, błędny \texttt{scenarioMode},
+dwa rodzaje resetu, \texttt{gt} na całej liście), a~stara przyjmuje wszystkie pięć.
+Portcullis na eShopLegacyMVC w~przypiętym commicie, wywołany tak jak robi to
+\path{5-scan-eshop.ps1}, daje z~obiema wersjami te same 27 znalezisk (te z~\path{results/p3})
+i~bajt w~bajt ten sam SARIF; na próbce z~blokiem \texttt{extension} nowa wersja zgłasza
+\path{PORTCULLIS_MIG_SYNC_OVER_ASYNC}, a~stara nic. Przechwycenie i~replay A/A małej aplikacji
+zastępczej, potem \repopath{sk compare} i~\repopath{sk evidence -{}-pdf required}, dają
+z~obiema wersjami te same liczby i~werdykt, a~linie, które skrypty parsują, się nie zmieniają.
+IIS, reset snapshotu i~host Windows sprawdza tylko CI. Zmiana \path{pins.json} uruchamia na
+pull requeście \path{legacy-build.yml} i~\path{warmup-eshop.yml}; \path{mutants.yml} reaguje
+tylko na własne ścieżki (podrozdział~\ref{sec:bench-p9}), więc uruchamia się go ręcznie na
+gałęzi. Muszą pokazać:
+
+{\small
+\begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{2.9cm} >{\raggedright\arraybackslash}X@{}}
+\toprule
+Workflow & Musi pokazać \\
+\midrule
+\endfirsthead
+\toprule
+Workflow & Musi pokazać \\
+\midrule
+\endhead
+\path{legacy-build.yml} & werdykt A/A \texttt{pass}, 290 wymian, 0 regresji, 76 z~76 klauzul
+  utrzymanych, 0 niewykonanych; pakiet z~\path{report.pdf} \\
+\path{warmup-eshop.yml} & werdykt \texttt{pass}, 27 wymian, 0 regresji, 13 z~13 utrzymanych;
+  bramka \texttt{fail} (7 blokujących) \\
+\path{mutants.yml} & M00 \texttt{pass}, 11 z~11 zabitych, job \texttt{summary} zielony \\
+\bottomrule
+\end{xltabular}
+}
+
+Konsekwencje:
+\begin{itemize}
+  \item Wynik zapisany na starych pinach zostaje taki, jaki zapisano: \path{results/p3}, \path{p4},
+    \path{p5} i~\path{p9} nazywają commity, na których biegły, i~nie są edytowane. Przebiegi
+    na nowych pinach to nowe zapisy.
+  \item Obie wersje przedstawiają się jako \texttt{secondkey 0.1.0}, a~w~statement pakietu
+    jest \texttt{"commit": null}, więc werdykt ani pakiet nie mówią, który build je zrobił.
+    Mówi to \path{pins.json} na commicie benchu i~plik \path{COMMITS} w~artefakcie
+    \texttt{chain-tools} przebiegu; wynik powinien cytować piny.
+  \item Logika porównania, formaty i~schemat są te same, więc liczby A/A i~mutantów mają się
+    powtórzyć; jeśli nie, to znalezisko o~samym przesunięciu, które opisuje ADR.
+  \item Klucze pamięci podręcznej pobrań zawierają skrót \path{pins.json}, więc pierwszy
+    przebieg po przesunięciu jest zimny i~pobiera od nowa nośnik SQL Server Express oraz
+    pakiety NuGet.
+  \item Nieudany \texttt{-Pdf required} nie zostawia już częściowego pakietu, więc krok
+    wysyłania artefaktu po nim niczego nie znajduje: \path{warmup-eshop.yml}
+    (\texttt{if-no-files-found: error}) zgłasza drugi błąd, pozostałe dwa workflowy go
+    ignorują.
+\end{itemize}
+
+Reguła na następne przesunięcie: (1) pin zmienia się, bo ticket potrzebuje czegoś w~nowym
+commicie, a~zapis mówi czego; jeden pull request obejmuje \path{pins.json}, każde miejsce,
+które cytuje pin jako obecną konfigurację (znalezione przez \texttt{git grep} starych
+identyfikatorów), i~następny zapis ADR; \path{results/} zachowuje piny, na których biegło;
+(2) nowy commit podaje się w~całości i~sprawdza po \texttt{git fetch}, że jest przodkiem
+\texttt{origin/main} narzędzia; (3) czyta się \texttt{git log -{}-no-merges} w~każdym
+repozytorium, diff każdego commita dotykającego kodu mówi, co bench może z~niego zauważyć,
+a~commity dokumentacyjne i~zależnościowe się liczy; bench sprawdza się wobec tego
+(\repopath{sk validate} na każdym kontrakcie i~konfiguracji, nazwy opcji skryptów, kody
+wyjścia, tekst i~linie, które skrypty parsują); (4) przed scaleniem: A/A w~\path{legacy-build.yml}
+\texttt{pass} z~każdą klauzulą utrzymaną i~bez regresji, rozgrzewka jak przedtem,
+\path{mutants.yml} uruchomiony na gałęzi z~M00 \texttt{pass} i~wszystkimi mutantami
+zabitymi; liczba, która różni się od poprzedniej, jest wyjaśniona w~zapisie.
+
+\paragraph{Wynik.} Trzy przebiegi na gałęzi pokazały to, co miały, z~tymi samymi liczbami co na
+starych pinach. \path{legacy-build.yml}: werdykt A/A \texttt{pass}, 290 wymian (272
+\repopath{equal}, 18 \repopath{equal-under-contract}), 0 regresji, 76 z~76 klauzul utrzymanych,
+0 niewykonanych, pakiet z~\path{report.pdf}. \path{warmup-eshop.yml}: werdykt \texttt{pass},
+27 wymian, 0 regresji, 13 z~13 klauzul utrzymanych, bramka \texttt{fail} z~7 blokującymi.
+\path{mutants.yml}, uruchomiony na gałęzi: M00 \texttt{pass}, \texttt{11 of 11 mutants killed},
+0 ocalałych, 0 bez wyniku, job \texttt{summary} zielony. Pull request jest scalony
+(\texttt{98d88d8}).
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0008-move-the-chain-pins.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/pins.json},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/chain-tools.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/mutants.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/lib/NopBench.Chain.ps1},
+\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/mutants/4-collect-mutants.ps1},
+\path{letsgolegacy.secondkey/docs/cli.md}}
 
 \subsection{Topologia demonstracyjna (decyzja D7)}\label{sec:bench-topologia}
 
@@ -2160,10 +2326,10 @@ wskazać zbudowane gdzie indziej przez \texttt{NOPBENCH\_SK} i~\texttt{NOPBENCH\
 
 \begin{lstlisting}
 git clone https://github.com/konradcinkusz/letsgolegacy.secondkey.git secondkey
-git -C secondkey checkout 967c49c0005c4412180914f43437d75b43f148dc   # chain.secondKey.commit
+git -C secondkey checkout c3ae5c28efece2a665a693dbcfa15767197d4ab3   # chain.secondKey.commit
 dotnet build secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj -c Release -o <work>/tools/chain/secondkey
 git clone https://github.com/konradcinkusz/letsgolegacy.portcullis.git portcullis
-git -C portcullis checkout 84e1925fe0d85cf23415f0d33c98590f86128722  # chain.portcullis.commit
+git -C portcullis checkout d045f07daf948ac07c3ac62481cc2a97c5d10846  # chain.portcullis.commit
 dotnet build portcullis/src/Portcullis.Cli/Portcullis.Cli.csproj -c Release -o <work>/tools/chain/portcullis
 \end{lstlisting}
 
@@ -2588,6 +2754,17 @@ wymierzony w~nazwane klauzule kontraktu P5, odtworzony przeciw sklepowi legacy i
 dokładnie tak, jak będzie porównany kandydat P7. \finding{W~\repopath{sk} nie ma tu nic
 nowego: mutant przechodzi przez te same \repopath{sk replay} i~\repopath{sk compare} co
 migracja.}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{\dgm{a11-przebieg-mutantow}}
+  \caption{Przebieg \texttt{mutants.yml}: macierz mutantów, job Windows i~job Linux na
+           każdego mutanta, zbiorczy job \texttt{summary}.}
+  \label{fig:przebieg-mutantow}
+\end{figure}
+
+\zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/mutants.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P9-MUTANTS.md}}
 
 \paragraph{Prerejestracja.} \path{docs/P9-MUTANTS.md}, katalog \path{mutants/mutants.json}
 i~każda łatka \path{mutants/*.patch} trafiły do repozytorium jednym commitem
