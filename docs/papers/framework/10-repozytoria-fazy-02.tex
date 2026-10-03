@@ -75,7 +75,7 @@ nawzajem:
         wychodzących (rozdział~\ref{sec:rdzen-status}). Pierwsza pozycja planu capture fazy
         02 dodaje nagrywanie wymian wychodzących (\repopath{defaultProxy}), których capture
         fazy 01 (S9) nie nagrywa.
-  \item \textbf{Zasady projektowe rdzenia}, które te repozytoria realizują: werdykt jest
+  \item \textbf{Zasady projektowe rdzenia}, które te repozytoria mają realizować: werdykt jest
         deterministyczny -- model może szkicować klauzule albo porządkować różnice, ale nigdy
         nie decyduje, więc triage C8, którą kalibrują decyzje recenzentów z~portalu, nigdy nie
         zmienia werdyktu (portal); wszystko działa wewnątrz granicy klienta, domyślnie bez
@@ -110,8 +110,8 @@ tokenizowanymi wewnątrz sieci klienta. README wymienia źródła: HTTP, sesje S
 Extended Events i~kolejki.
 
 \textbf{Dlaczego osobne repozytorium.} Capture fazy 01 obsługuje tylko HTTP i~mieszka
-w~repozytorium rdzenia. Od fazy 02 capture mieszka tutaj, bo działa po stronie klienta, na
-Windows/IIS, i~ma własny cykl wydań.
+w~repozytorium rdzenia. Według planu od fazy 02 capture ma mieszkać tutaj, bo działa po
+stronie klienta, na Windows/IIS, i~ma własny cykl wydań.
 
 \textbf{Format wyjścia.} Wynikiem jest format \repopath{*.skcap} zdefiniowany przez schemat
 w~repozytorium rdzenia (rozdział~\ref{sec:formaty}); to repozytorium nigdy nie zmienia tego
@@ -174,13 +174,14 @@ i~\path{evidence-out/}. Stan w~README: faza 02; capture HTTP fazy 01 mieszka w~r
 
 \subsection{secondkey-sandbox (C12)}\label{sec:faza02-sandbox}
 
-\textbf{Cel.} „Nothing leaves our network.” Second Key zawsze działa wewnątrz granicy klienta;
-to repozytorium pakuje go dla każdego rodzaju takiej granicy: Helm z~pulami węzłów Windows
-i~Linux, pojedynczy host Hyper-V, Bicep i~Azure Managed Application dla subskrypcji Azure
-klienta oraz paczka dla środowisk odciętych od sieci (air-gapped).
+\textbf{Cel.} „Nothing leaves our network.” Second Key ma zawsze działać wewnątrz granicy
+klienta; to repozytorium ma go pakować dla każdego rodzaju takiej granicy (dziś zawiera
+tylko plan pracy): Helm z~pulami węzłów Windows i~Linux, pojedynczy host Hyper-V, Bicep
+i~Azure Managed Application dla subskrypcji Azure klienta oraz paczka dla środowisk
+odciętych od sieci (air-gapped).
 
 \textbf{Ograniczenie, które kształtuje całość.} Migracje z~.NET Framework wymagają Windows,
-więc sandbox niesie oba środowiska: stronę legacy na Windows/IIS, a~zmigrowanego kandydata
+więc sandbox ma nieść oba środowiska: stronę legacy na Windows/IIS, a~zmigrowanego kandydata
 i~resztę łańcucha na Linuksie.
 
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{4.4cm} >{\raggedright\arraybackslash}X@{}}
@@ -269,7 +270,7 @@ Tenancy wersji próbnej hostowanej przez autorów, przez \repopath{authservice} 
 \bottomrule
 \end{xltabular}
 
-\textbf{Zależności.} Portal czyta artefakty rdzenia: \repopath{verdict.json} i~pakiet
+\textbf{Zależności.} Portal ma czytać artefakty rdzenia: \repopath{verdict.json} i~pakiet
 dowodowy z~CLI (w~fazie 01 niepodpisany pakiet C10, ticket S14 rdzenia -- zrobiony), a~od
 fazy 03 \repopath{evidence.dsse} (podpisywanie C10 jest w~planie rdzenia pozycją fazy 03).
 Etykiety z~decyzji recenzentów zasilają C8 -- triage doradczy, który według planu rdzenia
@@ -283,8 +284,8 @@ bez publicznego rejestru przejrzystości, i~przechowywanie w~OCI (ORAS) albo WOR
 (sekcja~\ref{sec:bezpieczenstwo-podpis}). Według notatek referencyjnych rdzenia C8 pozostaje
 doradcza, dopóki nie zostanie skalibrowana na etykietach recenzentów: bramka kalibracji
 wymaga co najmniej 10 etykiet i~$\kappa \geq 0{,}6$, inaczej wyniki są tylko raportowane
-i~niczego nie blokują; wynik strukturalny C8 daje \texttt{Microsoft.Extensions.AI}
-(rozdział~\ref{sec:rdzen-referencje}).
+i~niczego nie blokują; wynik strukturalny C8 ma według planu dawać
+\texttt{Microsoft.Extensions.AI} (rozdział~\ref{sec:rdzen-referencje}).
 
 \zrodla{\path{letsgolegacy.secondkey-portal/README.md},
 \path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md},

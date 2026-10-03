@@ -10,14 +10,17 @@ oraz jak repozytoria pilnują tego mechanicznie.
   \item \textbf{Redakcja przed zapisem.} Capture redaguje nagłówki, zanim cokolwiek
         trafi na dysk: zawsze \repopath{authorization}, \repopath{proxy-authorization},
         \repopath{cookie}, \repopath{set-cookie}, \repopath{x-api-key}, oraz każdy dodany
-        przez \repopath{--redact-header} albo \repopath{capture.redactHeaders}. Nagłówek
+        przez \repopath{--redact-header} albo \repopath{capture.redactHeaders}; redakcja jest
+        po~nazwie nagłówka, więc nagłówek o~innej nazwie, na przykład własny
+        \repopath{X-Auth-Token}, zostaje w~pliku jawnie. Nagłówek
         pliku \repopath{*.skcap} zapisuje listę zredagowanych nagłówków, a replay redaguje
         te same nagłówki w przebiegu. Replay nie wysyła wartości zredagowanych ani
         nagranych ciasteczek: każdy scenariusz po każdej stronie dostaje świeży cookie jar.
   \item \textbf{Ciała są nagrywane.} Redakcja obejmuje tylko nagłówki: ciała żądań
-        i odpowiedzi trafiają do nagrania (jako JSON, tekst albo base64, do limitu
-        \repopath{--max-body-bytes}), także pola formularzy, które kontrakt może czytać jako
-        \repopath{request.body.form.<pole>} --- na przykład hasło wpisane przy logowaniu.
+        i~odpowiedzi (jako JSON, tekst albo base64, do limitu \repopath{--max-body-bytes})
+        oraz ścieżka i~query trafiają do nagrania bez zmian. Dotyczy to także pól formularzy,
+        które kontrakt może czytać jako \repopath{request.body.form.<pole>} --- na przykład
+        hasła wpisanego przy logowaniu --- i~tokenów podanych w~adresie.
         Dlatego w benchu żądania konfiguracji sklepu idą do witryny z pominięciem proxy
         nagrywającego, bo hasło administratora nigdy nie może trafić do nagrania,
         a scenariusze logują się wyłącznie kontami sklepu przykładowego: publicznym klientem
@@ -25,17 +28,24 @@ oraz jak repozytoria pilnują tego mechanicznie.
         Tokenizacja danych osobowych w nagraniach należy do fazy 02
         (sekcja~\ref{sec:bezpieczenstwo-plan}).
   \item \textbf{Ruch sieciowy.} Nic nie jest wysyłane przez sieć poza dwoma systemami,
-        które są porównywane. Zasada projektowa 2: wszystko działa w granicy klienta,
+        które są porównywane; to własność kodu rdzenia, a~nie izolacja sieciowa (rdzeń nie
+        ma sandboxa). Zasada projektowa 2: wszystko działa w~granicy klienta,
         domyślnie bez ruchu wychodzącego.
   \item \textbf{Nagrania systemów rzeczywistych nigdy nie trafiają do git.} Pliki
         \repopath{.gitignore} rdzenia, benchu, Portcullis, standardów oraz repozytoriów
         fazy 02 i 03 wykluczają \repopath{*.skcap}, \repopath{*.skrun}, \path{.secondkey/}
         i \path{evidence-out/}; wyjątki dotyczą tylko syntetycznych próbek i fixture'ów
-        testów. Bench publikuje nagrania, przebiegi i pakiety wyłącznie jako artefakty CI,
-        które CI przechowuje 30 dni; każdy przebieg workflowu tworzy nowe, a trwałym zapisem
-        wyniku jest \path{results/<ticket>/README.md} z linkiem do przebiegu.
+        testów. To zasada z~\path{CONTRIBUTING.md} rdzenia, a~pilnują jej pliki
+        \repopath{.gitignore}: skan sekretów nie rozpozna w~nagraniu danych osobowych. Bench
+        publikuje nagrania, przebiegi i~pakiety wyłącznie jako artefakty CI, które CI
+        przechowuje 30 dni (nagranie, przebieg i~SARIF rozgrzewki na eShopLegacyMVC: 14 dni);
+        każdy przebieg workflowu tworzy nowe, a~trwałym zapisem wyniku jest
+        \path{results/<ticket>/README.md} z~linkiem do przebiegu.
   \item \textbf{Pakiet dowodowy bez ruchu.} Opcję \repopath{--run} pomija się, gdy nagrany
-        ruch musi zostać w swojej granicy; pakiet nadal wyjaśnia werdykt.
+        ruch musi zostać w~swojej granicy; pakiet nadal wyjaśnia werdykt, ale nie pozwala go
+        przeliczyć. Raport i~\repopath{verdict.json} niosą jednak fragmenty nagranych danych:
+        linie żądań (ścieżkę i~query) oraz wartości różnic (raport skraca wartość do 300
+        znaków i~pokazuje do 50 różnic na wymianę, \repopath{verdict.json} ma wszystkie).
   \item \textbf{Raport HTML jest statyczny}: jeden plik bez skryptów i bez dostępu do sieci
         (zabrania tego content security policy), każda nagrana wartość zakodowana jako HTML.
         Przeglądarka drukująca PDF działa z wyłączonym sandboxem, bo sandbox nie jest
@@ -44,12 +54,14 @@ oraz jak repozytoria pilnują tego mechanicznie.
 \end{itemize}
 
 \zrodla{\path{letsgolegacy.secondkey/SECURITY.md},
+\path{letsgolegacy.secondkey/CONTRIBUTING.md},
 \path{letsgolegacy.secondkey/docs/cli.md},
 \path{letsgolegacy.secondkey/docs/formats/README.md},
 \path{letsgolegacy.secondkey/docs/formats/contract.md},
 \path{letsgolegacy.secondkey/docs/formats/evidence.md},
 \path{letsgolegacy.secondkey/schemas/skcap.schema.json},
 \path{letsgolegacy.secondkey/src/SecondKey.Replay/ReplayEngine.cs},
+\path{letsgolegacy.secondkey/src/SecondKey.Evidence/HtmlReport.cs},
 \path{letsgolegacy.secondkey/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
 \path{.gitignore} w repozytoriach \path{letsgolegacy.secondkey},
@@ -61,7 +73,9 @@ oraz jak repozytoria pilnują tego mechanicznie.
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
-\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md}}
+\path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
+\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/warmup-eshop.yml}}
 
 \subsection{Sekrety}\label{sec:bezpieczenstwo-sekrety}
 
@@ -191,6 +205,8 @@ historię regułami dodanymi w międzyczasie. Każdy job skanuje całą histori�
         \path{/generated/}, \path{/src/}, \path{/.github/workflows/}; legacy-risk-scan
         \path{/src/lib/osv.js}, \path{/.github/workflows/}; bench \path{/.github/},
         \path{/.githooks/}, \path{/.gitleaks.toml}, \path{/contract/}, \path{/pins.json}.
+        CODEOWNERS wskazuje właściciela do przeglądu, ale go nie wymusza i~nie zapisuje
+        (podrozdział~\ref{sec:bezpieczenstwo-scalanie}).
   \item \textbf{Przypinanie akcji}: bench przypina każdą akcję SHA commita z wersją w
         komentarzu; pozostałe repozytoria używają tagów wersji głównej.
   \item \textbf{Uprawnienia workflowów i sekrety CI.} Każdy workflow deklaruje
@@ -237,7 +253,10 @@ wychodzące idą do publicznego API OSV.dev: zapytania \repopath{querybatch} po 
 1000 pakietów, których ciało buduje jedna funkcja (\repopath{toQueries()} w
 \path{src/lib/osv.js}) --- ekosystem, nazwa i wersja pakietu, nic więcej --- przy
 stronicowanej odpowiedzi ponowione z tokenem strony od OSV (najwyżej 10 stron), i po
-jednym \repopath{GET} na każde advisory. Content security policy strony pozwala łączyć się
+jednym \repopath{GET} na każde advisory. Wysyłane są współrzędne każdego sprawdzalnego
+pakietu, także o~nazwie wewnętrznej, jeśli występuje w~pliku; nazwa pliku, projektu
+i~ścieżki nie są wysyłane. Adres IP odwiedzającego widzą zarówno GitHub Pages, jak
+i~\repopath{api.osv.dev}. Content security policy strony pozwala łączyć się
 tylko z samą stroną i z \repopath{api.osv.dev} oraz nie pozwala ładować skryptów, stylów
 ani fontów z innych miejsc. Brak analityki, ciasteczek i pamięci przeglądarki; zestaw testów
 e2e sprawdza to na zbudowanej stronie: cel każdego żądania, dokładne ciała żądań,
@@ -247,10 +266,14 @@ IndexedDB.
 Tekst z zewnątrz --- opisy advisories z OSV i zawartość pliku odwiedzającego --- trafia do
 DOM wyłącznie przez \repopath{textContent} i \repopath{setAttribute}, nigdy jako znaczniki;
 CodeQL analizuje kod strony właśnie pod kątem tej powierzchni. Zmiany tego, co strona
-wysyła, pilnują CODEOWNERS (\path{src/lib/osv.js}) i sekcja „Privacy check” szablonu pull
-requestu. Szczegóły: podrozdział~\ref{sec:risk-scan-prywatnosc}.
+wysyła, mają pilnować CODEOWNERS (\path{src/lib/osv.js}) i~sekcja „Privacy check” szablonu
+pull requestu, ale żaden scalony pull request tego repozytorium nie ma recenzji;
+mechanicznie pilnuje tego test e2e z~dokładnymi ciałami żądań. Szczegóły:
+podrozdział~\ref{sec:risk-scan-prywatnosc}.
 
 \zrodla{\path{letsgolegacy.legacy-risk-scan/README.md},
+\path{letsgolegacy.legacy-risk-scan/src/index.html},
+\path{letsgolegacy.legacy-risk-scan/src/lib/osv.js},
 \path{letsgolegacy.legacy-risk-scan/src/render.js},
 \path{letsgolegacy.legacy-risk-scan/.github/workflows/codeql.yml},
 \path{letsgolegacy.legacy-risk-scan/.github/CODEOWNERS},
@@ -300,5 +323,10 @@ zielony, i nikt go wcześniej nie przegląda: przeglądem są checki --- testy, 
 mutacyjne, job end-to-end, CodeQL, skan sekretów. Koszt, jeśli to błąd: defekt, którego
 żaden check nie łapie, trafia do \repopath{main} bez przeglądu; testy mutacyjne ograniczają
 to, czego testy nie widzą na ścieżkach, które obejmują --- i nic więcej.
+
+Pozostałe repozytoria fazy 01 wyglądają tak samo: żaden z~pull requestów rdzenia,
+Portcullis, standardów, legacy-risk-scan i~benchu nie ma recenzji w~GitHubie, a~gałąź
+\repopath{main} żadnego z~nich nie ma ochrony (GitHub API, 3~X~2026: \texttt{protected} jest
+fałszem, brak rulesetów), więc CODEOWNERS i~szablon pull requestu niczego nie wymuszają.
 
 \zrodla{\path{letsgolegacy.secondkey/docs/analysis/phase-01.md}}
