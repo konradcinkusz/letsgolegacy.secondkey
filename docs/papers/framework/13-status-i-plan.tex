@@ -20,20 +20,29 @@ przykładowy, ani demonstracyjna konfiguracja nopCommerce nie wykonują wywoła�
 wychodzących. Nic nie jest wydane. \\
 Portcullis & R0 (import), R1 (zmiana nazwy, pilnowana w CI), R2 (reguły migracyjne z
 testami mutacyjnymi), R3 (SARIF z filtrem zmienionych linii i baseline) zrobione;
-wsparcie P8 zaplanowane. Pakiety i obraz kontenera zbudowane i sprawdzone lokalnie,
-publikacja przy pierwszym tagu \repopath{v*}. \\
+wsparcie P8 zaplanowane. Nic nie jest opublikowane: nie ma tagu \repopath{v*}, pakietów
+w~nuget.org ani opublikowanego kontenera, a~workflow wydania nie miał jeszcze przebiegu;
+publikacja przy pierwszym tagu \repopath{v*}. Według README pakiety i~obraz kontenera są
+zbudowane i~sprawdzone lokalnie, ale CI buduje tylko pakiet analyzerów --- obrazu nie. \\
 standardy & C4-a (standardy w Markdown z metadanymi), C4-b (generator z trybem
 \repopath{--check}), C4-c (drift check) zrobione; R4 (skill dla modernize-dotnet)
 scalony, zrobiony wtedy, gdy P6 potwierdzi, że agent go podjął. Żadna wersja nie jest
-jeszcze otagowana. \\
+jeszcze otagowana, a~odnośniki do źródeł w~stopce skilla wskazują tag \texttt{v0.1.0},
+którego nie ma. Sprawdzenie wykonywalne ma 11 z~20 standardów; pozostałe 9 to instrukcje
+dla agenta. \\
 bench nopCommerce & P1--P5 zrobione. P9 (bramka fazy 01) w toku: zabite mutanty
 zrobione (\#8, 11 z 11); pakiet dowodowy kandydata, różnice i regresje czekają na
 P6--P8. P10 (log godzin) w toku: godziny agenta do P5 i dla mutantów P9 są w logu, część
 oszacowana po fakcie; godzin człowieka jeszcze nie ma. P6 (praca człowieka z GitHub
 Copilot), P7 i P8 zaplanowane. \\
-legacy-risk-scan & L18 scalony; zrobiony, gdy job \repopath{verify} w
-\path{deploy.yml} przejdzie po włączeniu źródła GitHub Pages „GitHub Actions” w
-ustawieniach repozytorium. \\
+legacy-risk-scan & L18 scalony (\#1, \#2) i~zrobiony: strona działa na GitHub Pages od
+26~IX~2026 (\url{https://konradcinkusz.github.io/letsgolegacy.legacy-risk-scan/}), a~job
+\repopath{verify} w~\path{deploy.yml} przechodzi --- na \texttt{4f4e346} w~przebiegu
+37116401196 strona serwuje ten commit, a~test z~prawdziwym OSV przechodzi
+(podrozdział~\ref{sec:risk-scan-deploy}). Wiersz L18 w~planie pracy na tym commicie nie
+odnotowuje jeszcze wdrożenia. Otwarte pozostają dwa kroki z~planu: ustawienie pozwalające
+Actions otwierać pull requesty (miesięczne odświeżanie danych EOL z~1~X~2026 wypchnęło
+gałąź, ale nie otworzyło PR) i~kontakt na stronie (ticket L17; dziś „Kontakt: wkrótce”). \\
 capture, sandbox, portal & tylko plany; decyzja o topologii demonstracyjnej (D7) w stanie
 „proposed”, zrobiona, gdy ADR zostanie przyjęty. \\
 \bottomrule
@@ -43,10 +52,14 @@ capture, sandbox, portal & tylko plany; decyzja o topologii demonstracyjnej (D7)
 \path{letsgolegacy.secondkey/README.md},
 \path{letsgolegacy.portcullis/docs/WORKPLAN.md},
 \path{letsgolegacy.portcullis/docs/TUTORIAL.md},
+\path{letsgolegacy.portcullis/README.md},
+\path{letsgolegacy.portcullis/CHANGELOG.md},
 \path{letsgolegacy.secondkey-standards/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-standards/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
 \path{letsgolegacy.legacy-risk-scan/docs/WORKPLAN.md},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/deploy.yml},
+\path{letsgolegacy.legacy-risk-scan/.github/workflows/update-eol.yml},
 \path{letsgolegacy.secondkey-capture/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-sandbox/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-portal/docs/WORKPLAN.md}}
@@ -66,10 +79,15 @@ P3 --- rozgrzewka na eShopLegacyMVC & pakiet dowodowy wyprodukowany przez cały 
 P4 --- zestaw ruchu nopCommerce & 38 scenariuszy (30 zaplanowanych, niektóre jako kilka sesji), 290 wymian \\
 P5 --- kontrakt i dowód A/A & werdykt \repopath{pass}: 76 z 76 zaakceptowanych klauzul utrzymanych, 0 niesprawdzonych; 15 klauzul \repopath{never} (udział nieobecności 19,7\,\%); 290 wymian w 38 scenariuszach: 272 \repopath{equal}, 18 \repopath{equal-under-contract}, 0 regresji, 0 fix candidates \\
 P9 --- zabite mutanty & 11 z 11: każdy z M01--M11 daje w \repopath{sk compare} wynik \repopath{fail}, a każda klauzula zarejestrowana dla mutanta z góry na nim zregresowała; M00 (kalibracja: źródło bez zmian) \repopath{pass} --- 290 wymian, 269 \repopath{equal}, 21 \repopath{equal-under-contract}, 0 regresji; to wynik dla tych jedenastu defektów na tym ruchu, a nie mutation score --- zasięg kontraktu zmierzą generowane mutanty \repopath{sk mutate} (faza 02) \\
-Testy mutacyjne rdzenia & \repopath{SecondKey.Replay} (bez kodu SQL Server) wzrosło z 60,7\,\% do 89,5\,\% w drugiej rewizji analizy fazy 01 \\
+Testy mutacyjne rdzenia & Stryker.NET w~CI na \texttt{c3ae5c2} (przebieg 37116794634), pięć z~siedmiu projektów produktu: \repopath{SecondKey.Compare} 98,89\,\%, \repopath{SecondKey.Evidence} 91,67\,\%, \repopath{SecondKey.Replay} (bez kodu SQL Server) 89,71\,\%, \repopath{SecondKey.Artifacts} 89,09\,\%, \repopath{SecondKey.Contract} 86,87\,\%; progi 85, 70 i~60 (high, low, break), poniżej 60 CI zawodzi; poza zakresem są \repopath{SecondKey.Capture} i~\repopath{SecondKey.Cli}. Wyniki są w~logach i~artefaktach CI, nie w~repozytorium; wynik \repopath{SecondKey.Replay} wzrósł z~60,7\,\% do 89,5\,\% w~drugiej rewizji analizy fazy 01 \\
 Testy mutacyjne reguł migracyjnych Portcullis & 100,00\,\% w ostatnim zapisanym przebiegu Stryker.NET: 214 z 214 testowanych mutantów wykrytych (212 zabitych, 2 przekroczenia czasu); \path{mutation.yml} zawodzi poniżej progu 95 \\
 \bottomrule
 \end{xltabular}
+
+Liczby P3--P5 i~P9 pochodzą z~przebiegów na starych pinach narzędzi (\texttt{967c49c},
+\texttt{84e1925}; sekcja~\ref{sec:wprowadzenie-wersja}). Po przesunięciu pinów (ADR 0008)
+workflowy benchu przechodzą na zielono, ale nowych liczb szczegółowych nie zapisano
+w~\path{results/}.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
@@ -77,6 +95,8 @@ Testy mutacyjne reguł migracyjnych Portcullis & 100,00\,\% w ostatnim zapisanym
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p5/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p9/README.md},
 \path{letsgolegacy.secondkey/docs/analysis/phase-01.md},
+\path{letsgolegacy.secondkey/stryker-config.json},
+\path{letsgolegacy.secondkey/scripts/mutation.sh},
 \path{letsgolegacy.portcullis/docs/MUTATIONS.md},
 \path{letsgolegacy.portcullis/tests/Portcullis.Engine.Tests/stryker-config.json}}
 

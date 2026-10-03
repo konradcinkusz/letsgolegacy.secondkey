@@ -16,8 +16,10 @@ migracji zachowuje się tak samo wobec użytkownika. Migracja z .NET Framework n
 zmienia na przykład bibliotekę globalizacji z NLS na ICU, więc porównywanie i sortowanie
 napisów zależne od kultury może dać inny wynik, choć build i testy są zielone. Tę
 pułapkę bench nopCommerce traktuje jako główny kandydat na moment, wokół którego zbudowana
-jest demonstracja: agent migruje, build i testy przechodzą, a weryfikacja i tak znajduje
-realną różnicę zachowania.
+jest demonstracja: agent migruje, build i~testy przechodzą, a~weryfikacja i~tak ma znaleźć
+realną różnicę zachowania. To cel demonstracji, a~nie jej wynik: migracja przez agenta
+i~porównanie z~kandydatem (tickety benchu P6 i~P7) nie są jeszcze wykonane
+(rozdział~\ref{sec:status}).
 
 Rdzeń opisuje swoje zadanie jednym zdaniem: niezależny, deterministyczny dowód, że system
 .NET zmigrowany przez agenta AI nadal dotrzymuje kontraktu biznesowego. Nazwa Second Key
@@ -42,20 +44,24 @@ narzędziami, które ją realizują. Narzędzia mieszkają w repozytoriach o pre
 \begin{itemize}
   \item \textbf{Second Key} --- łańcuch weryfikacji: nagranie ruchu (capture), kontrakt,
         odtworzenie (replay) na obu wersjach, porównanie (compare), werdykt i pakiet
-        dowodowy. Rdzeń w \path{letsgolegacy.secondkey}, rozszerzenia fazy 02 i 03 w
-        \path{secondkey-capture}, \path{secondkey-sandbox} i \path{secondkey-portal}.
+        dowodowy. Rdzeń w~\path{letsgolegacy.secondkey}; rozszerzenia fazy 02 i~03 są
+        dopiero planowane w~\path{secondkey-capture}, \path{secondkey-sandbox}
+        i~\path{secondkey-portal}, które zawierają dziś tylko plany pracy.
   \item \textbf{Portcullis} --- bramka na pull request: deterministyczne analyzery Roslyn
         uruchamiane na zmienionych liniach, z wynikiem w SARIF i plikiem baseline
         (\path{letsgolegacy.portcullis}).
   \item \textbf{secondkey-standards} --- standardy architektury i migracji spisane raz w
         Markdown i dostarczane z jednego źródła agentowi migracyjnemu (jako skill) oraz
-        bramce (jako konfiguracja analyzerów).
+        bramce (jako konfiguracja analyzerów, którą czyta build z~paczką analyzerów, a~nie
+        skan CLI Portcullis); sprawdzenie wykonywalne ma 11 z~20 standardów, pozostałe 9 to
+        instrukcje dla agenta. Żadna wersja standardów nie jest jeszcze otagowana.
   \item \textbf{legacy-risk-scan} --- strona, która z pliku projektu (\repopath{.csproj},
         \repopath{packages.config}, \repopath{composer.json}) liczy w przeglądarce raport
         końca wsparcia (EOL) i znanych podatności.
   \item \textbf{bench nopCommerce} --- publiczny okaz: nopCommerce 3.90 na .NET Framework,
-        na którym cały łańcuch jest uruchamiany w CI i na którym będzie oceniona migracja
-        wykonana przez agenta.
+        na którym w~CI działają nagranie ruchu, replay, porównanie z~kontraktem i~pakiet
+        dowodowy, a~na którym będzie oceniona migracja wykonana przez agenta (bramka
+        Portcullis i~standardy czekają na tę migrację).
 \end{itemize}
 
 Komponenty wymieniają się wyłącznie plikami: nagraniem \repopath{*.skcap}, kontraktem

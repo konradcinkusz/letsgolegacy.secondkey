@@ -14,9 +14,9 @@ flowchart TB
     SBX["<b>secondkey-sandbox</b><br/>C12: pakowanie<br/>w granicy klienta"]
     POR["<b>secondkey-portal</b><br/>C11: portal dowodów"]
   end
-  STD -- "skill w<br/>.github/skills" --> AGENT
-  STD -- "severity<br/>diagnostyk" --> PC
-  AGENT -- "kandydat (PR)" --> BENCH
+  STD -- "skill w<br/>.github/skills<br/>(podjęcie: P6)" --> AGENT
+  STD -- "severity diagnostyk<br/>(kanał kompilatora)" --> PC
+  AGENT -- "kandydat (PR)<br/>(P6: planowane)" --> BENCH
   PC -- "*.sarif" --> CORE
   BENCH -- "sk i Portcullis z<br/>przypiętych commitów" --> CORE
   BENCH --> PC
