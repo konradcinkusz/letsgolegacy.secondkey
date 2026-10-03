@@ -209,6 +209,50 @@ public sealed class CaptureReplayCommandTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_correlation_pattern_that_does_not_compile_is_refused_before_any_request()
+    {
+        var config = Path.Combine(_directory, "secondkey.yaml");
+        await File.WriteAllTextAsync(config, $$"""
+            version: 1
+            replay:
+              capture: '{{Sample("sample.skcap")}}'
+              legacy: { baseUrl: "{{_legacy.Address}}" }
+              candidate: { baseUrl: "{{_candidate.Address}}" }
+              correlation:
+                - { name: csrf, regex: '(', formField: token }
+            """);
+
+        var (exit, _, error) = await RunAsync("replay", "--config", config);
+
+        // The same exit code as every other value the file gets wrong, not the 4 of a replay
+        // that started and then failed; and neither side was asked anything.
+        Assert.Equal(ExitCodes.InvalidInput, exit);
+        Assert.Contains("replay.correlation[0].regex ('csrf'): not a valid regular expression", error, StringComparison.Ordinal);
+        Assert.False(_legacy.Received.IsCompleted);
+        Assert.False(_candidate.Received.IsCompleted);
+    }
+
+    [Fact]
+    public async Task A_correlation_pattern_without_a_group_is_refused_because_it_would_learn_nothing()
+    {
+        var config = Path.Combine(_directory, "secondkey.yaml");
+        await File.WriteAllTextAsync(config, $$"""
+            version: 1
+            replay:
+              capture: '{{Sample("sample.skcap")}}'
+              legacy: { baseUrl: "{{_legacy.Address}}" }
+              candidate: { baseUrl: "{{_candidate.Address}}" }
+              correlation:
+                - { name: csrf, regex: 'token=[a-z0-9]+', formField: token }
+            """);
+
+        var (exit, _, error) = await RunAsync("replay", "--config", config);
+
+        Assert.Equal(ExitCodes.InvalidInput, exit);
+        Assert.Contains("replay.correlation[0].regex ('csrf'): has no capture group", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Replay_without_its_inputs_is_a_usage_error()
     {
         var (exit, _, error) = await RunAsync("replay", "--legacy", "http://127.0.0.1:1");

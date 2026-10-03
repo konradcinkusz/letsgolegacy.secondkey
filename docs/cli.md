@@ -158,6 +158,12 @@ first group of `regex` from each answer, on the same side and within the same sc
 and writes it into the named `formField` of later `application/x-www-form-urlencoded`
 posts, or into the `header` when the recorded request carried that header.
 
+The pattern is checked when `secondkey.yaml` is read, so `sk validate` and every command
+refuse a bad one the same way (exit 3, naming the rule as `replay.correlation[<n>].regex`):
+it must compile, and it must have a capture group — without one it would run and learn
+nothing. It is compiled culture-invariant with a one-second match limit; a match that needs
+longer stops the replay (exit 4).
+
 ## `sk compare`
 
 ```sh

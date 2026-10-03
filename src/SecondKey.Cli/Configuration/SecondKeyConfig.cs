@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using SecondKey.Artifacts.Yaml;
 
 namespace SecondKey.Cli.Configuration;
@@ -102,7 +104,8 @@ public sealed record SecondKeyConfig
 
     /// <summary>
     /// The values the keys' types cannot constrain: a URL that must be absolute http(s), a
-    /// choice among named values, a reset that names exactly one kind. Checked when the file
+    /// choice among named values, a reset that names exactly one kind, a correlation pattern
+    /// that compiles and carries a group. Checked when the file
     /// is read, so every command — and <c>sk validate</c> — refuses the same file the same
     /// way (exit 3) before anything runs, instead of one command guessing and another failing.
     /// </summary>
@@ -116,6 +119,7 @@ public sealed record SecondKeyConfig
         OneOf(Evidence?.Pdf, "evidence.pdf", "auto", "required", "off");
         OneKind(Replay?.Legacy?.Reset, "replay.legacy.reset");
         OneKind(Replay?.Candidate?.Reset, "replay.candidate.reset");
+        Correlation(Replay?.Correlation);
 
         void Url(string? value, string key)
         {
@@ -146,6 +150,31 @@ public sealed record SecondKeyConfig
             if (kinds != 1)
             {
                 throw new ConfigurationException($"{path}: {key}: give exactly one of http, sqlServerSnapshot, command (found {kinds})");
+            }
+        }
+
+        // A pattern that does not compile would stop sk replay half-way, with a different
+        // exit code than every other bad value; one without a group would run and silently
+        // learn nothing. Both are the file's fault, so both are refused here.
+        void Correlation(IReadOnlyList<CorrelationConfig>? rules)
+        {
+            for (var i = 0; i < (rules?.Count ?? 0); i++)
+            {
+                var key = $"replay.correlation[{i.ToString(CultureInfo.InvariantCulture)}].regex ('{rules![i].Name}')";
+                Regex pattern;
+                try
+                {
+                    pattern = rules[i].Compile();
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new ConfigurationException($"{path}: {key}: not a valid regular expression: {ex.Message}", ex);
+                }
+
+                if (pattern.GetGroupNumbers().Length < 2)
+                {
+                    throw new ConfigurationException($"{path}: {key}: has no capture group; the first group is the value that later requests carry");
+                }
             }
         }
     }
@@ -246,6 +275,16 @@ public sealed record CorrelationConfig
 
     /// <summary>A regex over the response body text whose first group is the value.</summary>
     public required string Regex { get; init; }
+
+    /// <summary>How long one match may take; a pattern that needs longer aborts the replay.</summary>
+    public static TimeSpan MatchTimeout { get; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The pattern exactly as the replay engine runs it — culture-invariant, bounded in time —
+    /// so that the file's check and the command that uses the file cannot disagree.
+    /// </summary>
+    /// <exception cref="ArgumentException">The pattern is not a valid regular expression.</exception>
+    public Regex Compile() => new(Regex, RegexOptions.CultureInvariant, MatchTimeout);
 
     /// <summary>The form field the value is written into on later requests.</summary>
     public string? FormField { get; init; }

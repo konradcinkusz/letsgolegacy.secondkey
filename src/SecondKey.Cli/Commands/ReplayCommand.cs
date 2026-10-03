@@ -1,6 +1,5 @@
 using System.CommandLine;
 using System.Globalization;
-using System.Text.RegularExpressions;
 using SecondKey.Artifacts.Capture;
 using SecondKey.Artifacts.Runs;
 using SecondKey.Cli.Configuration;
@@ -52,7 +51,7 @@ internal static class ReplayCommand
                 ScenarioMode = (result.GetValue(mode) ?? section?.ScenarioMode) == "exchange" ? ScenarioMode.Exchange : ScenarioMode.Session,
                 Timeout = TimeSpan.FromSeconds(result.GetValue(timeout) ?? section?.TimeoutSeconds ?? 30),
                 Correlation = (section?.Correlation ?? [])
-                    .Select(r => new CorrelationRule(r.Name, new Regex(r.Regex, RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)), r.FormField, r.Header))
+                    .Select(r => new CorrelationRule(r.Name, r.Compile(), r.FormField, r.Header))
                     .ToList(),
             };
 
