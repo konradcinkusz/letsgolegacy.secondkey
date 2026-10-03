@@ -3,15 +3,17 @@
 Repozytorium \repopath{letsgolegacy.secondkey-nopcommerce-bench} jest publicznym okazem
 (specimen) frameworku letsgolegacy, w~praktyce nazywanym „bench nopCommerce”. Pokazuje
 łańcuch Second Key na prawdziwym systemie legacy: nopCommerce 3.x, sklepie na klasycznym
-ASP.NET MVC i~.NET Framework, który migruje agent migracyjny Microsoftu (modernize-dotnet),
-a~Second Key sprawdza -- niezależnie i~deterministycznie -- względem spisanego kontraktu
+ASP.NET MVC i~.NET Framework, który ma zmigrować agent migracyjny Microsoftu (modernize-dotnet;
+zadanie P6 nie zostało jeszcze wykonane), a~Second Key sprawdza -- niezależnie
+i~deterministycznie -- względem spisanego kontraktu
 tego, co sklep musi robić i~czego nie może robić nigdy. Second Key niczego nie migruje;
 tylko sprawdza.
 
 Rozdział opisuje migawkę repozytorium w~stanie \texttt{origin/main} (commit
 \texttt{98d88d8}). W~tym stanie zadania P1--P5 są zrobione (build, host legacy, rozgrzewka
 łańcucha, nagranie ruchu, kontrakt z~dowodem A/A), w~P9 zrobiona jest część „zabite
-mutanty” (11 z~11), dziennik P10 jest prowadzony, a~P6--P8 i~reszta P9 są zaplanowane. README
+mutanty” (11 z~11 ręcznie napisanych defektów; to nie wskaźnik mutacyjny), dziennik P10 jest
+prowadzony, a~P6--P8 i~reszta P9 są zaplanowane. README
 zaznacza, że repozytorium jest w~budowie i~że żaden evidence pack (pakiet dowodowy) nie
 został jeszcze opublikowany; pakiety powstające w~każdym przebiegu CI są artefaktami
 workflowów, a~nie publikacją. Kolejne podsekcje idą od decyzji (ADR 0001--0008) przez
@@ -35,11 +37,14 @@ w~review.
 Plan pracy (\repopath{docs/WORKPLAN.md}) nazywa okaz publicznym dowodem, że łańcuch
 Second Key działa na prawdziwym kodzie legacy. Wybranym systemem jest starszy nopCommerce
 (3.x, klasyczne ASP.NET MVC na .NET Framework): prawdziwy sklep z~rabatami, podatkami
-i~wysyłką, w~którym reguły „never” coś znaczą. Migrację wykonuje agent modernize-dotnet;
-Second Key tylko ją sprawdza.
+i~wysyłką, w~którym reguły „never” coś znaczą. Migrację ma wykonać agent modernize-dotnet
+(P6, jeszcze niewykonane); Second Key tylko ją sprawdza.
 
-Pokaz jest zbudowany wokół jednego momentu: agent migruje, build i~istniejące testy
-przechodzą, a~Second Key mimo to znajduje prawdziwą różnicę w~zachowaniu. Najlepszym
+Pokaz jest zaplanowany wokół jednego momentu: agent migruje, build i~istniejące testy
+przechodzą, a~Second Key mimo to znajduje prawdziwą różnicę w~zachowaniu. Ten moment jeszcze
+nie nastąpił: kandydata nie ma (P6), więc żadnej różnicy między zmigrowanym systemem
+a~legacy nie znaleziono; różnice wykryto tylko na celowo wstrzykniętych defektach
+(mutanty P9). Najlepszym
 kandydatem na taką różnicę jest globalizacja: przejście z~.NET Framework na nowoczesny
 .NET przełącza ją z~NLS na ICU, więc porównywanie i~sortowanie napisów zależne od kultury
 może się zmienić -- plan nazywa to znaną, udokumentowaną pułapką migracji. Miejsca
@@ -111,7 +116,7 @@ przebieg \path{legacy-build.yml} w~kolejności zdarzeń, od przypiętego źród�
 dowodowego. Kroki 1--9 to skrypty z~\path{scripts/} (sekcja~\ref{sec:bench-skrypty}); każdy
 job działa na osobnym runnerze, więc pliki przechodzą między jobami jako artefakty CI, a~werdykt
 i~pakiet liczy job linuksowy z~samych plików (sekcja~\ref{sec:bench-topologia}). Zimny przebieg
-z~3 X 2026 po przesunięciu pinów (podrozdział~\ref{sec:bench-pins-adr}) trwał około
+z~3 X 2026 (przebieg 37118204557) po przesunięciu pinów (podrozdział~\ref{sec:bench-pins-adr}) trwał około
 15 minut, z~czego job \texttt{iis} 13 (instalacja SQL Server Express, nagranie 38 scenariuszy
 i~replay A/A). Dolna ramka rysunku nazywa to, czego jeszcze nie ma: kandydata (P6--P8).
 Dopóki go nie ma, pakiet jest pakietem A/A, czyli dowodem, że kontrakt trzyma na samym legacy
@@ -397,14 +402,23 @@ wyjścia, tekst i~linie, które skrypty parsują); (4) przed scaleniem: A/A w~\p
 \path{mutants.yml} uruchomiony na gałęzi z~M00 \texttt{pass} i~wszystkimi mutantami
 zabitymi; liczba, która różni się od poprzedniej, jest wyjaśniona w~zapisie.
 
-\paragraph{Wynik.} Trzy przebiegi na gałęzi pokazały to, co miały, z~tymi samymi liczbami co na
-starych pinach. \path{legacy-build.yml}: werdykt A/A \texttt{pass}, 290 wymian (272
-\repopath{equal}, 18 \repopath{equal-under-contract}), 0 regresji, 76 z~76 klauzul utrzymanych,
-0 niewykonanych, pakiet z~\path{report.pdf}. \path{warmup-eshop.yml}: werdykt \texttt{pass},
-27 wymian, 0 regresji, 13 z~13 klauzul utrzymanych, bramka \texttt{fail} z~7 blokującymi.
-\path{mutants.yml}, uruchomiony na gałęzi: M00 \texttt{pass}, \texttt{11 of 11 mutants killed},
-0 ocalałych, 0 bez wyniku, job \texttt{summary} zielony. Pull request jest scalony
-(\texttt{98d88d8}).
+\paragraph{Wynik.} Trzy przebiegi na gałęzi (3 X 2026) pokazały to, co miały, z~tymi samymi
+liczbami co na starych pinach. \path{legacy-build.yml} (przebieg 37118204557): werdykt A/A
+\texttt{pass}, 290 wymian (272 \repopath{equal}, 18 \repopath{equal-under-contract}), 0 regresji,
+76 z~76 klauzul utrzymanych, 0 niewykonanych, pakiet z~\path{report.pdf}.
+\path{warmup-eshop.yml} (37118204643): werdykt \texttt{pass}, 27 wymian, 0 regresji, 13 z~13
+klauzul utrzymanych, bramka \texttt{fail} z~7 blokującymi. \path{mutants.yml}, uruchomiony na
+gałęzi (37118170000): M00 \texttt{pass}, \texttt{11 of 11 mutants killed}, 0 ocalałych, 0 bez
+wyniku, job \texttt{summary} zielony; wynik każdego mutanta (werdykt, regresje, zregresowane
+klauzule i~wymiany) jest ten sam co w~przebiegu 36262958486 na starych pinach. Liczby
+pochodzą z~logów jobów \texttt{verdict} i~\texttt{summary}; sam zielony status joba
+\texttt{summary} liczby zabitych nie podaje (przeżycie mutanta nie psuje joba). Były to
+pierwsze przebiegi po zmianie \path{pins.json}, więc zimne (w~logach jobów z~pamięcią
+podręczną jest \texttt{Cache not found}); czasy: \texttt{legacy-build} 15~min~1~s,
+\texttt{warmup-eshop} 4~min~12~s, \texttt{mutants} 20~min~25~s. W~\path{results/} nie ma
+zapisu z~nowych pinów; tabele P3, P5 i~P9 w~tym rozdziale są ze starych pinów. Pull request
+jest scalony (\texttt{98d88d8}); przebiegi \texttt{legacy-build} (37119776772)
+i~\texttt{warmup-eshop} (37119776754) na \texttt{main} po scaleniu też są zielone.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0008-move-the-chain-pins.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/pins.json},
@@ -428,8 +442,8 @@ zadanie ma zaktualizować tę stronę.
     Framework, serwowany przez IIS, z~SQL Server pod spodem. Jeden host Windows mieści
     wszystkie trzy.
   \item Łańcuch Second Key -- capture, replay, compare, evidence -- jest aplikacją .NET 10
-    i~działa wszędzie; jego naturalnym miejscem jest Linux (szybszy start runnerów,
-    kontenery).
+    i~działa tam, gdzie jest .NET 10 (CI rdzenia sprawdza Linux i~Windows); jego naturalnym
+    miejscem jest Linux (szybszy start runnerów, kontenery).
   \item Komponenty wymieniają \textbf{pliki}, nigdy swoje wnętrza: \path{*.skcap},
     \path{contract.yaml}, \path{*.skrun}, \path{verdict.json}, \path{*.sarif}
     (sekcja~\ref{sec:formaty}). Granica między maszynami może więc przebiegać wszędzie
@@ -1051,8 +1065,8 @@ cytować.
     \texttt{sk capture} to proxy nagrywające oparte na YARP, tylko dla ruchu
     przychodzącego, zapisujące \path{*.skcap}. System legacy pozostaje nietknięty: bez
     zmian w~kodzie, bez rekompilacji, bez modułu IIS.
-  \item \textbf{Jeden scenariusz, jedna sesja.} Każdy scenariusz to jedna sesja
-    przeglądarki z~własnym słoikiem ciasteczek, a~każde żądanie niesie nagłówek
+  \item \textbf{Jeden scenariusz, jedna sesja.} Każdy scenariusz to jedna skryptowana sesja
+    HTTP z~własnym słoikiem ciasteczek, a~każde żądanie niesie nagłówek
     \texttt{x-bench-scenario: <id>} -- klucz sesji capture. Scenariusz jest więc jedną
     sesją w~\path{*.skcap} i~jednym scenariuszem w~odtworzeniu. Historia z~dwiema osobami
     to dwa scenariusze.
@@ -1063,7 +1077,10 @@ cytować.
     akcji oznaczonych \texttt{[PublicAntiForgery]} -- w~tym zestawie szacowania wysyłki
     (\path{ShoppingCartController.GetEstimateShipping}) i~rejestracji
     (\path{CustomerController.Register}). Dodawanie do koszyka, zmiany w~koszyku,
-    kupony, logowanie i~checkout jednostronicowy go nie sprawdzają.
+    kupony, logowanie i~checkout jednostronicowy go nie sprawdzają. To jednak klient HTTP
+    w~PowerShellu, a~nie przeglądarka: nie wykonuje JavaScriptu stron i~nie pobiera CSS,
+    skryptów ani obrazów, więc zasoby statyczne nie trafiają do nagrania, a~ruch jest
+    syntetyczny (skrypty na danych przykładowych), a~nie ruchem użytkowników.
   \item \textbf{Host.} \texttt{sk capture} przekazuje dalej host celu (domyślne
     zachowanie YARP), więc bezwzględne adresy, które nopCommerce buduje z~hosta żądania
     (adresy skryptów checkoutu jednostronicowego), wskazują \texttt{:8080}. Przeglądarka,
@@ -1403,7 +1420,13 @@ częściową \$500.00 bez wierszy rabatu.
 Konfiguracja odtwarzania P5 wskazuje ten sam snapshot i~bazę w~resecie
 \texttt{sqlServerSnapshot}. \path{*.skcap} zawiera wyłącznie dane sklepu przykładowego:
 opublikowane hasło klienta przykładowego, hasło, z~którym rejestruje się R1, testowe
-numery kart. Ciasteczka są domyślnie redagowane przez \texttt{sk capture}.
+numery kart. Ciasteczka są domyślnie redagowane przez \texttt{sk capture}. Zestaw
+obejmuje tylko ścieżkę zakupową sklepu publicznego (katalog, wyszukiwanie, koszyk, checkout,
+zamówienia klienta); poza nim zostają panel administracyjny (służy wyłącznie do konfiguracji
+i~nie przechodzi przez proxy), zewnętrzne płatności i~przewoźnicy, wysyłka e-maili, zadania
+harmonogramu (wyłączone), lista życzeń, recenzje, porównywanie, blog i~forum, konta klientów
+poza historią zamówień, wiele języków i~walut oraz zasoby statyczne -- to brak w~skryptach
+ruchu, a~nie w~nopCommerce.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P4-TRAFFIC-PLAN.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/docs/adr/0005-nopcommerce-traffic-recording.md},
@@ -1521,7 +1544,10 @@ pochodzi: 37 rodzaju \texttt{must} i~9 rodzaju \texttt{never} (R05, R19, R20, R2
 R32, R39, R44, R45), czyli 19,6\%. Reguła \texttt{must} stwierdza, co zawiera odpowiedź
 albo stan po niej; reguła \texttt{never} -- czego nie ma. „Pokazane” znaczy: w~HTML strony
 wskazanej w~scenariuszu; fakty o~zamówieniach można też stwierdzać na delcie bazy (zadanie
-rdzenia S4). Kontrakt pisze się według sześciu zasad:
+rdzenia S4), ale kontrakt benchu tego nie robi: żadna z~jego 134~asercji nie czyta bazy ani
+wywołań wychodzących. Reguły i~klauzule zaprojektowano na podstawie czytania kodu 3.90,
+a~nie wydobyto z~ruchu (\repopath{sk mine} jest w~fazie 01 stubem), dlatego każda klauzula
+ma \texttt{origin: designed}. Kontrakt pisze się według sześciu zasad:
 \begin{itemize}
   \item \textbf{Z~reguł planu.} Każda klauzula w~polu \texttt{why} podaje reguły, które
     wyraża; tabela~\ref{tab:bench-mapa} mapuje reguły na klauzule.
@@ -1536,10 +1562,12 @@ rdzenia S4). Kontrakt pisze się według sześciu zasad:
     przez wartości wyciągnięte ekstraktorami (\texttt{compare.html: extracts}): wiersze
     sum koszyka, komunikaty kuponów, tytuły list, sumy zamówień. Znaczniki nie są
     zachowaniem.
-  \item \textbf{Każda klauzula \texttt{never} ma pozytywnego bliźniaka} w~tym samym
-    scenariuszu, żeby nieobecność nie była spełniona dlatego, że nic się nie wydarzyło:
+  \item \textbf{Każda klauzula \texttt{never} poza jedną ma pozytywnego bliźniaka} w~tym
+    samym scenariuszu, żeby nieobecność nie była spełniona dlatego, że nic się nie wydarzyło:
     odrzucony \texttt{MEMBERS15} gościa obok \texttt{(\$75.00)} klienta zarejestrowanego,
     odrzucona karta obok złożonego zamówienia, odrzucone strony zamówień obok własnych.
+    Wyjątek to \path{NEVER-A-SERVER-ERROR}: obejmuje każde żądanie zestawu, więc nie ma
+    jednego scenariusza ani bliźniaka.
   \item \textbf{Zachowanie legacy przypięte takie, jakie jest} (ADR 0006, decyzja~2),
     łącznie z~tym, co migracja mogłaby chcieć „naprawić”: rabaty zapisywane jako
     \texttt{(\$100.00)}, pusty komunikat gościa dla \texttt{MEMBERS15}, opłata \$1.99 za
@@ -1670,8 +1698,9 @@ nagłówki \texttt{content-type} i~\texttt{location}, a~HTML -- przez ekstrakty
 Kontrakt ma \textbf{76~klauzul -- 61 rodzaju \texttt{must} i~15 rodzaju \texttt{never}}
 (udział nieobecności 19,7\%) -- nad 32~ekstraktorami i~z~trzema maskami normalizacji;
 wszystkie klauzule są zaakceptowane. Każda ma proweniencję \texttt{origin: designed},
-\texttt{status: accepted}, \texttt{author: bench}, \texttt{date: 2026-09-26}. Pełną listę
-klauzul z~zakresami i~tytułami podaje dodatek~\ref{app:klauzule}.
+\texttt{status: accepted}, \texttt{author: bench}, \texttt{date: 2026-09-26}; „zaakceptowana”
+to status w~proweniencji, nadany przez autora \texttt{bench}, a~nie zatwierdzenie przez nazwaną
+osobę. Pełną listę klauzul z~zakresami i~tytułami podaje dodatek~\ref{app:klauzule}.
 
 Policzone z~pliku: klauzule mają łącznie 134~asercje. Operatory: \texttt{equals} (86),
 \texttt{contains} (21), \texttt{matches} (13), \texttt{countEquals} (4),
@@ -2586,6 +2615,11 @@ i~\path{3-mutant-outcome.ps1}, który kończy się błędem, gdy replay nie jest
 legacy kontra ten mutant, gdy po stronie legacy brakuje odpowiedzi albo gdy M00 nie dał
 \texttt{pass}) oraz \texttt{summary} (błąd, gdy M00 nie dał \texttt{pass} albo któryś mutant
 nie ma wyniku). Wynik \texttt{killed} albo \texttt{survived} sam nie kończy kroku błędem.
+Ta bramka jest czerwonym sprawdzeniem CI, a~nie wymuszeniem: gałąź \texttt{main} repozytorium
+nie ma ochrony (brak wymaganych sprawdzeń i~recenzji), więc nic technicznie nie blokuje
+scalenia pull requesta z~czerwonym CI. CI nie uruchamia też testów jednostkowych
+nopCommerce (pięć projektów NUnit jest tylko budowanych razem z~rozwiązaniem), a~skrypty
+benchu nie mają własnych testów jednostkowych -- sprawdza je lint i~przebieg całego łańcucha.
 Workflowy CI wszystkich repozytoriów frameworku opisuje dodatek~\ref{app:ci}.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/.github/workflows/legacy-build.yml},
@@ -2601,9 +2635,15 @@ Workflowy CI wszystkich repozytoriów frameworku opisuje dodatek~\ref{app:ci}.
 
 \subsection{Wyniki P3, P4 i~P5}\label{sec:bench-wyniki}
 
-Liczby pochodzą z~przebiegów CI, które zamknęły zadania; pakiety i~nagrania z~tych
-przebiegów są artefaktami przechowywanymi przez 30~dni, a~każdy kolejny przebieg
-workflowu tworzy je od nowa.
+Liczby pochodzą z~przebiegów CI, które zamknęły zadania (2026-09-26, na starych pinach:
+\repopath{sk} \texttt{967c49c}, Portcullis \texttt{84e1925}); pakiety i~nagrania z~tych
+przebiegów są artefaktami przechowywanymi przez 30~dni (nagranie rozgrzewki -- 14~dni),
+a~każdy kolejny przebieg workflowu tworzy je od nowa. Artefakty z~2026-09-26, na które
+wskazują \path{results/}, wygasają 2026-10-26, pakiety z~przebiegów z~2026-10-03 --
+2026-11-02. Repozytorium nie ma wydań, tagów ani GitHub Pages, więc żaden pakiet nie jest
+opublikowany na stałe. Przebiegi z~3 X 2026 na nowych pinach dały te same liczby wymian, klauzul,
+znalezisk i~zabitych mutantów; czasy są inne (podrozdział~\ref{sec:bench-pins-adr}).
+Poniższe tabele zostają przy starych pinach, bo to one są zapisane w~\path{results/}.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/results/p3/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/results/p4/README.md},
@@ -2737,7 +2777,9 @@ Normalizacja & 18 wymian \texttt{equal-under-contract} według masek, które usu
   \texttt{pdf-bytes} 1 (faktura) \\
 Pakiet & \path{contract.yaml}, \path{index.html}, \path{report.pdf} (Google Chrome na
   runnerze linuksowym), \path{run.skrun}, \path{statement.intoto.json},
-  \path{verdict.json}, \path{manifest.json} -- każdy SHA-256 sprawdzony ponownie \\
+  \path{verdict.json}, \path{manifest.json} -- każdy SHA-256 sprawdzony ponownie; pakiet jest
+  niepodpisany (\path{statement.intoto.json} niesie tylko skróty SHA-256 plików, podpis to
+  faza~03) i~nie wskazuje commitu \repopath{sk} (\texttt{"commit": null}) \\
 \bottomrule
 \end{tabularx}
 \end{center}
@@ -2758,8 +2800,9 @@ migracja.}
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\linewidth,height=0.7\textheight,keepaspectratio]{\dgm{a11-przebieg-mutantow}}
-  \caption{Przebieg \texttt{mutants.yml}: macierz mutantów, job Windows i~job Linux na
-           każdego mutanta, zbiorczy job \texttt{summary}.}
+  \caption{Przebieg \texttt{mutants.yml} (28~jobów): \texttt{plan} z~macierzą, \texttt{build}
+           i~\texttt{tools} po jednym, job Windows i~job Linux na każdy z~12 wpisów katalogu
+           (M00 i~M01--M11), zbiorczy job \texttt{summary}.}
   \label{fig:przebieg-mutantow}
 \end{figure}
 
@@ -3058,7 +3101,10 @@ podsumowania zaczął drukować swój plik) dał to samo: M00 \repopath{pass}, 1
 przebieg na commicie, który dodał te wyniki (36265101762, \texttt{db364d4}), znów na
 dwunastu świeżych runnerach, zgadzał się z~zapisanym wymiana po wymianie: dla każdego
 mutanta i~M00 ten sam wynik, te same zregresowane wymiany z~tymi samymi powodami i~polami
-różnic, te same klauzule.
+różnic, te same klauzule. Wszystkie te przebiegi biegły na starych pinach. Na nowych
+(\repopath{sk} \texttt{c3ae5c2}, 3 X 2026, przebieg 37118170000) wynik jest ten sam: M00
+\repopath{pass}, 11 z~11 zabitych, a~dla każdego mutanta te same regresje, klauzule
+i~wymiany (podrozdział~\ref{sec:bench-pins-adr}).
 
 \paragraph{M00, kalibracja.} Sklep legacy odtworzony przeciw drugiemu buildowi tego samego
 źródła, działającemu jako druga witryna na tej samej bazie: 38~scenariuszy, 580~wyników
@@ -3171,6 +3217,11 @@ w~bajt.
   \item \textbf{Żaden mutant nie przeżył i~żadne oczekiwanie nie chybiło.} To stwierdzenie
     o~tych jedenastu defektach na tym ruchu, a~nie wynik mutacyjny (mutation score): pisano je
     pod nazwane klauzule, a~wynik mówi, że te klauzule łapią defekty, pod które je napisano.
+    Margines jest wąski: cztery mutanty (M03, M04, M08, M11) zabiła jedna wymiana z~290,
+    zregresowało 40 z~76 klauzul, a~z~15 klauzul \texttt{never} tylko 7 -- pozostałych 8
+    (m.in. \path{BAD-CARD-NEVER-REACHES-CONFIRM}, \path{MEMBERS15-NEVER-FOR-A-GUEST},
+    \path{UNPUBLISHED-NEVER-LISTED}) nie ruszył żaden mutant, co jest brakiem dowodu, że łapią
+    błąd, a~nie dowodem, że go nie łapią.
     Zasięg kontraktu zmierzą mutanty generowane --- \repopath{sk mutate}, faza 02.
   \item \textbf{Tam, gdzie nie patrzy żadna klauzula, porównanie i~tak patrzy.} Dla M01, M05
     i~M06 zarejestrowana klauzula złapała wymianę, pod którą ją napisano, a~ten sam defekt
@@ -3234,7 +3285,9 @@ stać przykładem.
     (\texttt{gh}) -- bazowy build legacy idzie przez MSBuild, kandydat przez
     \texttt{dotnet}; prawo zapisu do repozytorium benchu (dla zapisu przebiegu);
     \textbf{zrobione R4}: otagowane wydanie repozytorium standardów z~\path{generated/skills/}
-    -- bez niego P6 się nie zaczyna. Uruchom stoper i~zapisz czas startu: wszystko do
+    -- bez niego P6 się nie zaczyna (3 X 2026 repozytorium standardów nie ma żadnego tagu ani
+    wydania, a~jego \path{CHANGELOG.md} prowadzi wersję 0.1.0 jako niewydaną, więc ten warunek
+    nie jest jeszcze spełniony). Uruchom stoper i~zapisz czas startu: wszystko do
     otwarcia pull requesta liczy się jako godziny P6; czas CI benchu -- nie.
   \item \textbf{Fork i~gałęzie.} Kandydat to zmodyfikowany nopCommerce, więc żyje tam, gdzie
     obowiązuje już licencja nopCommerce -- w~forku upstream -- i~nigdy w~repozytorium
@@ -3435,7 +3488,8 @@ Kandydat zmienił się w~trakcie P7 & ktoś wypchnął zmiany na gałąź kandyd
 \end{checklista}
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/docs/P6-RUNBOOK.md},
-\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md}}
+\path{letsgolegacy.secondkey-nopcommerce-bench/docs/WORKPLAN.md},
+\path{letsgolegacy.secondkey-standards/CHANGELOG.md}}
 
 \subsection{Status i~plany P7--P10}\label{sec:bench-plany}
 
@@ -3453,7 +3507,8 @@ P3 & rozgrzewka łańcucha na eShopModernizing & powstaje pakiet; po S15 rdzenia
   zrobione (\#4) \\
 P4 & zestaw ruchu nopCommerce nagrany do \path{*.skcap} & liczba scenariuszy zapisana &
   zrobione (\#5) \\
-P5 & kontrakt nopCommerce: reguły „must” i~„never”, około 20\% asercji nieobecności &
+P5 & kontrakt nopCommerce: reguły „must” i~„never”, około 20\% klauzul nieobecności
+  (zapisane: 15 z~76, 19,7\%) &
   przechodzi walidację i~jest spełniony na legacy; po S8 rdzenia & zrobione (\#6) \\
 P6 & przebieg modernize-dotnet ze skillem standardów z~R4 & kandydat się buduje,
   istniejące testy przechodzą -- \textbf{praca człowieka, wymaga GitHub Copilot} &
@@ -3523,8 +3578,8 @@ oba wywołania: \path{5-scan-eshop.ps1} uruchamia \texttt{Portcullis.Cli.dll sca
 SARIF do \texttt{sk gate -{}-sarif} i~\texttt{sk evidence -{}-sarif}
 (sekcja~\ref{sec:bench-skrypty-eshop}). P9 opublikuje pakiet, kontrakt i~liczby: scenariusze,
 różnice, regresje i~zabite mutanty; pakiet cytuje PR, jego commit czołowy, wersję
-standardów i~zapis P6. Liczba zabitych mutantów już jest: 11 z~11
-(sekcja~\ref{sec:bench-p9}).
+standardów i~zapis P6. Liczba zabitych mutantów już jest: 11 z~11, zapisana na starych pinach
+(sekcja~\ref{sec:bench-p9}) i~powtórzona na nowych (podrozdział~\ref{sec:bench-pins-adr}).
 
 \paragraph{P10: dziennik godzin.} Liczba godzin potrzebnych do objęcia prawdziwego systemu
 legacy przez Second Key jest jedną z~liczb raportu fazy 01. Zakres: P4--P7 to wdrożenie
@@ -3541,7 +3596,9 @@ szacunki z~czasów commitów i~scaleń --- P3 2,00, P4 z~P5 razem 4,75 (pracowan
 równolegle, w~stosie pull requestów), mutanty P9 2,70 --- które obejmują czekanie na CI,
 więc są górnym ograniczeniem; zero godzin człowieka. Suma: P1--P2 -- 1,50~h agenta, P3 --
 2,00~h, przygotowania P4 i~P6 -- 0,55~h, P10 -- 0,05~h, wdrożenie P4--P7 (na razie P4
-i~P5) -- 4,75~h, mutanty P9 (poza wdrożeniem) -- 2,70~h. Minuty runnerów są prowadzone osobno: \#1 -- 3~przebiegi (jeden nieudany), 4,5~min
+i~P5) -- 4,75~h, mutanty P9 (poza wdrożeniem) -- 2,70~h; razem 11,55~h agenta, z~czego 9,45~h
+to szacunki, i~0~h człowieka. Dziennik mierzy pracę już wykonaną, niczego nie prognozuje.
+Minuty runnerów są prowadzone osobno: \#1 -- 3~przebiegi (jeden nieudany), 4,5~min
 Windows i~1,2~min Linux; \#2 -- 3~przebiegi (jeden nieudany), 28,3 i~1,5~min; \#3 -- około
 7 i~0,5~min na przebieg. Zielony przebieg całego workflowu legacy trwał w~P2 około
 7~minut (build 1,5, IIS z~SQL Server, instalatorem i~smoke testem 5--5,5, lint 0,5
@@ -3606,7 +3663,8 @@ całego frameworku opisuje sekcja~\ref{sec:bezpieczenstwo}.
 \paragraph{Własność i~zależności.} \path{.github/CODEOWNERS} przypisuje każdą ścieżkę
 właścicielowi repozytorium i~jawnie wymienia te, które decydują o~tym, co bench dowodzi:
 \path{/.github/}, \path{/.githooks/}, \path{/.gitleaks.toml}, \path{/contract/}
-i~\path{/pins.json}. \path{.github/dependabot.yml} aktualizuje akcje GitHub raz
+i~\path{/pins.json}. Gałąź \texttt{main} nie ma ochrony, więc plik wskazuje recenzenta,
+ale recenzji nie wymusza. \path{.github/dependabot.yml} aktualizuje akcje GitHub raz
 w~tygodniu, jedną grupą.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/PSScriptAnalyzerSettings.psd1},
