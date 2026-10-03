@@ -1,0 +1,21 @@
+%%{init: {"sequence": {"wrap": true, "width": 160, "actorMargin": 24, "noteMargin": 6, "messageMargin": 22, "boxMargin": 4}}}%%
+sequenceDiagram
+  participant P as job plan<br/>ubuntu-24.04
+  participant B as job build<br/>windows-2022
+  participant M as job mutant, jeden<br/>na mutanta<br/>windows-2022
+  participant V as job verdict, jeden<br/>na mutanta<br/>ubuntu-24.04
+  participant S as job summary<br/>ubuntu-24.04
+  Note over P: katalog mutants.json (M00 kalibracja, M01-M11) i każda łatka sprawdzone na przypiętym drzewie
+  P->>M: macierz mutantów
+  Note over B: witryna legacy zbudowana raz
+  B->>M: witryna legacy
+  Note over M: 1-2. źródło z łatką, build mutanta (M00 bez łatki)
+  Note over M: 3-6. sklep legacy: IIS, SQL Server, wdrożenie, konfiguracja
+  Note over M: M2. mutant wdrożony obok, na tej samej bazie (:8091)
+  Note over M: 7. nagranie ruchu na sklepie legacy (sk capture)
+  Note over M: 8. replay legacy kontra mutant (sk replay)
+  M->>V: run.skrun
+  Note over V: 9. sk compare z contract.yaml, pakiet dowodowy
+  Note over V: M3. zabity (werdykt fail) albo ocalały (pass)
+  V->>S: wynik mutanta
+  Note over S: mutants.json i nagłówek "N of M mutants killed". M00 musi przejść, inaczej żaden wynik przebiegu się nie liczy

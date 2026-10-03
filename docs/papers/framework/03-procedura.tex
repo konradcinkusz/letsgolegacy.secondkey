@@ -7,6 +7,8 @@ skrypty benchu nopCommerce, runbook P6, tutorial Portcullis, przewodnik standard
 procedura przytacza ją dosłownie i odsyła do rozdziału z pełną referencją. Każdy krok
 kończy się checklistą, a tam, gdzie źródła nazywają typowe awarie, także tabelą trybów
 awarii (objaw → przyczyna); krok 8 ma zamiast niej tabelę decyzji.
+Jak kroki 1--4 i~9 wyglądają na prawdziwym systemie, pokazuje rysunek~\ref{fig:przebieg-nopcommerce}
+w~rozdziale~\ref{sec:bench}.
 
 \begin{figure}[htbp]
   \centering
@@ -114,10 +116,10 @@ przypiętych commitów (\path{pins.json}, sekcja \repopath{chain}) i uruchamia j
 
 \begin{lstlisting}
 git clone https://github.com/konradcinkusz/letsgolegacy.secondkey.git secondkey
-git -C secondkey checkout 967c49c0005c4412180914f43437d75b43f148dc   # chain.secondKey.commit
+git -C secondkey checkout c3ae5c28efece2a665a693dbcfa15767197d4ab3   # chain.secondKey.commit
 dotnet build secondkey/src/SecondKey.Cli/SecondKey.Cli.csproj -c Release -o <work>/tools/chain/secondkey
 git clone https://github.com/konradcinkusz/letsgolegacy.portcullis.git portcullis
-git -C portcullis checkout 84e1925fe0d85cf23415f0d33c98590f86128722  # chain.portcullis.commit
+git -C portcullis checkout d045f07daf948ac07c3ac62481cc2a97c5d10846  # chain.portcullis.commit
 dotnet build portcullis/src/Portcullis.Cli/Portcullis.Cli.csproj -c Release -o <work>/tools/chain/portcullis
 \end{lstlisting}
 
@@ -126,18 +128,18 @@ zmiennych \repopath{NOPBENCH\_SK} i \repopath{NOPBENCH\_PORTCULLIS}. W rdzeniu C
 uruchamia się też bez instalacji:
 \repopath{dotnet run --project src/SecondKey.Cli -- --help}.
 
-\textbf{Przypięte narzędzia benchu są starsze niż commity opisane w tym dokumencie.}
-\texttt{967c49c} poprzedza commit rdzenia z sekcji~\ref{sec:wprowadzenie-wersja}
-(\texttt{7939e80}). Później doszły między innymi: odrzucanie przez \repopath{sk validate}
-operatora jednej wartości na całej liście (\texttt{05ba3b3}), dokończenie wymian w locie
-przy zatrzymaniu \repopath{sk capture} (\texttt{51e1754}), końce linii
-\texttt{\textbackslash n} w każdym dokumencie JSON na każdej platformie (\texttt{b2e1bb7})
-i sprawdzanie wartości \repopath{secondkey.yaml} przy wczytaniu pliku (\texttt{7939e80}).
-Portcullis \texttt{84e1925} poprzedza \texttt{52d9f1e}, w którym parser skanera przeszedł
-z Roslyn 4.11 na 5.9: projekt .NET 10 domyślnie kompiluje C\# 14, a starszy Roslyn czyta go
-jako błędy składni (podrozdział~\ref{sec:portcullis-roslyn}). Zachowanie opisane
-w rozdziałach~\ref{sec:cli} i \ref{sec:portcullis} dotyczy commitów z tabeli; bramka na
-kandydacie .NET 10 (krok~6) potrzebuje Portcullis co najmniej z commita \texttt{52d9f1e}.
+\textbf{Przypięte narzędzia benchu są commitami opisanymi w tym dokumencie.} Piny przesunięto
+w ADR 0008 (podrozdział~\ref{sec:bench-pins-adr}): \texttt{sk} z \texttt{967c49c} na
+\texttt{c3ae5c2}, Portcullis z \texttt{84e1925} na \texttt{d045f07}. Powód to Portcullis:
+od \texttt{52d9f1e} parser skanera przeszedł z Roslyn 4.11 na 5.9, a projekt .NET 10
+domyślnie kompiluje C\# 14, który starszy Roslyn czyta jako błędy składni
+(podrozdział~\ref{sec:portcullis-roslyn}); bramka na kandydacie .NET 10 (krok~6) potrzebuje
+Portcullis co najmniej z tego commita. Po stronie \repopath{sk} doszły między innymi:
+sprawdzanie wartości \repopath{secondkey.yaml} i wzorców korelacji przy wczytaniu pliku
+(kod 3), odrzucanie przez \repopath{sk validate} operatora jednej wartości na całej liście
+(\texttt{05ba3b3}) i drukowanie PDF przed zapisem pakietu (\texttt{d39e264}). Oba pliki
+\repopath{secondkey.yaml} i oba kontrakty benchu przechodzą bez zmian. Wyniki P3--P5 i P9
+w \path{results/} zapisano na starych pinach i tak je opisują.
 
 \zrodla{\path{letsgolegacy.secondkey-nopcommerce-bench/scripts/README.md},
 \path{letsgolegacy.secondkey-nopcommerce-bench/pins.json},

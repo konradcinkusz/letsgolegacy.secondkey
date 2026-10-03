@@ -518,7 +518,7 @@ kształtu API psuje testy tego modułu i~job aktualizacji, a~nie dociera do odwi
 po cichu błędna data. Plik zawiera datę pobrania (\repopath{generatedAt}); raport ją pokazuje
 („Dane o~końcu wsparcia: endoflife.date, stan na …”).
 
-Produkty w~migawce z~2026-09-26 (wszystkie pobrane przez API v1, lista
+Produkty w~migawce z~2026-10-03 (wszystkie pobrane przez API v1, lista
 \repopath{unavailable} pusta):
 
 \begin{tabularx}{\linewidth}{@{}>{\raggedright\arraybackslash}p{3.2cm} >{\raggedright\arraybackslash}X >{\raggedright\arraybackslash}p{2.2cm} >{\raggedright\arraybackslash}p{2.2cm}@{}}
@@ -545,7 +545,7 @@ Początek pliku:
 \begin{lstlisting}
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-26",
+  "generatedAt": "2026-10-03",
   "source": {
     "name": "endoflife.date",
     "url": "https://endoflife.date",
@@ -646,12 +646,20 @@ node scripts/update-eol.mjs --out <file> --date YYYY-MM-DD
         zmieniło (porównanie treści pomija \repopath{generatedAt}).
   \item Skrypt drukuje tabelę wybranych dat (koniec wsparcia i~ESU) do przejrzenia w~pull
         requeście -- drukowaną, nigdy asertowaną, bo źródłem rozstrzygającym jest
-        endoflife.date -- także do podsumowania kroku w~GitHub Actions. Lista
-        \repopath{KEY\_DATES} wybiera cykle po nazwie: .NET Framework 4.5.2, 4.6, 4.6.1, 4.6.2
-        i~4.8; .NET 6, 8, 9 i~10; Windows Server 2012, 2012 R2, 2016 i~2019; PHP 7.4, 8.1
-        i~8.2. Lista wymienia też SQL Server 2014, 2016, 2017 i~2019, ale te nazwy nie pasują
-        do nazw cykli SQL Server w~danych v1 (\repopath{12.0-sp3}, \repopath{13.0-sp3},
-        \repopath{14.0}, \repopath{15.0} i~podobne), więc tabela nie ma wierszy SQL Server.
+        endoflife.date -- także do podsumowania kroku w~GitHub Actions. Tabelę buduje
+        \repopath{keyDatesTable} z~\path{scripts/lib/key-dates.mjs}, a~lista
+        \repopath{KEY\_DATES} wybiera cykle po nazwie dokładnie tak, jak pisze ją plik danych:
+        .NET Framework 4.5.2, 4.6, 4.6.1, 4.6.2 i~4.8; .NET 6, 8, 9 i~10; Windows Server
+        \repopath{2012}, \repopath{2012-r2} (małymi literami), 2016 i~2019; PHP 7.4, 8.1 i~8.2;
+        SQL Server po nazwach cykli v1: \repopath{12.0-sp3} (2014 SP3), \repopath{13.0-sp3}
+        (2016 SP3), \repopath{14.0} (2017) i~\repopath{15.0} (2019). To jeden cykl na wydanie,
+        ostatni service pack, bo starszy stracił wsparcie wcześniej. Wariant
+        \repopath{13.0-sp3-acp} (Azure Connect Pack) ma te same daty co \repopath{13.0-sp3},
+        więc go nie ma w~liście, tak jak formularz nie oferuje pakietów dodatkowych. Nazwa,
+        która nie pasuje do żadnego cyklu, po cichu gubi swój wiersz, dlatego pilnują tego
+        testy: \path{test/key-dates.test.mjs} sprawdza tabelę na fixture w~kształcie
+        \path{data/eol.json}, a~dwa testy w~\path{test/eol-data.test.mjs} wymagają wiersza dla
+        każdego z~pięciu produktów i~cyklu w~zatwierdzonych danych dla każdej nazwy z~listy.
 \end{itemize}
 
 Odświeżanie danych automatyzuje workflow \path{update-eol.yml}
@@ -1025,7 +1033,13 @@ tabeli nie są tu powtarzane.
         GAC, pakiety bez wersji albo z~wersją, której nie da się wyznaczyć.
   \item \textbf{Zachowaj raport}: „Drukuj lub zapisz jako PDF” otwiera okno drukowania
         przeglądarki; wydruk pomija nagłówek strony, formularz, sekcję o~prywatności
-        i~przyciski.
+        i~przyciski, a~po identyfikatorze każdej podatności dopisuje jej adres
+        (\texttt{a.advisory-id::after} w~bloku \texttt{@media print}; pilnuje tego test e2e
+        \texttt{print: an advisory link is followed by its URL}). Wydruk ma jedno ograniczenie:
+        pierwsze trzy podatności komponentu są widoczne, a~dalsze leżą w~zwiniętym elemencie
+        \texttt{<details>}, którego zawartości Chromium nie drukuje (sprawdzone dla zwykłego
+        zamkniętego \texttt{<details>}, nie dla całego raportu), więc na wydruku jest tylko
+        linia „pokaż więcej”. Przed drukiem rozwiń je w~raporcie.
 \end{enumerate}
 
 \begin{xltabular}{\linewidth}{@{}>{\raggedright\arraybackslash}p{5.4cm} >{\raggedright\arraybackslash}X@{}}
@@ -1209,7 +1223,7 @@ Warstwa & Co & Kiedy \\
 \midrule
 \endhead
 Jednostkowe (\path{test/}) & Parsery, ograniczenia wersji, dopasowanie EOL, klient OSV, raport, polskie teksty; zatwierdzony \path{data/eol.json} & Każdy PR i~push; w~miesięcznym odświeżeniu danych przed otwarciem PR \\
-E2E z~makietą OSV (\path{e2e/scan.spec.mjs}) & Przykład daje raport z~wierszem EOL i~podatnością; prywatność; uszkodzone wejście; OSV niedostępne i~ponowienie; wybór serwerów; plik z~dysku; klawiatura; szerokość 390~px; axe w~trybie jasnym i~ciemnym & Każdy PR i~push; przed każdym wdrożeniem \\
+E2E z~makietą OSV (\path{e2e/scan.spec.mjs}) & Przykład daje raport z~wierszem EOL i~podatnością; prywatność; uszkodzone wejście; OSV niedostępne i~ponowienie; wybór serwerów; plik z~dysku; klawiatura; szerokość 390~px; druk (adres podatności); axe w~trybie jasnym i~ciemnym & Każdy PR i~push; przed każdym wdrożeniem \\
 Dymne, prawdziwe OSV (\path{scripts/smoke-osv.mjs}, \path{e2e/live.spec.mjs}) & Preflight CORS i~POST dla opublikowanego originu; podatność przykładu; strona w~prawdziwej przeglądarce & Każdy PR i~push, co tydzień; błąd sieci jest ostrzeżeniem, zła odpowiedź -- porażką \\
 Po wdrożeniu (\path{deploy.yml} → \repopath{verify}) & Opublikowana strona, prawdziwe OSV, zrzut ekranu jako artefakt & Po każdym wdrożeniu \\
 \bottomrule
@@ -1230,7 +1244,9 @@ management, \path{Directory.Packages.props}), \path{other-parsers.test.mjs}
 \repopath{package.json}), \path{frameworks.test.mjs}, \path{versions.test.mjs},
 \path{eol.test.mjs} (reguły dopasowania cyklu i~statusu, ESU, arytmetyka kalendarza),
 \path{eol-source.test.mjs} (normalizacja v1 i~v0, walidacja zbioru, porównanie treści),
-\path{eol-data.test.mjs}, \path{osv.test.mjs} (dokładne ciało zapytania, deduplikacja, brak
+\path{eol-data.test.mjs} (zatwierdzone dane, także to, że lista dat kluczowych ma wiersz dla
+każdego produktu i~cykl dla każdej nazwy), \path{key-dates.test.mjs} (tabela dat kluczowych
+na fixture, SQL Server po nazwach cykli, produkt, którego dane nie mają), \path{osv.test.mjs} (dokładne ciało zapytania, deduplikacja, brak
 poświadczeń i~referrera, podział na paczki, stronicowanie, klasyfikacja błędów, anulowanie,
 brakujące rekordy, streszczenia, scalanie), \path{report.test.mjs}, \path{scan.test.mjs},
 \path{servers.test.mjs}, \path{messages.test.mjs} (każdy kod błędu, przyczyny wersji
@@ -1239,7 +1255,8 @@ nagrane rekordy OSV w~\path{test/fixtures/osv/} (\repopath{GHSA-5crp-9r3c-p9vr},
 \repopath{GHSA-gxr4-xjj5-5px2}, \repopath{GHSA-rmxg-73gg-4p98}) i~odpowiedzi endoflife.date
 w~\path{test/fixtures/endoflife/}.
 
-Testy logiki nie czytają \path{data/eol.json}. Używają ręcznie napisanego
+Testy logiki nie czytają \path{data/eol.json} (poza dwoma testami dat kluczowych, które
+sprawdzają właśnie zatwierdzone dane). Używają ręcznie napisanego
 \path{test/fixtures/eol.fixture.json} w~tym samym schemacie, którego daty są według jego
 komentarza ilustracyjnymi danymi wejściowymi, a~nie źródłem prawdy, i~stałego dnia
 2026-09-26, więc odświeżenie danych ich nie zmienia; zatwierdzone dane sprawdza tylko
@@ -1319,6 +1336,8 @@ Scenariusze \path{e2e/scan.spec.mjs}:
   \item sama klawiatura: Tab dochodzi do „Wypróbuj na przykładzie”, Enter uruchamia skan,
         fokus przechodzi do raportu;
   \item ekran o~szerokości 390~px: bez przewijania w~poziomie, wiersze stają się kartami;
+  \item druk: po identyfikatorze podatności jest jej adres, którego na ekranie nie ma
+        (media \texttt{print} włączone przez \texttt{page.emulateMedia});
   \item brak poważnych i~krytycznych naruszeń dostępności (axe) przed raportem i~po nim,
         w~trybie jasnym i~ciemnym.
 \end{itemize}

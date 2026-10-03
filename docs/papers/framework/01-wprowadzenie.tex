@@ -116,11 +116,11 @@ Pozostałych repozytoriów ten check nie czyta.
 \toprule
 Repozytorium & Commit & Data & Rola \\
 \midrule
-\path{letsgolegacy.secondkey} & \texttt{7939e80} & 2026-09-26 & rdzeń Second Key \\
+\path{letsgolegacy.secondkey} & \texttt{c3ae5c2} & 2026-10-03 & rdzeń Second Key \\
 \path{letsgolegacy.portcullis} & \texttt{d045f07} & 2026-09-26 & bramka C5 \\
 \path{letsgolegacy.secondkey-standards} & \texttt{a8c60ff} & 2026-09-26 & standardy C4 \\
-\path{letsgolegacy.secondkey-nopcommerce-bench} & \texttt{5bf3cfc} & 2026-10-02 & publiczny okaz \\
-\path{letsgolegacy.legacy-risk-scan} & \texttt{d87b9e6} & 2026-10-02 & raport EOL i CVE \\
+\path{letsgolegacy.secondkey-nopcommerce-bench} & \texttt{98d88d8} & 2026-10-03 & publiczny okaz \\
+\path{letsgolegacy.legacy-risk-scan} & \texttt{4f4e346} & 2026-10-03 & raport EOL i CVE \\
 \path{letsgolegacy.secondkey-capture} & \texttt{e56068e} & 2026-09-25 & C1, faza 02 \\
 \path{letsgolegacy.secondkey-sandbox} & \texttt{75042c6} & 2026-09-25 & C12, faza 02 \\
 \path{letsgolegacy.secondkey-portal} & \texttt{e73546f} & 2026-09-25 & C11, faza 03 \\
@@ -137,9 +137,10 @@ repozytoriach. Dokument nie opisuje też pracy w toku na gałęziach, które nie
 \repopath{main} na wymienionych commitach.
 
 Bench buduje narzędzia łańcucha z własnych przypiętych commitów (\path{pins.json}, sekcja
-\repopath{chain}; podrozdział~\ref{sec:bench-pins}): \repopath{sk} z \texttt{967c49c},
-Portcullis z \texttt{84e1925}. Oba są starsze niż commity z tabeli; co z tego wynika,
-mówi sekcja~\ref{sec:procedura-wymagania}.
+\repopath{chain}; podrozdział~\ref{sec:bench-pins}): \repopath{sk} z \texttt{c3ae5c2}
+i Portcullis z \texttt{d045f07}, czyli z tych samych commitów, które opisuje tabela. Piny
+przesunięto po raz pierwszy w ADR 0008 (podrozdział~\ref{sec:bench-pins-adr}); wyniki P3--P5
+i P9 zapisano na starych pinach, \texttt{967c49c} i \texttt{84e1925} (sekcja~\ref{sec:procedura-wymagania}).
 
 Wersję samego dokumentu --- commit, z którego zbudowano PDF --- podaje nagłówek każdej
 strony. PDF buduje workflow \path{.github/workflows/build-docs-pdf.yml} repozytorium
