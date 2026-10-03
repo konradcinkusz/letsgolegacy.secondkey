@@ -15,6 +15,6 @@ flowchart LR
   SKILL --> AG["agent migracyjny<br/>.github/skills"]
   NUP --> BUILD["build kandydata<br/>severity diagnostyk"]
   CFG --> BUILD
-  REL["tagi v*<br/>repozytorium<br/>standardów"] -. "najnowsze<br/>wydanie" .-> DRIFT["actions/drift-check"]
+  REL["tagi v*<br/>repozytorium<br/>standardów<br/>(jeszcze brak)"] -. "najnowsze<br/>wydanie" .-> DRIFT["actions/drift-check"]
   DRIFT -. "pin:<br/>metadata.version" .-> AG
   DRIFT -. "pin: referencja<br/>pakietu" .-> BUILD
