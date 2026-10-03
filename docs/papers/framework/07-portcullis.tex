@@ -2597,7 +2597,9 @@ Azure DevOps); do pierwszego wydania działa tylko ścieżka ze źródeł (krok~
 \subsubsection{Krok 5. Odczyt wyniku}
 
 \repopath{summary} to to, co \textbf{znaleziono};
-\repopath{gate} to to, co \textbf{blokuje}; różnica to istniejący dług. Pełny schemat --
+\repopath{gate} to to, co \textbf{blokuje}; różnica między błędami a~\repopath{blockingErrorCount}
+to istniejący dług (błędy poza zmienionymi liniami albo w~baseline), a~ostrzeżenia same nie
+blokują. Pełny schemat --
 sekcja~\ref{sec:portcullis-spec}. Kody wyjścia: 0 -- nie blokuje, 1 -- blokuje, 2 -- błędne
 użycie; awarię Portcullis oznacza kod większy niż 1, a~1 to werdykt.
 
@@ -2613,6 +2615,8 @@ użycie; awarię Portcullis oznacza kod większy niż 1, a~1 to werdykt.
   "gate": { "blocked": true, "scope": "diff", "blockingErrorCount": 5 }
 }
 \end{lstlisting}
+Przykład jest skrócony i~poglądowy: liczby błędów, ostrzeżeń i~bramki pochodzą z~przebiegu M5A
+na repozytorium referencyjnym (sekcja~\ref{sec:portcullis-diff-gate}).
 
 \subsubsection{Krok 6. Rozwiązywanie problemów}
 
