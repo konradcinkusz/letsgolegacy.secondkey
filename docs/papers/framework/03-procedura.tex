@@ -1340,8 +1340,8 @@ sk evidence --verdict verdict.json --contract contract.yaml --run run.skrun \
         zostaje w nim coś innego, polecenie odmawia (kod 64) --- obce pliki zostają, ale pliki
         poprzedniego pakietu są już usunięte. Katalog niepusty bez manifestu pakietu jest
         odrzucany bez usuwania czegokolwiek. Przy \repopath{--pdf required} porażka PDF
-        (kod 4) zostawia katalog bez \repopath{manifest.json}, więc kolejne
-        \repopath{sk evidence} do niego kończy się kodem 64, dopóki się go nie opróżni
+        (kod 4) niczego w katalogu nie zmienia, bo PDF powstaje przed zapisem pakietu, więc po
+        naprawie przeglądarki to samo polecenie można uruchomić jeszcze raz
         (sekcja~\ref{sec:cli-evidence}). Bench przed złożeniem usuwa katalog pakietu i po
         złożeniu weryfikuje skrót każdego pliku z manifestu.
   \item W benchu \path{scripts/9-verdict.ps1} wywołuje \repopath{sk evidence} bez

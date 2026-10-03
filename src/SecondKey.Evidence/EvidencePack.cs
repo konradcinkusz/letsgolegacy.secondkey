@@ -91,12 +91,12 @@ public static class EvidencePack
         var gate = logs.Count == 0 ? null : GateSummary.From(logs);
 
         var directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(options.OutputDirectory));
-        PrepareDirectory(directory);
 
-        var copied = new List<string> { Copy(options.VerdictPath, directory, "verdict.json"), Copy(options.ContractPath, directory, "contract.yaml") };
+        // The files the pack copies in, under the names it gives them.
+        var inputs = new List<(string Name, string Source)> { ("verdict.json", options.VerdictPath), ("contract.yaml", options.ContractPath) };
         if (options.RunPath is { } run)
         {
-            copied.Add(Copy(run, directory, "run.skrun"));
+            inputs.Add(("run.skrun", run));
         }
 
         var sarifNames = new List<string>();
@@ -104,12 +104,14 @@ public static class EvidencePack
         {
             var name = Unique("sarif/" + Path.GetFileName(path), sarifNames);
             sarifNames.Add(name);
-            copied.Add(Copy(path, directory, name));
+            inputs.Add((name, path));
         }
 
-        var digests = copied
-            .Where(name => name == "verdict.json" || name.StartsWith("sarif/", StringComparison.Ordinal))
-            .Select(name => new DigestedFile(name, Sha256Digest.OfFile(Path.Combine(directory, name))))
+        // A copy has its source's digest, so the report can be written, and printed, before the
+        // output directory is touched.
+        var digests = inputs
+            .Where(input => input.Name == "verdict.json" || input.Name.StartsWith("sarif/", StringComparison.Ordinal))
+            .Select(input => new DigestedFile(input.Name, Sha256Digest.OfFile(input.Source)))
             .ToList();
         var html = HtmlReport.Render(new ReportInput
         {
@@ -120,9 +122,45 @@ public static class EvidencePack
             GeneratedAt = generatedAt,
             Tool = ToolInfo.Current,
         });
-        await WriteTextAsync(Path.Combine(directory, ReportName), html, cancellationToken).ConfigureAwait(false);
 
-        var pdf = await PdfRenderer.RenderAsync(Path.Combine(directory, ReportName), Path.Combine(directory, PdfName), options.Pdf, cancellationToken, options.Browser).ConfigureAwait(false);
+        // Everything that can refuse the run happens before the directory is changed: a
+        // directory that cannot take a pack, and a PDF the run requires and the machine
+        // cannot print. The page is printed from a staging directory and moved in afterwards,
+        // so a run that fails there leaves the output directory exactly as it found it —
+        // including a previous pack, which a half-written replacement would have destroyed.
+        CheckDirectory(directory);
+        PdfOutcome pdf;
+        var staging = Directory.CreateTempSubdirectory("sk-evidence-");
+        try
+        {
+            var stagedReport = Path.Combine(staging.FullName, ReportName);
+            var stagedPdf = Path.Combine(staging.FullName, PdfName);
+            await WriteTextAsync(stagedReport, html, cancellationToken).ConfigureAwait(false);
+            pdf = await PdfRenderer.RenderAsync(stagedReport, stagedPdf, options.Pdf, cancellationToken, options.Browser).ConfigureAwait(false);
+
+            PrepareDirectory(directory);
+            foreach (var (name, source) in inputs)
+            {
+                Copy(source, directory, name);
+            }
+
+            File.Copy(stagedReport, Path.Combine(directory, ReportName));
+            if (pdf.Written)
+            {
+                File.Copy(stagedPdf, Path.Combine(directory, PdfName));
+            }
+        }
+        finally
+        {
+            try
+            {
+                staging.Delete(recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A browser helper still holding the directory; the temp directory is cleaned up by the OS.
+            }
+        }
 
         var subjects = Files(directory);
         await WriteTextAsync(Path.Combine(directory, StatementName), Statement(subjects, verdict, gate, sarifNames, generatedAt).ToJsonString(Indented) + "\n", cancellationToken).ConfigureAwait(false);
@@ -133,34 +171,32 @@ public static class EvidencePack
     }
 
     /// <summary>
+    /// Refuses, touching nothing, a directory that cannot take a pack: one that holds files but
+    /// no pack manifest, or a manifest that lists a path outside the directory. What
+    /// <see cref="PrepareDirectory"/> can only find out by removing files is not decided here.
+    /// </summary>
+    internal static void CheckDirectory(string directory) => _ = PreviousPack(directory);
+
+    /// <summary>
     /// Makes <paramref name="directory"/> ready for a pack: created when missing; when it holds
     /// a previous pack, exactly the files that pack's manifest lists are removed; anything
     /// else in it is refused rather than deleted or mixed into the new pack.
     /// </summary>
     internal static void PrepareDirectory(string directory)
     {
+        var previous = PreviousPack(directory);
         Directory.CreateDirectory(directory);
-        if (!Directory.EnumerateFileSystemEntries(directory).Any())
+        if (previous is null)
         {
             return;
         }
 
-        var manifest = Path.Combine(directory, ManifestName);
-        var listed = ReadManifest(manifest)
-            ?? throw new EvidenceOutputException($"{directory} is not empty and holds no evidence pack; choose an empty or new directory");
-        // Every listed path is checked before any is deleted.
-        var paths = listed.Select(relative => (Relative: relative, Full: Path.GetFullPath(Path.Combine(directory, relative)))).ToList();
-        if (paths.FirstOrDefault(p => !p.Full.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal)) is { Relative: not null } outside)
-        {
-            throw new EvidenceOutputException($"{manifest} lists '{outside.Relative}', which is outside the pack");
-        }
-
-        foreach (var (_, full) in paths)
+        foreach (var full in previous)
         {
             File.Delete(full);
         }
 
-        File.Delete(manifest);
+        File.Delete(Path.Combine(directory, ManifestName));
         foreach (var sub in Directory.EnumerateDirectories(directory).Where(d => !Directory.EnumerateFileSystemEntries(d).Any()).ToList())
         {
             Directory.Delete(sub);
@@ -170,6 +206,29 @@ public static class EvidencePack
         {
             throw new EvidenceOutputException($"{directory} holds files the previous pack did not write; choose an empty or new directory");
         }
+    }
+
+    /// <summary>
+    /// The full paths of the files a previous pack in <paramref name="directory"/> lists, or null
+    /// when the directory is missing or empty. Every listed path is checked before any is used.
+    /// </summary>
+    private static List<string>? PreviousPack(string directory)
+    {
+        if (!Directory.Exists(directory) || !Directory.EnumerateFileSystemEntries(directory).Any())
+        {
+            return null;
+        }
+
+        var manifest = Path.Combine(directory, ManifestName);
+        var listed = ReadManifest(manifest)
+            ?? throw new EvidenceOutputException($"{directory} is not empty and holds no evidence pack; choose an empty or new directory");
+        var paths = listed.Select(relative => (Relative: relative, Full: Path.GetFullPath(Path.Combine(directory, relative)))).ToList();
+        if (paths.FirstOrDefault(p => !p.Full.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.Ordinal)) is { Relative: not null } outside)
+        {
+            throw new EvidenceOutputException($"{manifest} lists '{outside.Relative}', which is outside the pack");
+        }
+
+        return paths.Select(p => p.Full).ToList();
     }
 
     private static List<string>? ReadManifest(string path)

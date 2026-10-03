@@ -1,3 +1,4 @@
+using System.Runtime.Versioning;
 using System.Text.Json.Nodes;
 using SecondKey.Artifacts.Hashing;
 using SecondKey.Artifacts.Validation;
@@ -270,6 +271,106 @@ public class EvidencePackTests
         var again = await WriteAsync(directory, o => o with { OutputDirectory = directory.File("pack") + Path.DirectorySeparatorChar });
 
         Assert.Equal(directory.File("pack"), again.Directory);
+    }
+
+    [Fact]
+    public async Task A_required_pdf_that_cannot_be_printed_fails_before_the_output_directory_exists()
+    {
+        using var directory = new TempDirectory();
+
+        await Assert.ThrowsAsync<PdfRenderingException>(() => WriteAsync(directory, o => o with { Pdf = PdfMode.Required, Browser = directory.File("no-such-browser") }));
+
+        Assert.False(Directory.Exists(directory.File("pack")));
+    }
+
+    [Fact]
+    public async Task A_required_pdf_that_cannot_be_printed_leaves_a_previous_pack_as_it_was_and_the_staging_directory_removed()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var directory = new TempDirectory();
+        var before = await WriteAsync(directory);
+        var snapshot = Snapshot(before.Directory);
+        var browser = FakeBrowser(directory, "exit 3");
+
+        var failure = await Assert.ThrowsAsync<PdfRenderingException>(() => WriteAsync(directory, o => o with { Pdf = PdfMode.Required, Browser = browser, RunPath = null }));
+
+        Assert.Contains("wrote no PDF", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(snapshot, Snapshot(before.Directory));
+        Assert.False(Directory.Exists(File.ReadAllText(directory.File("staging.txt")).Trim()), "the staging directory must be removed");
+        // The directory still takes a pack: a half-written one would have been refused here.
+        var again = await WriteAsync(directory);
+        Assert.Equal(before.Files.Select(f => f.Path), again.Files.Select(f => f.Path));
+    }
+
+    [Fact]
+    public async Task An_automatic_pdf_that_cannot_be_printed_is_reported_and_the_pack_goes_on_without_it()
+    {
+        using var directory = new TempDirectory();
+
+        var pack = await WriteAsync(directory, o => o with { Pdf = PdfMode.Auto, Browser = directory.File("no-such-browser") });
+
+        Assert.False(pack.Pdf.Written);
+        Assert.NotNull(pack.Pdf.Reason);
+        Assert.DoesNotContain(pack.Files, f => f.Path == EvidencePack.PdfName);
+        Assert.False(File.Exists(Path.Combine(pack.Directory, EvidencePack.PdfName)));
+    }
+
+    [Fact]
+    public async Task The_page_that_is_printed_is_the_page_in_the_pack_and_the_pdf_is_listed()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var directory = new TempDirectory();
+        var browser = FakeBrowser(directory, "printf '%s' '%PDF-1.4 fake' > \"$pdf\"");
+
+        var pack = await WriteAsync(directory, o => o with { Pdf = PdfMode.Required, Browser = browser });
+
+        Assert.True(pack.Pdf.Written, pack.Pdf.Reason);
+        Assert.Equal("%PDF-1.4 fake", File.ReadAllText(Path.Combine(pack.Directory, EvidencePack.PdfName)));
+        Assert.Equal(File.ReadAllBytes(directory.File("printed.html")), File.ReadAllBytes(Path.Combine(pack.Directory, EvidencePack.ReportName)));
+        Assert.Contains(pack.Files, f => f.Path == EvidencePack.PdfName);
+        var statement = Json(Path.Combine(pack.Directory, EvidencePack.StatementName));
+        Assert.Contains(statement["subject"]!.AsArray(), s => s!["name"]!.GetValue<string>() == EvidencePack.PdfName);
+        Assert.False(Directory.Exists(File.ReadAllText(directory.File("staging.txt")).Trim()), "the staging directory must be removed");
+    }
+
+    /// <summary>Every file of the pack with its digest, so "left as it was" is a comparison, not a count.</summary>
+    private static string[] Snapshot(string packDirectory) =>
+        Directory.EnumerateFiles(packDirectory, "*", SearchOption.AllDirectories)
+            .Select(file => Path.GetRelativePath(packDirectory, file) + " " + Sha256Digest.OfFile(file))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    /// <summary>
+    /// A stand-in for the browser: records the page it was asked to print (<c>printed.html</c>) and
+    /// where that page lives (<c>staging.txt</c>), then runs <paramref name="body"/> with the
+    /// requested PDF path in <c>$pdf</c>.
+    /// </summary>
+    [UnsupportedOSPlatform("windows")]
+    private static string FakeBrowser(TempDirectory directory, string body)
+    {
+        var path = directory.File("browser");
+        File.WriteAllText(path, $$"""
+            #!/bin/sh
+            pdf=
+            for a in "$@"; do
+              case "$a" in
+                --print-to-pdf=*) pdf="${a#--print-to-pdf=}" ;;
+                file://*) page="${a#file://}"; cp "$page" '{{directory.File("printed.html")}}'; dirname "$page" > '{{directory.File("staging.txt")}}' ;;
+              esac
+            done
+            {{body}}
+            exit 0
+            """.Replace("\r\n", "\n", StringComparison.Ordinal));
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        return path;
     }
 
     [PdfFact]
