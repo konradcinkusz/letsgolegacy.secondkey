@@ -132,7 +132,7 @@ izolacja sieciowa; żaden test architektury ani analizator zakazanych API ich ni
         językowego. Model może szkicować klauzule kontraktu albo pomagać w~triage różnic;
         nigdy nie decyduje. \emph{Dlaczego:} osoba zatwierdzająca potrzebuje decyzji
         deterministycznej (ADR 0003); ten sam kontrakt i~ten sam przebieg dają zawsze ten
-        sam werdykt, poza polem \repopath{createdAt}, więc werdykt można przeliczyć z~plików
+        sam werdykt, poza polami \repopath{createdAt}, \repopath{tool} (inny build) i~\repopath{inputs.*.path} (nazwy plików), więc werdykt można przeliczyć z~plików
         w~pakiecie (o~ile złożono go z~\repopath{-{}-run}); także tekst klauzuli w~języku naturalnym jest deterministyczny, żeby
         mógł stać w~dowodzie podpisywanym od fazy 03 (dziś pakiet jest niepodpisany). \emph{Jak:} w~\repopath{SecondKey.Contract} i~\repopath{SecondKey.Compare} nic nie może wołać modelu językowego --- opisy obu
         projektów mówią „Deterministic; no model in it”; komparator jest czysty, a~czas i~wartości losowe w~odpowiedziach maskuje normalizacja z~kontraktu; klauzule
@@ -165,8 +165,9 @@ izolacja sieciowa; żaden test architektury ani analizator zakazanych API ich ni
         in-toto Statement. Faza 01 niesie skróty i~niepodpisany statement po to, żeby podpis
         w~fazie 03 niczego w~formacie nie zmienił. Ticket S14 powołuje się na tę zasadę.
   \item \textbf{Brak własnej usługi tożsamości}; używany jest IdP klienta. \emph{Jak:}
-        repozytorium authservice służy wyłącznie próbnej instancji portalu, którą
-        hostują sami autorzy Second Key (C11, faza 03); produkcyjnie portal używa IdP klienta przez OIDC.
+        repozytorium authservice ma służyć wyłącznie próbnej instancji portalu, którą
+        mieliby hostować sami autorzy Second Key (C11, faza 03); produkcyjnie portal ma używać IdP klienta przez OIDC.
+        To plan: repozytorium portalu jest w~tej migawce szkieletem bez kodu.
   \item \textbf{Każdy krok działa z~CLI w~pipeline}; portal jest oknem, nie interfejsem.
         \emph{Jak:} każdy krok łańcucha, który rdzeń implementuje, to polecenie \repopath{sk}
         (\repopath{sk mine} i~\repopath{sk mutate} to stuby z~kodem 70) ze stabilnymi kodami
@@ -364,7 +365,7 @@ i~\texttt{BodyCodec}; w~\path{Runs/} zdarzenia \texttt{RunHeader}, \texttt{State
 \texttt{ExchangeResult}, \texttt{RunEnd}, \texttt{RunFile} i~\texttt{RunWriter}; w~\path{Contracts/} \texttt{ContractDocument}, \texttt{ContractFile} (YAML → JSON → schemat →
 reguły) i~\texttt{ContractRules}; w~\path{Verdicts/} \texttt{VerdictDocument} i~\texttt{VerdictFile}, który waliduje dokument przed zapisem; ponadto \texttt{SelectorPath}
 (jeden język ścieżek dla klauzul, ekstraktów i~normalizacji), \texttt{YamlJson},
-\texttt{ArtifactJson} (jedyny zestaw opcji serializacji), \texttt{Sha256Digest} i~\texttt{ToolInfo} (nazwa \texttt{secondkey}, wersja i~commit z~metadanych buildu, zapisywane
+\texttt{ArtifactJson} (wspólne opcje serializacji capture, przebiegu i~werdyktu; manifest i~statement pakietu mają własne), \texttt{Sha256Digest} i~\texttt{ToolInfo} (nazwa \texttt{secondkey}, wersja i~commit z~metadanych buildu, zapisywane
 w~każdym artefakcie).\par
 \smallskip
 \textbf{SecondKey.Capture --- C1} („a~recording proxy in front of the legacy system that
@@ -1134,7 +1135,7 @@ Nie przeniesiono: runtime agenta MCP, modelu trace/span, warstwy Layer 2 (sędzi
 
 \textbf{listing-search-bench} → kształt publicznego okazu. Commit \repopath{5751287}
 (publiczne, MIT): 28 scenariuszy, 128 asercji, z~czego 29 to wykluczenia i~nieobecności
-(około 22\%). To drugi okaz tej samej metody, co czyni metodę przenośną, a~nie szytą na
+(22,7\%). To drugi okaz tej samej metody, co czyni metodę przenośną, a~nie szytą na
 miarę. Nic z~niego nie działa w~Second Key; jest wzorem dla
 \path{letsgolegacy.secondkey-nopcommerce-bench}: publicznego repozytorium, którego korpus
 ewaluacyjny, liczby i~znaleziska są dowodem produktu, publikowanym razem z~ograniczeniami.
@@ -1184,7 +1185,8 @@ Identyfikatory reguł \texttt{PORTCULLIS\_<...>}; reguły migracyjne
 \path{PORTCULLIS_MIG_SYSTEM_WEB}, \path{PORTCULLIS_MIG_HTTPCONTEXT_CURRENT},
 \path{PORTCULLIS_MIG_SYNC_OVER_ASYNC}, \path{PORTCULLIS_MIG_CONFIGURATION_MANAGER}
 (\path{src/Portcullis.Rules/RuleRegistry.cs}) & pokazywane po identyfikatorze w~pakiecie;
-mapowane na standardy w~C4 \\
+mapowane na standardy w~C4. W~commicie \repopath{4a375b9} rejestr ma jeszcze tylko sześć reguł zasad i~regułę
+pokrycia konwencji; reguły migracyjne doszły później i~są w~rejestrze w~commicie \repopath{d045f07} Portcullis \\
 Testy mutacyjne jako nawyk, nie wydarzenie (\path{docs/MUTATIONS.md}) & CI rdzenia ma próg
 Stryker.NET od ticketu S1, pierwszego commitu z~kodem \\
 \bottomrule
@@ -1207,8 +1209,8 @@ Celowo nieużywane przez rdzeń: \texttt{context-pin} --- jego idea, wersja stan
 przypięta per repozytorium i~wykrywanie dryfu w~CI, weszła do C4
 (\path{letsgolegacy.secondkey-standards}) jako pakiet NuGet, tag gita i~jeden krok CI, bez
 osobnej usługi (w~migawce pakiet NuGet powstaje tylko jako artefakt CI, a~pierwszy tag wydania
-jeszcze nie istnieje); \texttt{authservice} --- tylko dla próbnej instancji portalu, którą hostują
-sami autorzy Second Key (C11, faza 03), bo produkcja używa IdP klienta przez OIDC (zasada 6); Keploy
+jeszcze nie istnieje); \texttt{authservice} --- tylko dla planowanej próbnej instancji portalu, którą mieliby hostować
+sami autorzy Second Key (C11, faza 03), bo produkcja ma używać IdP klienta przez OIDC (zasada 6); Keploy
 (zewnętrzny) --- wczesny plan zbudowania na nim capture porzucono, bo eBPF działa tylko na
 Linuksie, a~legacy .NET Framework działa na Windows/IIS.
 

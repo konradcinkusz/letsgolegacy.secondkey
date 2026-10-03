@@ -1121,7 +1121,8 @@ drugi \texttt{run.header} & a~run has exactly one run.header, on its first line 
 \repopath{sk compare} czyta kontrakt i~przebieg i~zapisuje jeden werdykt: każdą odtworzoną
 wymianę w~dokładnie jednej z~czterech klas oraz wynik przebiegu. Werdykt liczy wyłącznie kod
 --- ten sam kontrakt i~ten sam przebieg zawsze dają ten sam werdykt, poza
-\repopath{createdAt} (zasada 1). Autorytetem jest \path{verdict.schema.json}, a~\path{schemas/samples/verdict.json} to dokładnie to, co \repopath{sk compare} tworzy z~próbek kontraktu i~przebiegu; pilnuje tego test.
+\repopath{createdAt} oraz polami zależnymi od buildu i~nazwy pliku (\repopath{tool},
+\repopath{inputs.*.path}; zasada 1). Autorytetem jest \path{verdict.schema.json}, a~\path{schemas/samples/verdict.json} to dokładnie to, co \repopath{sk compare} tworzy z~próbek kontraktu i~przebiegu; pilnuje tego test.
 
 \subsubsection{Co jest porównywane}
 
@@ -1584,7 +1585,7 @@ polecenie z~listingu wymaga \path{run.skrun}, a~ten trafia do pakietu tylko wted
 z~\repopath{-{}-run}.
 
 \paragraph{Czego jeszcze nie ma.} Podpisu: w~fazie 03 statement ma być podpisywany kluczem
-właściciela do koperty DSSE (\repopath{evidence.dsse}). Do tego czasu pakiet dowodzi, które
+klienta (cosign, KMS lub HSM) do koperty DSSE (\repopath{evidence.dsse}). Do tego czasu pakiet dowodzi, które
 pliki należą do siebie i~co mówią, a~niczego o~tym, kto go złożył. Tryby PDF, wyszukiwanie
 przeglądarki i~reguły bramki opisuje sekcja~\ref{sec:cli}.
 
@@ -1630,7 +1631,7 @@ w~próbce werdyktu to wypełniacze z~samych \repopath{1} i~\repopath{2}. Test ko
 te skróty, razem z~\repopath{createdAt} i~\repopath{tool}, z~próbki werdyktu, zanim porówna
 bajty.
 
-Syntetyczne próbki żyją w~\path{schemas/samples/}, a~fixtures testów w~\path{tests/**/fixtures/}; nagranie z~prawdziwego systemu nigdy nie trafia do gita.
+Syntetyczne próbki żyją w~\path{schemas/samples/}, a~fixtures testów w~\path{tests/**/fixtures/}; nagrania z~prawdziwego systemu nie wolno wersjonować (CONTRIBUTING; \path{.gitignore} pomija \repopath{*.skcap} i~\repopath{*.skrun} poza próbkami i~fixtures oraz katalog \path{.secondkey/}).
 Testy walidatorów sprawdzają, że każda z~czterech próbek w~\path{schemas/samples/} się
 waliduje, test komparatora --- że próbki kontraktu i~przebiegu dają dokładnie próbkę werdyktu,
 a~test CLI --- że \repopath{sk validate} przyjmuje wszystkie cztery.
