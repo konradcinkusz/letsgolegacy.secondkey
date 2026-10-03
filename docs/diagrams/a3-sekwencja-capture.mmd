@@ -4,8 +4,8 @@ sequenceDiagram
   participant L as System legacy
   participant F as traffic.skcap
   K->>P: request, np. GET /cart
-  P->>L: ten sam request<br/>(bez kompresji odpowiedzi)
+  P->>L: ta sama treść żądania<br/>(Host = cel, X-Forwarded-*,<br/>bez kompresji odpowiedzi)
   L-->>P: response
   P-->>K: ta sama odpowiedź
-  P->>F: wymiana: nagłówki zredagowane,<br/>sesja z session key
+  P->>F: wymiana: wybrane nagłówki zredagowane,<br/>treść jawna, sesja = skrót klucza
   Note over P,F: legacy nie odpowiada: klient dostaje 502/504,<br/>wymiana pominięta (skipped), nie trafia do pliku
