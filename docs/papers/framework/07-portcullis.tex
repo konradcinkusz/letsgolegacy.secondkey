@@ -1058,8 +1058,8 @@ blokowałaby każdy PR, także taki, który niczego w~pobliżu nie dotyka. M4 na
 M5 odtworzył ją deterministycznie w~dwóch commitach, M5A (\repopath{docs/DIFF-GATE.md})
 ją zamknął.
 
-\finding{Wszystko, co skan znajdzie, jest raportowane; blokować może tylko błąd na linii
-zmienionej przez PR, którego nie akceptuje baseline.}
+\finding{Wszystko, co skan znajdzie, jest raportowane; przy zakresie diff blokować może tylko
+błąd zgłoszony na linii zmienionej przez PR, którego nie akceptuje baseline.}
 
 \paragraph{Werdykt.} \repopath{ScanResult} dostał addytywne pole \repopath{gate}
 (\repopath{GateResult}): \repopath{blocked}, \repopath{scope}, \repopath{blockingErrorCount},
