@@ -31,6 +31,14 @@ Writing a pack into a directory that holds a previous pack replaces exactly the 
 pack's manifest lists; a directory holding anything else is refused, never emptied, and
 `sk evidence` exits 64: the command asked for a place it cannot write to.
 
+Everything that can refuse a run happens before the directory is changed: the inputs are
+validated, a directory that holds files but no pack is refused, and the report is printed to
+PDF in a staging directory of the system's temporary files and moved in afterwards. So a run
+that fails there — `--pdf required` without a browser that can print — leaves the output
+directory exactly as it found it: not created if it did not exist, and a previous pack still
+whole. (A previous pack with a stranger file beside it is still refused only after its own
+files are removed; see above.)
+
 ## Checking a pack
 
 ```sh
@@ -43,7 +51,8 @@ sk compare --contract contract.yaml --run run.skrun --out recomputed.json   # th
 ## The PDF
 
 `--pdf auto` (the default) prints the report when a Chromium-based browser is on the
-machine and says so when none is; `--pdf required` makes a missing PDF a failure (exit 4);
+machine and says so when none is; `--pdf required` makes a missing PDF a failure (exit 4, and
+nothing is written — the pack's directory is untouched);
 `--pdf off` skips it. The browser is found through `SK_CHROME_PATH`, then the PATH —
 Google Chrome and Edge before Chromium, whose builds vary more — then where Chrome, Edge
 and Playwright install it. A browser that has not printed within a minute is stopped, and

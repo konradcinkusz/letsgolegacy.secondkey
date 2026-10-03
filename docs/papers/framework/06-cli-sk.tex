@@ -641,16 +641,17 @@ zostaje, pliki pakietu są już usunięte, a~polecenie kończy się kodem 64 z~k
 \texttt{… holds files the previous pack did not write; choose an empty or new directory}.
 Manifest, który wskazuje ścieżkę poza katalogiem, jest odrzucany (\texttt{… lists '…',
 which is outside the pack}) i~nic nie zostaje usunięte. Plik \repopath{manifest.json}, który
-nie jest manifestem pakietu, traktuje się tak, jakby go nie było. Przy
-\repopath{-{}-pdf required} porażka PDF kończy polecenie kodem 4 po zapisaniu kopii wejść
-i~\repopath{index.html}, ale przed zapisaniem \path{statement.intoto.json}
-i~\repopath{manifest.json}. Taki katalog nie ma manifestu, więc kolejne
-\repopath{sk evidence} do niego kończy się kodem 64, dopóki się go nie opróżni albo nie
-wybierze innego katalogu.
+nie jest manifestem pakietu, traktuje się tak, jakby go nie było. Katalog, który ma pliki,
+a~nie ma pakietu, i~manifest wskazujący poza katalog są odrzucane jeszcze przed drukowaniem.
+Raport drukuje się do PDF w~katalogu tymczasowym systemu i~dopiero potem przenosi do pakietu,
+więc przy \repopath{-{}-pdf required} porażka PDF (kod 4) niczego w~katalogu wyjściowym nie
+zmienia: nie powstaje, jeśli go nie było, a~poprzedni pakiet zostaje cały. Kolejne
+\repopath{sk evidence} do tego samego katalogu działa po naprawie maszyny.
 
 \paragraph{PDF.} \repopath{-{}-pdf auto} (domyślnie) drukuje raport, gdy na maszynie jest
 przeglądarka oparta na Chromium, a~gdy jej nie ma, mówi o~tym i~zapisuje pakiet bez PDF;
-\repopath{-{}-pdf required} czyni brak PDF porażką (kod 4); \repopath{-{}-pdf off} pomija PDF.
+\repopath{-{}-pdf required} czyni brak PDF porażką (kod 4, bez zapisu do katalogu wyjściowego);
+\repopath{-{}-pdf off} pomija PDF.
 Wartość spoza tych trzech kończy się kodem 64 w~opcji i~kodem 3 w~\repopath{evidence.pdf}.
 Przeglądarka jest szukana kolejno:
 

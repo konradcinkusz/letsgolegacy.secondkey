@@ -182,6 +182,9 @@ sk evidence --verdict verdict.json --contract contract.yaml --run run.skrun --sa
 error that is neither suppressed nor known from the baseline — and 0 otherwise.
 `sk evidence` writes the pack and exits 0 whatever the verdict, so a pipeline can publish
 the pack that explains a failure; it refuses a contract or a run the verdict does not name.
+With `--pdf required`, a machine that cannot print the PDF fails the command (exit 4) before
+the output directory is touched, so a pipeline can fix the machine and run it again into the
+same directory.
 Both are described in [the evidence pack](formats/evidence.md).
 
 ## Exit codes
