@@ -328,7 +328,7 @@ w~sekcji~\ref{sec:portcullis-tutorial}, krok~5.
 
 \paragraph{Kody wyjścia CLI.} \repopath{0} -- bramka nie blokuje, \repopath{1} -- bramka
 blokuje, \repopath{2} -- błędne użycie. Awarię samego Portcullis oznacza każdy kod większy
-niż 1 (\repopath{1} to werdykt); poza kodem 2 jest to nieobsłużony wyjątek, który przerywa
+niż 1 (\repopath{1} to werdykt); poza kodem 2 jest to zwykle nieobsłużony wyjątek, który przerywa
 proces (na Linuksie kod 134, np. przy wiszącym dowiązaniu o~nazwie \repopath{*.cs}), więc
 akcja i~workflowy repozytorium traktują kod większy niż 1 jako awarię. Kod 2 zwracają też:
 ścieżka skanu, która nie jest
@@ -1982,7 +1982,8 @@ ustalić), \repopath{result-path} (ścieżka surowego JSON). Kroki akcji:
         jest w~checkoucie; jeśli tak, dodaje \repopath{--provenance-range base..sha}
         i~\repopath{--provenance-repo}, jeśli nie -- wypisuje \repopath{::warning::}
         z~zaleceniem \repopath{fetch-depth: 0} i~skanuje całe drzewo. Kod wyjścia większy
-        niż 1 to błąd użycia i~kończy krok; kod 1 jest werdyktem. Wyjścia liczy krótki
+        niż 1 kończy krok błędem z~komunikatem „usage error” (także gdy proces się wywrócił,
+        np. kod 134); kod 1 jest werdyktem. Wyjścia liczy krótki
         skrypt Python z~JSON (z~fallbackiem na \repopath{summary.errorCount}, gdy brak
         \repopath{gate}).
   \item Publikacja komentarza (\repopath{comment: true} i~zdarzenie PR) -- błąd publikacji
@@ -2649,7 +2650,7 @@ W~wyniku jest \path{PORTCULLIS_NO_CONVENTION_MATCHED} albo \path{PORTCULLIS_CONV
 \texttt{portcullis: note: N of the baseline's M entries matched no finding ...} & Wpisy baseline są nieaktualne (dług spłacony albo linia przepisana). Nie blokują; \texttt{--write-baseline} je usuwa. \\
 \texttt{portcullis: warning: could not publish the sticky comment (...)} & PR z~forka (token tylko do odczytu) albo token bez \texttt{pull-requests: write}. Werdykt bez zmian. \\
 \texttt{... — skipping comment publish.} & Brak \texttt{GITHUB\_TOKEN}, \texttt{GITHUB\_REPOSITORY} albo numeru PR (\texttt{--pr} lub zdarzenie \texttt{pull\_request} w~\texttt{GITHUB\_EVENT\_PATH}); poza CI to zwykły suchy przebieg. \\
-\texttt{::error title=Portcullis::\allowbreak portcullis exited 2 (usage error).} w~akcji & CLI zakończyło się kodem większym niż 1 -- błędem użycia, a~nie werdyktem; przyczyna jest w~komunikacie \texttt{portcullis:} na stderr w~logu kroku. \\
+\texttt{::error title=Portcullis::\allowbreak portcullis exited 2 (usage error).} w~akcji & CLI zakończyło się kodem większym niż 1 -- błędem użycia (albo awarią procesu), a~nie werdyktem; przyczyna jest w~komunikacie \texttt{portcullis:} albo w~śladzie wyjątku na stderr w~logu kroku. \\
 \bottomrule
 \end{xltabular}
 \endgroup
@@ -2839,9 +2840,10 @@ mniejszym problemem:
         jak reguła, która milczy.
 \end{itemize}
 
-\paragraph{Rola i~granice.} Wynik dowodzi, że każda gałąź logiki decyzyjnej czterech reguł
-jest przypięta testem, który zawodzi po jej zmianie, i~że ręczne mutanty centralnych
-mechanizmów są łapane. Wynik dotyczy pięciu z~16 plików projektu reguł: pozostałych jedenastu
+\paragraph{Rola i~granice.} MUTATIONS.md wnioskuje z~wyniku, że każda gałąź logiki
+decyzyjnej czterech reguł jest przypięta testem, który zawodzi po jej zmianie, i~że ręczne
+mutanty centralnych mechanizmów są łapane; ściślej: testy wykryły każdy z~214 mutantów,
+które Stryker na poziomie \repopath{Standard} przetestował. Wynik dotyczy pięciu z~16 plików projektu reguł: pozostałych jedenastu
 Stryker nie mutuje, w~tym siedmiu analyzerów (sześć reguł zasad architektury i~analyzer
 pokrycia konwencji), które poza testami w~obu kierunkach chronią tylko dziesięć ręcznych
 mutantów. Nie dowodzi braku fałszywych alarmów na prawdziwym zmigrowanym kodzie
@@ -3132,8 +3134,8 @@ a~\repopath{0.1.0} to numer przyszłego pierwszego wydania.
         zestawów frameworku i~deklaracji API .NET Framework; wynik skanu niesie fingerprinty
         i~baseline (addytywnie); jedna klasa sprawdza zakres diffu dla bramki, eskalacji
         i~SARIF.
-  \item \textbf{Fixed}: bramka nie przechodzi już przy awarii git (fail-open,
-        \repopath{ProvenanceStatus}); CLI respektuje konfigurację (wcześniej
+  \item \textbf{Fixed}: bramka nie przechodzi już automatycznie przy awarii git
+        (wraca do całego skanu; fail-open, \repopath{ProvenanceStatus}); CLI respektuje konfigurację (wcześniej
         \repopath{options: null}); ścieżka komentarza PR nie wywraca się na zniekształconym
         wyniku; dwa findingi w~jednej linii mają stałą kolejność między przebiegami; dwa zdania
         pozostałe po zmianie nazwy; \repopath{scanStartedUtc} to moment rozpoczęcia skanu
