@@ -100,9 +100,12 @@ wyników, a~werdykt zapisuje dopiero wtedy, gdy przejdzie on sprawdzenie własny
 sk capture --target http://127.0.0.1:5080 --listen http://127.0.0.1:8080 --session-key ASP.NET_SessionId
 \end{lstlisting}
 
-Uruchamia proxy nagrywające. Klienci łączą się z~adresem \repopath{-{}-listen} zamiast z~systemem legacy; każde żądanie trafia do \repopath{-{}-target} bez zmian --- poza tym, że
-proxy prosi o~nieskompresowaną odpowiedź, żeby nagranie dało się czytać --- a~klient dostaje
-odpowiedź systemu legacy bez zmian. \finding{Systemu legacy nie dotyka się: zmienia się tylko
+Uruchamia proxy nagrywające. Klienci łączą się z~adresem \repopath{-{}-listen} zamiast z~systemem legacy; każde żądanie trafia do \repopath{-{}-target} z~tą samą metodą, ścieżką, zapytaniem
+i~treścią, a~klient dostaje odpowiedź systemu legacy bez zmian. Nagłówki żądania proxy jednak
+zmienia i~widzi to system legacy: \texttt{Host} jest zastąpiony adresem celu (oryginał trafia
+do \texttt{X-Forwarded-Host}), dochodzą \texttt{X-Forwarded-For}, \texttt{X-Forwarded-Host}
+i~\texttt{X-Forwarded-Proto}, a~\texttt{Accept-Encoding} jest usuwany, żeby nagranie dało się
+czytać. \finding{Systemu legacy nie dotyka się: zmienia się tylko
 adres, pod który łączą się jego klienci.}
 
 Rysunek~\ref{fig:capture} pokazuje drogę jednej wymiany przez proxy.
@@ -147,19 +150,32 @@ Proxy jest aplikacją ASP.NET Core z~forwarderem YARP. Z~systemem legacy łączy
 proxy systemowego, nie wykonuje przekierowań (klient dostaje odpowiedź 3xx taką, jaką
 wysłał system legacy) i~nie przechowuje ciasteczek między żądaniami. Adres
 z~\repopath{-{}-listen} może mieć port 0. Proxy wybiera wtedy wolny port, a~komunikat
-startowy podaje adres, na którym faktycznie nasłuchuje.
+startowy podaje adres, na którym faktycznie nasłuchuje. Nasłuch jest wyłącznie HTTP: proxy
+nie kończy TLS, a~\repopath{-{}-listen} z~adresem \texttt{https://} przechodzi sprawdzenie
+adresu, ale uruchomienie kończy się błędem (kod 4). Adres \repopath{-{}-target} może zaczynać
+się od \texttt{https://}, lecz żaden test tego nie sprawdza.
 
 \paragraph{Sesje i~scenariusze.} Klucz sesji decyduje o~scenariuszach: \repopath{sk replay}
 odtwarza wymiany jednej sesji jako jeden scenariusz, po kolei. Wymiana należy do sesji, którą
 nazywa jej żądanie --- ciasteczkiem albo nagłówkiem o~tej nazwie --- a~przy pierwszej wizycie
 do tej, którą jej odpowiedź ustawia jako ciasteczko. Wymiana bez żadnego z~nich jest sesją
-samą dla siebie, więc bez klucza każda wymiana jest odtwarzana osobno. W~nagraniu sesja jest
-zapisana jako skrót, nigdy jako wartość ciasteczka. Klucze sesji są sprawdzane w~podanej
+samą dla siebie, więc bez klucza każda wymiana jest odtwarzana osobno. W~polu \repopath{session}
+nagrania jest skrót, nigdy wartość ciasteczka; wartość klucza będącego nagłówkiem zostaje
+jednak jawnie w~nagłówkach żądania w~nagraniu, jeśli nie ma go na liście redagowanych
+(\repopath{-{}-redact-header}). Klucze sesji są sprawdzane w~podanej
 kolejności, a~dla każdego klucza najpierw ciasteczko o~tej nazwie, potem nagłówek. Nazwy
 porównuje się bez rozróżniania wielkości liter, a~pusta wartość ciasteczka albo nagłówka nie
 wskazuje sesji. Sesja z~żądania ma pierwszeństwo przed sesją, którą odpowiedź ustawia
 w~\texttt{set-cookie}. Ta sama nazwa klucza z~tą samą wartością daje zawsze ten sam
 identyfikator sesji.
+
+\paragraph{Kolejność nagrania.} Wymiana dostaje numer \repopath{seq} dopiero przy zapisie,
+po przekazaniu odpowiedzi klientowi, a~\repopath{sk replay} odtwarza wymiany w~kolejności
+\repopath{seq}. Żądania wysyłane jedno po drugim bez przerwy mogą więc trafić do pliku
+w~innej kolejności, niż klient je wysłał (w~próbie na lokalnym serwerze zdarzało się to
+wśród pierwszych żądań po starcie proxy). Kolejność nadejścia pokazuje \repopath{startedAt},
+a~\repopath{sk validate} jej nie sprawdza. Skrypt ruchu, w~którym kolejność żądań jednej
+sesji ma znaczenie, powinien więc zostawiać między nimi przerwę.
 
 \paragraph{Redakcja i~limit treści.} Wartości redagowanych nagłówków --- w~żądaniu i~w
 odpowiedzi --- są zastępowane przez \repopath{<redacted>} przed zapisem na dysk, a~nagłówek
@@ -264,7 +280,10 @@ przy wczytaniu pliku: replay stosuje ją wprost jako limit każdego żądania.
 \texttt{keep-alive}, \texttt{upgrade}, \texttt{te}, \texttt{trailer},
 \texttt{proxy-connection}, \texttt{proxy-authorization}, \texttt{cookie},
 \texttt{accept-encoding} i~\texttt{expect}, a~także każda wartość \repopath{<redacted>}.
-Ścieżka adresu bazowego strony poprzedza ścieżkę każdego żądania. Odpowiedzi są
+Skutek: uwierzytelnianie nagłówkiem, który nagranie zredagowało (domyślnie
+\texttt{authorization} i~\texttt{x-api-key}), oraz nagrane ciasteczka nie są odtwarzane, więc
+logowanie musi być częścią scenariusza; hasło z~formularza logowania leży w~nagraniu jawnie,
+bo redakcja obejmuje tylko nagłówki. Ścieżka adresu bazowego strony poprzedza ścieżkę każdego żądania. Odpowiedzi są
 dekompresowane, a~replay nie używa proxy systemowego.
 
 \paragraph{Treść żądania i~odpowiedzi.} Replay odtwarza treść żądania z~nagrania, a~nie
@@ -351,7 +370,10 @@ porażki zawiera kod wyjścia i~wyjście błędów polecenia; względny
 \repopath{workingDirectory} rozwiązuje się względem katalogu pliku, jak każdą ścieżkę
 w~\repopath{secondkey.yaml}, a~bez niego polecenie działa w~bieżącym katalogu procesu.
 \repopath{reset} wskazuje dokładnie jeden rodzaj: żaden albo dwa to niepoprawna
-konfiguracja (kod 3), sprawdzana już przy wczytaniu pliku.
+konfiguracja (kod 3), sprawdzana już przy wczytaniu pliku. Reset \repopath{command} wykonuje
+dowolne polecenie powłoki z~pliku, z~uprawnieniami procesu \repopath{sk}, więc
+\repopath{secondkey.yaml} z~takim resetem jest zaufanym kodem, a~nie samą konfiguracją:
+cudzego pliku się nie uruchamia.
 
 Przy \repopath{http} ścieżka bez początkowego ukośnika dostaje go automatycznie i~może
 nieść zapytanie (\texttt{/\_\_sk/reset?all=true}). Reset przez opcję
@@ -365,7 +387,11 @@ nieść zapytanie (\texttt{/\_\_sk/reset?all=true}). Reset przez opcję
   \item \texttt{'<polecenie>' exited <kod>: <wyjście błędów>} przy \repopath{command}.
 \end{itemize}
 Standardowe wyjście polecenia jest pomijane. \repopath{sk} nie ogranicza czasu polecenia
-resetu: czeka, aż proces się zakończy, a~przerwać go może tylko anulowanie (Ctrl+C).
+resetu: czeka, aż proces się zakończy, a~przerwać go może tylko anulowanie (Ctrl+C). Reset
+\repopath{http} ma domyślny limit \texttt{HttpClient}, 100 sekund, niezależny od
+\repopath{-{}-timeout}; reset, który nie odpowie w~tym czasie, nie kończy się wpisem
+\repopath{reset-failed}, tylko przerywa cały replay komunikatem \texttt{cancelled}
+i~kodem 4, a~przebieg zostaje bez \repopath{run.end}.
 
 \paragraph{Ograniczenia resetu snapshotem.} \repopath{sqlServerSnapshot} przywraca bazę SQL
 Server z~database snapshotu; według komentarza w~kodzie snapshoty baz danych są w~każdej
@@ -423,10 +449,14 @@ replay:
     probe: { sqlServer: { connectionStringEnv: SK_LEGACY_DB, tables: [dbo.Order, dbo.ShoppingCartItem] } }
 \end{lstlisting}
 
-Sonda czyta każdy wiersz wymienionych tabel przed każdym żądaniem i~po nim i~zapisuje w~wyniku wiersze, które żądanie wstawiło, usunęło i~zmieniło (zmienione z~kluczem, stanem
+Sonda czyta każdy wiersz wymienionych tabel raz przed scenariuszem i~raz po każdym żądaniu
+(stan po poprzednim żądaniu jest stanem przed następnym) i~zapisuje w~wyniku wiersze, które żądanie wstawiło, usunęło i~zmieniło (zmienione z~kluczem, stanem
 przed i~po); wiersze są identyfikowane kluczem głównym, a~w~tabeli bez klucza --- całą
 zawartością. Tabele bez zmian są pomijane. Sonda za każdym razem czyta całe tabele: jest
 przeznaczona dla małej, zasianej bazy sandboksu, nie dla bazy wielkości produkcyjnej.
+Zapisywane wiersze są kompletne (\texttt{SELECT *}, wszystkie kolumny), więc
+\repopath{*.skrun} z~sondą niesie zawartość tych wierszy, a~\repopath{verdict.json} ---
+wartości pól, którymi stan bazy różni się między legacy a~kandydatem.
 Klauzule czytają jej wynik przez korzeń \repopath{db} (sekcja~\ref{sec:formaty}).
 
 Sonda łączy się connection stringiem ze zmiennej \repopath{connectionStringEnv} tak, jak
@@ -473,6 +503,8 @@ Ograniczenia reguły korelacji, z~kodu replay:
         \texttt{text/*}, XML, formularze. Odpowiedź JSON (\texttt{application/json},
         \texttt{*+json}) jest zapisywana jako JSON i~reguła jej nie czyta. Nie czyta też
         treści base64.
+  \item Z~odpowiedzi brane jest pierwsze dopasowanie wyrażenia (jego pierwsza grupa);
+        kolejne są ignorowane.
   \item \repopath{regex} bez grupy niczego by nie poznawał i~niczego by nie zgłaszał, więc
         plik z~takim wyrażeniem jest odrzucany przy wczytaniu (niżej).
   \item \repopath{formField} jest podmieniane tylko tam, gdzie pole już jest, i~to w~każdym
@@ -855,7 +887,8 @@ did not write; …}, \texttt{… which is outside the pack} & 64 & katalog wyjś
 nadaje się na pakiet; wybierz pusty albo nowy \\
 \texttt{sk mine: not available in this build — …} & 70 & polecenie planowane na fazę 02 \\
 \texttt{cancelled} & 4 & polecenie inne niż \repopath{sk capture} przerwane przez Ctrl+C
-albo SIGTERM; wynik może być niekompletny, np. przebieg bez \repopath{run.end} \\
+albo SIGTERM; także replay, w~którym reset \repopath{http} nie odpowiedział w~ciągu 100 s;
+wynik może być niekompletny, np. przebieg bez \repopath{run.end} \\
 \texttt{error: database '<baza>' was not found or has no data files} & 4 & zła nazwa
 w~\repopath{reset.sqlServerSnapshot.database} \\
 \texttt{error: …} & 4 & każdy inny wyjątek, np. brak pliku wejściowego,
@@ -1173,9 +1206,11 @@ się wywracać na pustym koszyku, przedstawione osobie jako poprawka.
 \subsection{Jak czytać wynik}\label{sec:cli-wynik}
 
 \begin{enumerate}
-  \item \textbf{Kod wyjścia \texttt{sk compare}} rozstrzyga krok pipeline'u: 0 --- zachowanie
-        dotrzymuje kontraktu, 1 --- jest regresja, 2 --- jest kandydat na poprawkę do
-        decyzji. \repopath{sk gate} daje osobno 0 albo 1 dla kodu, a~\repopath{sk evidence}
+  \item \textbf{Kod wyjścia \texttt{sk compare}} rozstrzyga krok pipeline'u: 0 --- brak regresji
+        i~brak kandydata na poprawkę względem legacy, w~zakresie nagranego ruchu i~kontraktu
+        (klauzule \repopath{unexercised}, \repopath{violated-both} i~\repopath{proposed}
+        nie blokują wyniku \repopath{pass}), 1 --- jest regresja, 2 --- jest kandydat na poprawkę do
+        decyzji. \repopath{sk gate} daje osobno 0 albo 1 dla dołączonych logów SARIF, a~\repopath{sk evidence}
         zawsze 0, gdy pakiet powstał.
   \item \textbf{Wyjście \texttt{sk compare}} wymienia tylko to, na co musi spojrzeć osoba:
         regresje, kandydatów na poprawkę i~zaakceptowane klauzule \repopath{regressed},
@@ -1186,11 +1221,14 @@ się wywracać na pustym koszyku, przedstawione osobie jako poprawka.
         i~„Gate”, kafelki podsumowania, potem regresje i~kandydaci na poprawkę z~różnicami i~klauzulami, które złamała któraś strona, tabela klauzul, to, co kontrakt uznaje za
         nieistotne, i~to, czego dowód nie pokazuje --- ruch, którego nagranie nie
         zawierało, zaakceptowane klauzule \repopath{unexercised}, klauzule
-        \repopath{proposed}, klauzule \repopath{violated-both} i~brak podpisu.
+        \repopath{proposed}, klauzule \repopath{violated-both}, brak logów SARIF (gdy
+        nie dołączono żadnego --- pakiet nic wtedy nie mówi o~samym kodzie) i~brak podpisu.
   \item \textbf{Każda regresja} kończy się przeglądaną zmianą: poprawką kandydata albo zmianą
         kontraktu --- regułą normalizacji, jeśli różnica nie ma znaczenia, albo klauzulą, jeśli
         ma. \textbf{Każdy kandydat na poprawkę} wymaga decyzji osoby, czy zmiana jest
-        pożądana. Klauzula \repopath{violated-both} to defekt, który migracja zachowała; nie
+        pożądana; narzędzie nie zapisuje tej decyzji i~nie ma oznaczenia „zamierzona zmiana”,
+        więc \repopath{review} trwa, dopóki nie zmieni się kontrakt albo kandydat. Klauzula
+        \repopath{violated-both} to defekt, który migracja zachowała; nie
         oblewa przebiegu.
   \item \textbf{Integralność} sprawdza się niezależnie od Second Key: skróty z~\repopath{manifest.json}, walidacja \repopath{verdict.json} i~kontraktu oraz ponowne
         \repopath{sk compare} na \repopath{run.skrun} z~pakietu, które daje ten sam werdykt
